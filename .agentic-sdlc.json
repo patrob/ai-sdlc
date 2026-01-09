@@ -1,0 +1,9 @@
+{
+  "sdlcFolder": ".agentic-sdlc",
+  "stageGates": {
+    "requireApprovalBeforeImplementation": false,
+    "requireApprovalBeforePR": false,
+    "autoMergeOnApproval": false
+  },
+  "defaultLabels": []
+}

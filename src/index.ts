@@ -60,6 +60,8 @@ program
   .option('--auto', 'Process all pending actions')
   .option('--dry-run', 'Show what would be done without executing')
   .option('--continue', 'Resume workflow from last checkpoint')
+  .option('--story <id-or-slug>', 'Target a specific story by ID or slug')
+  .option('--step <phase>', 'Run a specific phase (refine, research, plan, implement, review)')
   .action((options) => {
     if (!options.dryRun) {
       checkApiKey();

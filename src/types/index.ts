@@ -3,6 +3,68 @@ export type StoryStatus = 'backlog' | 'ready' | 'in-progress' | 'done';
 export type StoryType = 'feature' | 'bug' | 'chore' | 'spike';
 export type EffortEstimate = 'small' | 'medium' | 'large';
 
+/**
+ * Severity levels for review issues
+ */
+export type ReviewIssueSeverity = 'blocker' | 'critical' | 'major' | 'minor';
+
+/**
+ * Individual issue identified during review
+ */
+export interface ReviewIssue {
+  severity: ReviewIssueSeverity;
+  category: string;
+  description: string;
+  file?: string;
+  line?: number;
+  suggestedFix?: string;
+}
+
+/**
+ * Review decision outcomes
+ */
+export enum ReviewDecision {
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  FAILED = 'FAILED',
+}
+
+/**
+ * Severity levels for review rejection
+ */
+export enum ReviewSeverity {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  CRITICAL = 'CRITICAL',
+}
+
+/**
+ * Record of a single review attempt
+ */
+export interface ReviewAttempt {
+  timestamp: string;
+  decision: ReviewDecision;
+  severity?: ReviewSeverity;
+  feedback: string;
+  blockers: string[];
+  codeReviewPassed: boolean;
+  securityReviewPassed: boolean;
+  poReviewPassed: boolean;
+}
+
+/**
+ * Record of a single refinement iteration
+ */
+export interface RefinementIteration {
+  iteration: number;
+  agentType: string;
+  startedAt: string;
+  completedAt?: string;
+  reviewFeedback?: string;
+  result: 'success' | 'failed' | 'in_progress';
+}
+
 export interface StoryFrontmatter {
   id: string;
   title: string;
@@ -22,6 +84,16 @@ export interface StoryFrontmatter {
   pr_url?: string;
   branch?: string;
   last_error?: string;
+  // Refinement tracking
+  refinement_iterations?: RefinementIteration[];
+  refinement_count?: number;
+  max_refinement_attempts?: number;
+  // Review retry tracking
+  retry_count?: number;
+  max_retries?: number;
+  last_restart_reason?: string;
+  last_restart_timestamp?: string;
+  review_history?: ReviewAttempt[];
 }
 
 export interface Story {
@@ -38,6 +110,7 @@ export type ActionType =
   | 'plan'
   | 'implement'
   | 'review'
+  | 'rework'
   | 'create_pr'
   | 'move_to_done';
 
@@ -47,6 +120,7 @@ export interface Action {
   storyPath: string;
   reason: string;
   priority: number;
+  context?: any; // Additional context for the action (e.g., review feedback for rework)
 }
 
 export interface StateAssessment {
@@ -80,9 +154,30 @@ export interface StageGateConfig {
   autoMergeOnApproval: boolean;
 }
 
+/**
+ * Refinement loop configuration
+ */
+export interface RefinementConfig {
+  maxIterations: number;
+  escalateOnMaxAttempts: 'error' | 'manual' | 'skip';
+  enableCircuitBreaker: boolean;
+}
+
+/**
+ * Review flow configuration
+ */
+export interface ReviewConfig {
+  maxRetries: number;
+  maxRetriesUpperBound: number;
+  autoCompleteOnApproval: boolean;
+  autoRestartOnRejection: boolean;
+}
+
 export interface Config {
   sdlcFolder: string;
   stageGates: StageGateConfig;
+  refinement: RefinementConfig;
+  reviewConfig: ReviewConfig;
   defaultLabels: string[];
   theme: ThemePreference;
 }
@@ -93,6 +188,27 @@ export interface AgentResult {
   story: Story;
   changesMade: string[];
   error?: string;
+}
+
+/**
+ * Review-specific result with structured feedback
+ */
+export interface ReviewResult extends AgentResult {
+  passed: boolean;
+  decision: ReviewDecision;
+  severity?: ReviewSeverity;
+  reviewType: 'code' | 'security' | 'product_owner' | 'combined';
+  issues: ReviewIssue[];
+  feedback: string;
+}
+
+/**
+ * Context for rework action
+ */
+export interface ReworkContext {
+  reviewFeedback: ReviewResult;
+  targetPhase: 'research' | 'plan' | 'implement';
+  iteration: number;
 }
 
 // Kanban folder structure

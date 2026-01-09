@@ -137,10 +137,23 @@ export async function add(title: string): Promise<void> {
 /**
  * Run the workflow (process one action or all)
  */
-export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean }): Promise<void> {
+export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string }): Promise<void> {
   const config = loadConfig();
   const sdlcRoot = getSdlcRoot();
   const c = getThemedChalk(config);
+
+  // Valid step names for --step option
+  const validSteps = ['refine', 'research', 'plan', 'implement', 'review'] as const;
+
+  // Validate --step option early
+  if (options.step) {
+    const normalizedStep = options.step.toLowerCase();
+    if (!validSteps.includes(normalizedStep as any)) {
+      console.log(c.error(`Error: Invalid step "${options.step}"`));
+      console.log(c.dim(`Valid steps: ${validSteps.join(', ')}`));
+      return;
+    }
+  }
 
   if (!kanbanExists(sdlcRoot)) {
     console.log(c.warning('agentic-sdlc not initialized. Run `agentic-sdlc init` first.'));
@@ -203,10 +216,72 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     workflowId = generateWorkflowId();
   }
 
-  const assessment = assessState(sdlcRoot);
+  let assessment = assessState(sdlcRoot);
+
+  // Filter actions by story if --story flag is provided
+  if (options.story) {
+    const normalizedInput = options.story.toLowerCase().trim();
+
+    // Try to find story by ID first, then by slug (case-insensitive)
+    let targetStory = findStoryById(sdlcRoot, normalizedInput);
+    if (!targetStory) {
+      targetStory = findStoryBySlug(sdlcRoot, normalizedInput);
+    }
+    // Also try original case for slug
+    if (!targetStory) {
+      targetStory = findStoryBySlug(sdlcRoot, options.story.trim());
+    }
+
+    if (!targetStory) {
+      console.log(c.error(`Error: Story not found: "${options.story}"`));
+      console.log();
+      console.log(c.dim('Searched for:'));
+      console.log(c.dim(`  ID: ${normalizedInput}`));
+      console.log(c.dim(`  Slug: ${normalizedInput}`));
+      console.log();
+      console.log(c.info('Tip: Use `agentic-sdlc status` to see all available stories.'));
+      return;
+    }
+
+    // Filter actions to only include those for the target story
+    const originalCount = assessment.recommendedActions.length;
+    assessment.recommendedActions = assessment.recommendedActions.filter(
+      action => action.storyPath === targetStory!.path
+    );
+
+    console.log(c.info(`Targeting story: ${targetStory.frontmatter.title}`));
+    console.log(c.dim(`  ID: ${targetStory.frontmatter.id}`));
+    console.log(c.dim(`  Status: ${targetStory.frontmatter.status}`));
+    console.log(c.dim(`  Actions: ${assessment.recommendedActions.length} of ${originalCount} total`));
+    console.log();
+  }
+
+  // Filter actions by step type if --step flag is provided
+  if (options.step) {
+    const normalizedStep = options.step.toLowerCase();
+    const originalCount = assessment.recommendedActions.length;
+
+    assessment.recommendedActions = assessment.recommendedActions.filter(
+      action => action.type === normalizedStep
+    );
+
+    if (assessment.recommendedActions.length < originalCount) {
+      console.log(c.dim(`Filtered to "${options.step}" step: ${assessment.recommendedActions.length} actions`));
+      console.log();
+    }
+  }
 
   if (assessment.recommendedActions.length === 0) {
-    console.log(c.success('No pending actions. Board is up to date!'));
+    if (options.story || options.step) {
+      const filterDesc = [
+        options.story ? `story "${options.story}"` : null,
+        options.step ? `step "${options.step}"` : null,
+      ].filter(Boolean).join(' and ');
+      console.log(c.info(`No pending actions for ${filterDesc}.`));
+      console.log(c.dim('The specified work may already be complete.'));
+    } else {
+      console.log(c.success('No pending actions. Board is up to date!'));
+    }
 
     // Clear state if workflow is complete
     if (options.continue || hasWorkflowState(sdlcRoot)) {
@@ -399,6 +474,7 @@ function formatAction(action: Action): string {
     plan: 'Plan',
     implement: 'Implement',
     review: 'Review',
+    rework: 'Rework',
     create_pr: 'Create PR for',
     move_to_done: 'Move to done',
   };

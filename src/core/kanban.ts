@@ -1,8 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
-import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder } from '../types/index.js';
-import { parseStory } from './story.js';
+import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder, ReviewDecision } from '../types/index.js';
+import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt } from './story.js';
+import { loadConfig } from './config.js';
+import { determineTargetPhase } from '../agents/rework.js';
 
 /**
  * Get all stories in a specific kanban folder
@@ -59,6 +61,19 @@ export function findStoryBySlug(sdlcRoot: string, slug: string): Story | null {
 }
 
 /**
+ * Check if a story has a failed review that needs rework
+ */
+function hasFailedReview(story: Story): boolean {
+  const latestReview = getLatestReviewAttempt(story);
+  if (!latestReview) {
+    return false;
+  }
+
+  // Check if the latest review was rejected (not failed - that's a review agent error)
+  return latestReview.decision === ReviewDecision.REJECTED;
+}
+
+/**
  * Assess the current state of the kanban board and recommend actions
  */
 export function assessState(sdlcRoot: string): StateAssessment {
@@ -68,64 +83,96 @@ export function assessState(sdlcRoot: string): StateAssessment {
   const doneItems = getStoriesInFolder(sdlcRoot, 'done');
 
   const recommendedActions: Action[] = [];
+  const workingDir = path.dirname(sdlcRoot);
+  const config = loadConfig(workingDir);
 
-  // Check backlog items that need refinement
-  for (const story of backlogItems) {
-    recommendedActions.push({
-      type: 'refine',
-      storyId: story.frontmatter.id,
-      storyPath: story.path,
-      reason: `Story "${story.frontmatter.title}" needs refinement`,
-      priority: story.frontmatter.priority,
-    });
-  }
+  // Priority order: In-Progress (0-150) > Ready (200-400) > Backlog (500+)
 
-  // Check ready items that need research/planning/implementation
-  for (const story of readyItems) {
-    if (!story.frontmatter.research_complete) {
-      recommendedActions.push({
-        type: 'research',
-        storyId: story.frontmatter.id,
-        storyPath: story.path,
-        reason: `Story "${story.frontmatter.title}" needs research`,
-        priority: story.frontmatter.priority + 100, // Lower priority than refinement
-      });
-    } else if (!story.frontmatter.plan_complete) {
-      recommendedActions.push({
-        type: 'plan',
-        storyId: story.frontmatter.id,
-        storyPath: story.path,
-        reason: `Story "${story.frontmatter.title}" needs implementation plan`,
-        priority: story.frontmatter.priority + 200,
-      });
-    } else {
-      recommendedActions.push({
-        type: 'implement',
-        storyId: story.frontmatter.id,
-        storyPath: story.path,
-        reason: `Story "${story.frontmatter.title}" is ready for implementation`,
-        priority: story.frontmatter.priority + 300,
-      });
-    }
-  }
-
-  // Check in-progress items
+  // Check in-progress items FIRST (highest priority)
   for (const story of inProgressItems) {
-    if (!story.frontmatter.implementation_complete) {
+    // Check if implementation is complete but review failed
+    if (story.frontmatter.implementation_complete && !story.frontmatter.reviews_complete) {
+      // Check if there's a failed review that needs rework
+      if (hasFailedReview(story)) {
+        // Check if we can still retry refinement (circuit breaker)
+        if (canRetryRefinement(story, config.refinement.maxIterations)) {
+          const latestReview = getLatestReviewAttempt(story);
+          const refinementCount = story.frontmatter.refinement_count || 0;
+
+          // Create a mock ReviewResult for determineTargetPhase
+          const reviewResult = {
+            issues: latestReview?.blockers.map(b => ({
+              severity: 'blocker' as const,
+              category: 'review_failure',
+              description: b,
+            })) || [],
+          };
+
+          // Determine which phase to rework (research, plan, or implement)
+          const targetPhase = determineTargetPhase(reviewResult as any);
+
+          recommendedActions.push({
+            type: 'rework',
+            storyId: story.frontmatter.id,
+            storyPath: story.path,
+            reason: `⟳ Story "${story.frontmatter.title}" needs rework (iteration ${refinementCount + 1}, target: ${targetPhase})`,
+            priority: story.frontmatter.priority, // Highest priority (0-based)
+            context: {
+              reviewFeedback: latestReview,
+              targetPhase,
+              iteration: refinementCount + 1,
+            },
+          });
+        } else {
+          // Circuit breaker: max refinement attempts reached
+          const refinementCount = story.frontmatter.refinement_count || 0;
+          const maxAttempts = story.frontmatter.max_refinement_attempts || config.refinement.maxIterations;
+          recommendedActions.push({
+            type: 'review', // Keep as review to flag it
+            storyId: story.frontmatter.id,
+            storyPath: story.path,
+            reason: `🛑 Story "${story.frontmatter.title}" reached max refinement attempts (${refinementCount}/${maxAttempts}) - manual intervention required`,
+            priority: story.frontmatter.priority + 10000, // Very low priority to not auto-execute
+            context: { blockedByMaxRefinements: true },
+          });
+        }
+        continue; // Skip other checks for this story
+      }
+    }
+
+    // Check if story is at max retries
+    const atMaxRetries = isAtMaxRetries(story, config);
+
+    if (atMaxRetries) {
+      // Story blocked by max retries - flag for manual intervention
+      const retryCount = story.frontmatter.retry_count || 0;
+      recommendedActions.push({
+        type: 'review', // Keep as review but with special reason
+        storyId: story.frontmatter.id,
+        storyPath: story.path,
+        reason: `⚠️  Story "${story.frontmatter.title}" requires manual intervention (max retries: ${retryCount})`,
+        priority: story.frontmatter.priority + 10000, // Very low priority to not auto-execute
+        context: { blockedByMaxRetries: true },
+      });
+    } else if (!story.frontmatter.implementation_complete) {
       recommendedActions.push({
         type: 'implement',
         storyId: story.frontmatter.id,
         storyPath: story.path,
         reason: `Story "${story.frontmatter.title}" implementation in progress`,
-        priority: story.frontmatter.priority + 400,
+        priority: story.frontmatter.priority + 50,
       });
     } else if (!story.frontmatter.reviews_complete) {
+      // Deprioritize stories with high retry counts
+      const retryCount = story.frontmatter.retry_count || 0;
+      const priorityPenalty = retryCount * 50; // Add 50 to priority per retry
+
       recommendedActions.push({
         type: 'review',
         storyId: story.frontmatter.id,
         storyPath: story.path,
-        reason: `Story "${story.frontmatter.title}" needs review`,
-        priority: story.frontmatter.priority + 500,
+        reason: `Story "${story.frontmatter.title}" needs review${retryCount > 0 ? ` (retry ${retryCount})` : ''}`,
+        priority: story.frontmatter.priority + 100 + priorityPenalty,
       });
     } else {
       recommendedActions.push({
@@ -133,9 +180,49 @@ export function assessState(sdlcRoot: string): StateAssessment {
         storyId: story.frontmatter.id,
         storyPath: story.path,
         reason: `Story "${story.frontmatter.title}" is ready for PR`,
-        priority: story.frontmatter.priority + 600,
+        priority: story.frontmatter.priority + 150,
       });
     }
+  }
+
+  // Check ready items SECOND (medium priority)
+  for (const story of readyItems) {
+    if (!story.frontmatter.research_complete) {
+      recommendedActions.push({
+        type: 'research',
+        storyId: story.frontmatter.id,
+        storyPath: story.path,
+        reason: `Story "${story.frontmatter.title}" needs research`,
+        priority: story.frontmatter.priority + 200,
+      });
+    } else if (!story.frontmatter.plan_complete) {
+      recommendedActions.push({
+        type: 'plan',
+        storyId: story.frontmatter.id,
+        storyPath: story.path,
+        reason: `Story "${story.frontmatter.title}" needs implementation plan`,
+        priority: story.frontmatter.priority + 300,
+      });
+    } else {
+      recommendedActions.push({
+        type: 'implement',
+        storyId: story.frontmatter.id,
+        storyPath: story.path,
+        reason: `Story "${story.frontmatter.title}" is ready for implementation`,
+        priority: story.frontmatter.priority + 400,
+      });
+    }
+  }
+
+  // Check backlog items LAST (lowest priority)
+  for (const story of backlogItems) {
+    recommendedActions.push({
+      type: 'refine',
+      storyId: story.frontmatter.id,
+      storyPath: story.path,
+      reason: `Story "${story.frontmatter.title}" needs refinement`,
+      priority: story.frontmatter.priority + 500,
+    });
   }
 
   // Sort actions by priority (lower number = higher priority)

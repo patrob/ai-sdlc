@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
-import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS } from '../types/index.js';
+import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config } from '../types/index.js';
 
 /**
  * Parse a story markdown file into a Story object
@@ -201,5 +201,209 @@ export function appendToSection(story: Story, section: string, content: string):
 
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
   writeStory(story);
+  return story;
+}
+
+/**
+ * Record a refinement attempt in the story's frontmatter
+ */
+export function recordRefinementAttempt(
+  story: Story,
+  agentType: string,
+  reviewFeedback: string
+): Story {
+  // Initialize refinement tracking if not present
+  if (!story.frontmatter.refinement_iterations) {
+    story.frontmatter.refinement_iterations = [];
+    story.frontmatter.refinement_count = 0;
+  }
+
+  const iteration = (story.frontmatter.refinement_count || 0) + 1;
+  const refinementRecord = {
+    iteration,
+    agentType,
+    startedAt: new Date().toISOString(),
+    reviewFeedback,
+    result: 'in_progress' as const,
+  };
+
+  story.frontmatter.refinement_iterations.push(refinementRecord);
+  story.frontmatter.refinement_count = iteration;
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+
+  writeStory(story);
+  return story;
+}
+
+/**
+ * Get the current refinement count for a story
+ */
+export function getRefinementCount(story: Story): number {
+  return story.frontmatter.refinement_count || 0;
+}
+
+/**
+ * Check if a story can retry refinement based on iteration limit
+ */
+export function canRetryRefinement(story: Story, maxAttempts: number): boolean {
+  const currentCount = getRefinementCount(story);
+  const storyMax = story.frontmatter.max_refinement_attempts;
+  const effectiveMax = storyMax !== undefined ? storyMax : maxAttempts;
+  return currentCount < effectiveMax;
+}
+
+/**
+ * Reset phase completion flags for rework
+ */
+export function resetPhaseCompletion(
+  story: Story,
+  phase: 'research' | 'plan' | 'implement'
+): Story {
+  switch (phase) {
+    case 'research':
+      story.frontmatter.research_complete = false;
+      break;
+    case 'plan':
+      story.frontmatter.plan_complete = false;
+      break;
+    case 'implement':
+      story.frontmatter.implementation_complete = false;
+      break;
+  }
+
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+  writeStory(story);
+  return story;
+}
+
+/**
+ * Get the latest review feedback from the story content
+ */
+export function getLatestReviewFeedback(story: Story): string | null {
+  const reviewSection = story.content.match(/## Review Notes\n\n([\s\S]*?)(?=\n## |$)/);
+  if (!reviewSection) {
+    return null;
+  }
+
+  // Extract the most recent review (look for latest "### Review" or similar heading)
+  const reviews = reviewSection[1].split(/### /);
+  return reviews.length > 1 ? reviews[reviews.length - 1].trim() : null;
+}
+
+/**
+ * Append refinement feedback to the story content
+ */
+export function appendRefinementNote(
+  story: Story,
+  iteration: number,
+  feedback: string
+): Story {
+  const refinementNote = `### Refinement Iteration ${iteration}\n\n${feedback}`;
+  return appendToSection(story, 'Review Notes', refinementNote);
+}
+
+/**
+ * Get the effective maximum retries for a story (story-specific or config default)
+ */
+export function getEffectiveMaxRetries(story: Story, config: Config): number {
+  return story.frontmatter.max_retries !== undefined
+    ? story.frontmatter.max_retries
+    : config.reviewConfig.maxRetries;
+}
+
+/**
+ * Check if a story has reached its maximum retry limit
+ */
+export function isAtMaxRetries(story: Story, config: Config): boolean {
+  const currentRetryCount = story.frontmatter.retry_count || 0;
+  const maxRetries = getEffectiveMaxRetries(story, config);
+  return currentRetryCount >= maxRetries;
+}
+
+/**
+ * Increment the retry count for a story
+ */
+export function incrementRetryCount(story: Story): Story {
+  const currentCount = story.frontmatter.retry_count || 0;
+  story.frontmatter.retry_count = currentCount + 1;
+  story.frontmatter.last_restart_timestamp = new Date().toISOString();
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+  writeStory(story);
+  return story;
+}
+
+/**
+ * Reset RPIV cycle for a story (keep research, reset plan/implementation/reviews)
+ */
+export function resetRPIVCycle(story: Story, reason: string): Story {
+  // Keep research_complete as true, reset other flags
+  story.frontmatter.plan_complete = false;
+  story.frontmatter.implementation_complete = false;
+  story.frontmatter.reviews_complete = false;
+  story.frontmatter.last_restart_reason = reason;
+  story.frontmatter.last_restart_timestamp = new Date().toISOString();
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+
+  // Increment retry count
+  const currentCount = story.frontmatter.retry_count || 0;
+  story.frontmatter.retry_count = currentCount + 1;
+
+  writeStory(story);
+  return story;
+}
+
+/**
+ * Append a review attempt to the story's review history
+ */
+export function appendReviewHistory(story: Story, attempt: ReviewAttempt): Story {
+  if (!story.frontmatter.review_history) {
+    story.frontmatter.review_history = [];
+  }
+
+  // Add new attempt
+  story.frontmatter.review_history.push(attempt);
+
+  // Keep only the last 10 attempts to prevent unbounded growth
+  if (story.frontmatter.review_history.length > 10) {
+    story.frontmatter.review_history = story.frontmatter.review_history.slice(-10);
+  }
+
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+  writeStory(story);
+  return story;
+}
+
+/**
+ * Get the latest review attempt from a story's history
+ */
+export function getLatestReviewAttempt(story: Story): ReviewAttempt | null {
+  if (!story.frontmatter.review_history || story.frontmatter.review_history.length === 0) {
+    return null;
+  }
+  return story.frontmatter.review_history[story.frontmatter.review_history.length - 1];
+}
+
+/**
+ * Mark a story as complete (all workflow flags set to true)
+ */
+export function markStoryComplete(story: Story): Story {
+  story.frontmatter.research_complete = true;
+  story.frontmatter.plan_complete = true;
+  story.frontmatter.implementation_complete = true;
+  story.frontmatter.reviews_complete = true;
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+  writeStory(story);
+  return story;
+}
+
+/**
+ * Snapshot max_retries from config to story frontmatter (for mid-cycle config change protection)
+ */
+export function snapshotMaxRetries(story: Story, config: Config): Story {
+  if (story.frontmatter.max_retries === undefined) {
+    story.frontmatter.max_retries = config.reviewConfig.maxRetries;
+    story.frontmatter.updated = new Date().toISOString().split('T')[0];
+    writeStory(story);
+  }
   return story;
 }

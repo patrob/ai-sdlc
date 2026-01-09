@@ -2,13 +2,14 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { getSdlcRoot, loadConfig, isStageGateEnabled } from '../core/config.js';
 import { assessState, kanbanExists } from '../core/kanban.js';
-import { parseStory } from '../core/story.js';
-import { Action, StateAssessment } from '../types/index.js';
+import { parseStory, resetRPIVCycle, markStoryComplete, moveStory, isAtMaxRetries } from '../core/story.js';
+import { Action, StateAssessment, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
 import { runRefinementAgent } from '../agents/refinement.js';
 import { runResearchAgent } from '../agents/research.js';
 import { runPlanningAgent } from '../agents/planning.js';
 import { runImplementationAgent } from '../agents/implementation.js';
 import { runReviewAgent, createPullRequest } from '../agents/review.js';
+import { runReworkAgent } from '../agents/rework.js';
 import { getThemedChalk } from '../core/theme.js';
 
 export interface RunOptions {
@@ -159,6 +160,8 @@ export class WorkflowRunner {
    * Execute a specific action
    */
   private async executeAction(action: Action) {
+    const config = loadConfig();
+
     switch (action.type) {
       case 'refine':
         return runRefinementAgent(action.storyPath, this.sdlcRoot);
@@ -172,14 +175,101 @@ export class WorkflowRunner {
       case 'implement':
         return runImplementationAgent(action.storyPath, this.sdlcRoot);
 
-      case 'review':
-        return runReviewAgent(action.storyPath, this.sdlcRoot);
+      case 'review': {
+        const reviewResult = await runReviewAgent(action.storyPath, this.sdlcRoot);
+        // Handle review decision (auto-complete or restart RPIV)
+        if (reviewResult.success) {
+          await this.handleReviewDecision(action.storyPath, reviewResult);
+        }
+        return reviewResult;
+      }
+
+      case 'rework': {
+        // Get rework context from action
+        const reworkContext = action.context as ReworkContext;
+        if (!reworkContext || !reworkContext.targetPhase) {
+          throw new Error('Rework action missing required context (targetPhase)');
+        }
+
+        // Run rework agent to prepare the story for refinement
+        const reworkResult = await runReworkAgent(action.storyPath, this.sdlcRoot, reworkContext);
+
+        // If rework setup succeeded, automatically trigger the target phase agent
+        if (reworkResult.success) {
+          const c = getThemedChalk(config);
+          console.log(c.info(`\n  ↳ Triggering ${reworkContext.targetPhase} agent for refinement...`));
+
+          // Execute the appropriate agent based on target phase
+          switch (reworkContext.targetPhase) {
+            case 'research':
+              return runResearchAgent(action.storyPath, this.sdlcRoot);
+            case 'plan':
+              return runPlanningAgent(action.storyPath, this.sdlcRoot);
+            case 'implement':
+              return runImplementationAgent(action.storyPath, this.sdlcRoot);
+            default:
+              throw new Error(`Unknown target phase: ${reworkContext.targetPhase}`);
+          }
+        }
+
+        return reworkResult;
+      }
 
       case 'create_pr':
         return createPullRequest(action.storyPath, this.sdlcRoot);
 
       default:
         throw new Error(`Unknown action type: ${action.type}`);
+    }
+  }
+
+  /**
+   * Handle review decision - auto-complete on approval, restart RPIV on rejection
+   */
+  private async handleReviewDecision(storyPath: string, reviewResult: ReviewResult): Promise<void> {
+    const config = loadConfig();
+    const c = getThemedChalk(config);
+    let story = parseStory(storyPath);
+
+    if (reviewResult.decision === ReviewDecision.APPROVED) {
+      // Auto-complete on approval
+      if (config.reviewConfig.autoCompleteOnApproval) {
+        console.log(c.success(`\n✅ Review approved! Auto-completing story "${story.frontmatter.title}"`));
+        markStoryComplete(story);
+
+        // Move to done if in in-progress
+        if (story.frontmatter.status === 'in-progress') {
+          story = moveStory(story, 'done', this.sdlcRoot);
+          console.log(c.success(`Moved story to done/`));
+        }
+      }
+    } else if (reviewResult.decision === ReviewDecision.REJECTED) {
+      // Auto-restart RPIV cycle on rejection
+      if (config.reviewConfig.autoRestartOnRejection) {
+        // Reload story to get latest state
+        story = parseStory(storyPath);
+
+        // Check if at max retries
+        if (isAtMaxRetries(story, config)) {
+          const retryCount = story.frontmatter.retry_count || 0;
+          console.log(c.error(`\n⚠️  Story "${story.frontmatter.title}" has reached max retries (${retryCount})`));
+          console.log(c.warning('Manual intervention required. Use appropriate commands to reset or fix the story.'));
+          return;
+        }
+
+        // Reset RPIV cycle
+        const retryCount = (story.frontmatter.retry_count || 0) + 1;
+        const maxRetries = story.frontmatter.max_retries || config.reviewConfig.maxRetries;
+        console.log(c.warning(`\n🔄 Review rejected. Restarting RPIV cycle (attempt ${retryCount}/${maxRetries})`));
+        console.log(c.dim(`Reason: ${reviewResult.feedback.substring(0, 200)}...`));
+
+        resetRPIVCycle(story, reviewResult.feedback);
+        console.log(c.info('RPIV cycle reset. Planning phase will restart on next run.'));
+      }
+    } else if (reviewResult.decision === ReviewDecision.FAILED) {
+      // Review agent failed - don't increment retry count
+      console.log(c.error(`\n❌ Review process failed: ${reviewResult.error}`));
+      console.log(c.warning('This does not count as a retry attempt. You can retry manually.'));
     }
   }
 
@@ -208,6 +298,7 @@ export class WorkflowRunner {
       plan: 'Planning',
       implement: 'Implementing',
       review: 'Reviewing',
+      rework: 'Reworking',
       create_pr: 'Creating PR for',
       move_to_done: 'Moving to done',
     };

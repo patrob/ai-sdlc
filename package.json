@@ -21,8 +21,16 @@
     "claude",
     "ai"
   ],
-  "author": "",
+  "author": "Patrick Robinson",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/patrob/agentic-workflow.git"
+  },
+  "bugs": {
+    "url": "https://github.com/patrob/agentic-workflow/issues"
+  },
+  "homepage": "https://github.com/patrob/agentic-workflow#readme",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.76",
     "chalk": "^5.3.0",

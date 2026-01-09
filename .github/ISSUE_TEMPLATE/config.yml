@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/patrob/agentic-workflow#readme
+    about: Check the README for usage information
+  - name: Discussions
+    url: https://github.com/patrob/agentic-workflow/discussions
+    about: Ask questions and discuss ideas

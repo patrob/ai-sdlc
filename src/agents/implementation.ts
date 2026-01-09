@@ -12,6 +12,9 @@ When implementing:
 3. Follow existing patterns in the codebase
 4. Write tests alongside implementation (TDD when possible)
 5. Update the plan checkboxes as you complete tasks
+6. Do NOT create temporary files, shell scripts, or documentation files - keep all notes in the story file
+7. Follow the Testing Pyramid: prioritize unit tests (colocated with source, e.g., src/foo.test.ts), then integration tests (in tests/integration/)
+8. Do NOT commit changes - that happens in the review phase
 
 You have access to tools for reading and writing files, running commands, and searching the codebase.`;
 

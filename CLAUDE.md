@@ -48,3 +48,15 @@ case 'rework':
 ## Testing
 - Run `npm test` before completing implementation
 - Run `npm run build` to verify TypeScript compilation succeeds
+- Follow the Testing Pyramid: many unit tests, fewer integration tests, fewest E2E tests
+- **Unit tests**: Colocate with the files they test (e.g., `src/core/story.ts` → `src/core/story.test.ts`)
+- **Integration tests**: Place in `tests/integration/` when testing multiple components together
+- The `tests/` directory is for integration tests, test utilities, helpers, and fixtures
+- Do NOT create shell scripts for manual testing - use vitest instead
+
+## File Hygiene
+- Do NOT create temporary/scratch files in the project root (e.g., `verify-*.md`, `IMPLEMENTATION_SUMMARY.md`)
+- Do NOT create shell scripts for manual testing or debugging
+- Do NOT create documentation files unless explicitly requested
+- Keep implementation notes within the story file itself, not in separate files
+- The only markdown files in root should be: `README.md`, `CLAUDE.md`, `REFINEMENT_LOOP.md`

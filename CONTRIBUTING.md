@@ -6,7 +6,7 @@ Thank you for your interest in contributing to agentic-workflow! We welcome cont
 
 ### Prerequisites
 
-- Node.js 18+ and npm 9+
+- Node.js 20+ and npm 9+
 - Git
 
 ### Development Setup

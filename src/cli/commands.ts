@@ -53,7 +53,7 @@ export async function init(): Promise<void> {
 /**
  * Show current board state
  */
-export async function status(): Promise<void> {
+export async function status(options?: { active?: boolean }): Promise<void> {
   const config = loadConfig();
   const sdlcRoot = getSdlcRoot();
   const c = getThemedChalk(config);
@@ -78,7 +78,16 @@ export async function status(): Promise<void> {
     { name: 'DONE', folder: 'done', color: c.done },
   ];
 
-  for (const col of columns) {
+  // Filter columns if --active flag is set
+  let displayColumns = columns;
+  let doneCount = 0;
+
+  if (options?.active) {
+    doneCount = stats['done'];
+    displayColumns = columns.filter(col => col.folder !== 'done');
+  }
+
+  for (const col of displayColumns) {
     const count = stats[col.folder];
     console.log(c.bold(col.color(`${col.name} (${count})`)));
 
@@ -89,6 +98,12 @@ export async function status(): Promise<void> {
 
     // Use new table renderer
     console.log(renderStories(stories, c));
+    console.log();
+  }
+
+  // Show summary line when done is filtered and there are done stories
+  if (options?.active && doneCount > 0) {
+    console.log(c.dim(`${doneCount} done stories (use 'status' without --active to show all)`));
     console.log();
   }
 

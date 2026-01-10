@@ -1,5 +1,8 @@
 {
   "sdlcFolder": ".agentic-sdlc",
+  "timeouts": {
+    "agentTimeout": 1800000
+  },
   "stageGates": {
     "requireApprovalBeforeImplementation": false,
     "requireApprovalBeforePR": false,

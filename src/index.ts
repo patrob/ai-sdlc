@@ -41,7 +41,8 @@ program
 program
   .command('status')
   .description('Show current board state')
-  .action(status);
+  .option('--active', 'Hide done stories from output')
+  .action((options) => status(options));
 
 program
   .command('add <title>')

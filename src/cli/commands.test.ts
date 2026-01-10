@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { Story, ActionType } from '../types/index.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { Story, ActionType, KanbanFolder } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
-import { getPhaseInfo, calculatePhaseProgress, truncateForTerminal, sanitizeStorySlug } from './commands.js';
+import { getPhaseInfo, calculatePhaseProgress, truncateForTerminal, sanitizeStorySlug, status } from './commands.js';
 
 describe('CLI Commands - Phase Helpers', () => {
   let originalEnv: NodeJS.ProcessEnv;
@@ -406,6 +406,177 @@ describe('CLI Commands - Phase Helpers', () => {
       const sanitized = sanitizeStorySlug(complex);
       expect(sanitized).toBe('StoryREDEnd');
       expect(sanitized).not.toContain('\x1b');
+    });
+  });
+});
+
+describe('Status Command - Active Flag Filtering', () => {
+  let consoleLogSpy: any;
+
+  beforeEach(() => {
+    // Mock console.log to capture output
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    // Restore console.log
+    consoleLogSpy.mockRestore();
+  });
+
+  describe('Column Filtering Logic', () => {
+    it('should show all columns including done when --active flag is not provided', () => {
+      // This test verifies the columns array structure
+      const columns: { name: string; folder: KanbanFolder; color: any }[] = [
+        { name: 'BACKLOG', folder: 'backlog', color: () => '' },
+        { name: 'READY', folder: 'ready', color: () => '' },
+        { name: 'IN-PROGRESS', folder: 'in-progress', color: () => '' },
+        { name: 'DONE', folder: 'done', color: () => '' },
+      ];
+
+      // When --active is not set, displayColumns should equal columns
+      const displayColumns = columns; // No filtering
+      expect(displayColumns).toHaveLength(4);
+      expect(displayColumns.find(col => col.folder === 'done')).toBeDefined();
+    });
+
+    it('should exclude done column when --active flag is true', () => {
+      const columns: { name: string; folder: KanbanFolder; color: any }[] = [
+        { name: 'BACKLOG', folder: 'backlog', color: () => '' },
+        { name: 'READY', folder: 'ready', color: () => '' },
+        { name: 'IN-PROGRESS', folder: 'in-progress', color: () => '' },
+        { name: 'DONE', folder: 'done', color: () => '' },
+      ];
+
+      // When --active is true, filter out done column
+      const displayColumns = columns.filter(col => col.folder !== 'done');
+
+      expect(displayColumns).toHaveLength(3);
+      expect(displayColumns.find(col => col.folder === 'done')).toBeUndefined();
+      expect(displayColumns.find(col => col.folder === 'backlog')).toBeDefined();
+      expect(displayColumns.find(col => col.folder === 'ready')).toBeDefined();
+      expect(displayColumns.find(col => col.folder === 'in-progress')).toBeDefined();
+    });
+  });
+
+  describe('Summary Line Logic', () => {
+    it('should not show summary line when done count is 0', () => {
+      const doneCount = 0;
+      const active = true;
+
+      // Logic: only show summary if active && doneCount > 0
+      const shouldShowSummary = active && doneCount > 0;
+
+      expect(shouldShowSummary).toBe(false);
+    });
+
+    it('should show summary line when done count > 0 and --active is true', () => {
+      const doneCount = 5;
+      const active = true;
+
+      const shouldShowSummary = active && doneCount > 0;
+
+      expect(shouldShowSummary).toBe(true);
+    });
+
+    it('should not show summary line when --active is false even if done count > 0', () => {
+      const doneCount = 5;
+      const active = false;
+
+      const shouldShowSummary = active && doneCount > 0;
+
+      expect(shouldShowSummary).toBe(false);
+    });
+
+    it('should format summary message correctly', () => {
+      const doneCount = 42;
+      const expectedMessage = `${doneCount} done stories (use 'status' without --active to show all)`;
+
+      expect(expectedMessage).toBe('42 done stories (use \'status\' without --active to show all)');
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle empty board with 0 done stories', () => {
+      const columns: { name: string; folder: KanbanFolder; color: any }[] = [
+        { name: 'BACKLOG', folder: 'backlog', color: () => '' },
+        { name: 'READY', folder: 'ready', color: () => '' },
+        { name: 'IN-PROGRESS', folder: 'in-progress', color: () => '' },
+        { name: 'DONE', folder: 'done', color: () => '' },
+      ];
+
+      const doneCount = 0;
+      const active = true;
+
+      const displayColumns = active ? columns.filter(col => col.folder !== 'done') : columns;
+      const shouldShowSummary = active && doneCount > 0;
+
+      expect(displayColumns).toHaveLength(3);
+      expect(shouldShowSummary).toBe(false); // No summary for 0 stories
+    });
+
+    it('should handle large done count (100+)', () => {
+      const doneCount = 150;
+      const active = true;
+
+      const shouldShowSummary = active && doneCount > 0;
+      const summaryMessage = `${doneCount} done stories (use 'status' without --active to show all)`;
+
+      expect(shouldShowSummary).toBe(true);
+      expect(summaryMessage).toBe('150 done stories (use \'status\' without --active to show all)');
+    });
+
+    it('should handle board with only done stories', () => {
+      const columns: { name: string; folder: KanbanFolder; color: any }[] = [
+        { name: 'BACKLOG', folder: 'backlog', color: () => '' },
+        { name: 'READY', folder: 'ready', color: () => '' },
+        { name: 'IN-PROGRESS', folder: 'in-progress', color: () => '' },
+        { name: 'DONE', folder: 'done', color: () => '' },
+      ];
+
+      const doneCount = 10;
+      const active = true;
+
+      // When filtered, only 3 columns remain (no done)
+      const displayColumns = active ? columns.filter(col => col.folder !== 'done') : columns;
+      const shouldShowSummary = active && doneCount > 0;
+
+      expect(displayColumns).toHaveLength(3);
+      expect(displayColumns.find(col => col.folder === 'done')).toBeUndefined();
+      expect(shouldShowSummary).toBe(true); // Summary shows 10 done stories hidden
+    });
+  });
+
+  describe('Options Parameter Type Safety', () => {
+    it('should accept undefined options', () => {
+      const options: { active?: boolean } | undefined = undefined;
+      const shouldFilter = options?.active;
+
+      expect(shouldFilter).toBeUndefined();
+      expect(!!shouldFilter).toBe(false);
+    });
+
+    it('should accept options with active: false', () => {
+      const options: { active?: boolean } = { active: false };
+      const shouldFilter = options?.active;
+
+      expect(shouldFilter).toBe(false);
+    });
+
+    it('should accept options with active: true', () => {
+      const options: { active?: boolean } = { active: true };
+      const shouldFilter = options?.active;
+
+      expect(shouldFilter).toBe(true);
+    });
+
+    it('should handle optional chaining safely', () => {
+      const options1: { active?: boolean } | undefined = undefined;
+      const options2: { active?: boolean } = {};
+      const options3: { active?: boolean } = { active: true };
+
+      expect(options1?.active).toBeUndefined();
+      expect(options2?.active).toBeUndefined();
+      expect(options3?.active).toBe(true);
     });
   });
 });

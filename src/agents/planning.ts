@@ -70,6 +70,7 @@ Format the plan with markdown checkboxes like:
       prompt,
       systemPrompt: PLANNING_SYSTEM_PROMPT,
       workingDirectory: path.dirname(sdlcRoot),
+      onProgress: options.onProgress,
     });
 
     // Append plan to the story

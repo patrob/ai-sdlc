@@ -53,6 +53,7 @@ case 'rework':
 - **Integration tests**: Place in `tests/integration/` when testing multiple components together
 - The `tests/` directory is for integration tests, test utilities, helpers, and fixtures
 - Do NOT create shell scripts for manual testing - use vitest instead
+- Do NOT test frameworks or SDKs - trust that they work as documented (e.g., don't test that the Claude Agent SDK discovers CLAUDE.md)
 
 ## File Hygiene
 - Do NOT create temporary/scratch files in the project root (e.g., `verify-*.md`, `IMPLEMENTATION_SUMMARY.md`)
@@ -60,3 +61,22 @@ case 'rework':
 - Do NOT create documentation files unless explicitly requested
 - Keep implementation notes within the story file itself, not in separate files
 - The only markdown files in root should be: `README.md`, `CLAUDE.md`, `REFINEMENT_LOOP.md`
+
+## Completion Criteria
+NEVER mark implementation as complete until:
+1. `npm test` passes with 0 failures
+2. `npm run build` succeeds
+3. Story status accurately reflects current state (no conflicting "Complete" claims)
+
+## Testing (Critical Rules)
+- **Export testable functions**: Never recreate production logic in tests. Export functions from production code and import them in tests
+- **Integration tests must test integration**: Tests in `tests/integration/` must mock dependencies and verify actual execution flows (e.g., mock `ora`, call `executeAction()`, verify spinner methods called). Tests that only check types/return values are unit tests - name them accordingly
+
+## Security Patterns
+- Apply validation/sanitization at ALL display/output points, not just one function
+- When adding security measures to one code path, audit all related code paths for consistency
+
+## Story Document Accuracy
+- Keep ONE current status section - remove or clearly mark outdated "Implementation Complete" claims
+- Update build/test results after fixing issues - don't leave stale failure information
+- Run `npm test` and verify output before claiming tests pass

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
 import { parseStory, writeStory, appendToSection, updateStoryField } from '../core/story.js';
-import { runAgentQuery } from '../core/client.js';
+import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
 import { Story, AgentResult } from '../types/index.js';
 
 const RESEARCH_SYSTEM_PROMPT = `You are a technical research specialist. Your job is to research how to implement a user story by analyzing the existing codebase and external best practices.
@@ -19,6 +19,8 @@ Output your research findings in markdown format. Be specific about file paths a
 export interface AgentOptions {
   /** Context from a previous review failure - must address these issues */
   reworkContext?: string;
+  /** Callback for real-time progress updates from agent execution */
+  onProgress?: AgentProgressCallback;
 }
 
 /**
@@ -77,6 +79,7 @@ Format your response as markdown for the Research section of the story.`;
       prompt,
       systemPrompt: RESEARCH_SYSTEM_PROMPT,
       workingDirectory: path.dirname(sdlcRoot),
+      onProgress: options.onProgress,
     });
 
     // Append research to the story

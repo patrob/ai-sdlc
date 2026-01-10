@@ -153,6 +153,16 @@ export interface ThemeColors {
   ready: any;
   inProgress: any;
   done: any;
+  // RPIV phase colors
+  phaseRefine: any;
+  phaseResearch: any;
+  phasePlan: any;
+  phaseImplement: any;
+  phaseVerify: any;
+  // Review action distinction
+  reviewAction: any;
+  // Phase completion
+  phaseComplete: any;
 }
 
 // Configuration types
@@ -181,6 +191,18 @@ export interface ReviewConfig {
   autoRestartOnRejection: boolean;
 }
 
+/**
+ * Timeout configuration for various operations
+ */
+export interface TimeoutConfig {
+  /** Timeout for agent queries in milliseconds. @default 600000 (10 minutes) */
+  agentTimeout: number;
+  /** Timeout for build commands in milliseconds. @default 120000 (2 minutes) */
+  buildTimeout: number;
+  /** Timeout for test commands in milliseconds. @default 300000 (5 minutes) */
+  testTimeout: number;
+}
+
 export interface Config {
   sdlcFolder: string;
   stageGates: StageGateConfig;
@@ -204,6 +226,11 @@ export interface Config {
    * @default []
    */
   settingSources?: SettingSource[];
+  /**
+   * Timeout configuration for operations.
+   * All values are in milliseconds.
+   */
+  timeouts: TimeoutConfig;
 }
 
 // Agent types

@@ -41,6 +41,48 @@ describe('theme module', () => {
       process.env.COLORFGBG = 'invalid';
       expect(detectTerminalTheme()).toBe('dark');
     });
+
+    it('should handle 256-color RGB cube values (16-231)', () => {
+      // Test a light color in the RGB cube (high R, G, B values)
+      process.env.COLORFGBG = '0;231'; // Max RGB value (5,5,5)
+      expect(detectTerminalTheme()).toBe('light');
+
+      // Test a dark color in the RGB cube (low R, G, B values)
+      process.env.COLORFGBG = '15;16'; // Min RGB value (0,0,0)
+      expect(detectTerminalTheme()).toBe('dark');
+    });
+
+    it('should handle 256-color grayscale ramp (232-255)', () => {
+      // Test a light grayscale value
+      process.env.COLORFGBG = '0;255'; // Brightest gray
+      expect(detectTerminalTheme()).toBe('light');
+
+      // Test a dark grayscale value
+      process.env.COLORFGBG = '15;232'; // Darkest gray
+      expect(detectTerminalTheme()).toBe('dark');
+
+      // Test midpoint (should be dark as threshold is 243)
+      process.env.COLORFGBG = '15;240';
+      expect(detectTerminalTheme()).toBe('dark');
+
+      // Just above threshold (should be light)
+      process.env.COLORFGBG = '0;244';
+      expect(detectTerminalTheme()).toBe('light');
+    });
+
+    it('should reject out-of-range COLORFGBG values (>255)', () => {
+      process.env.COLORFGBG = '0;999999';
+      expect(detectTerminalTheme()).toBe('dark'); // Should fall back to default
+    });
+
+    it('should handle standard 16-color palette correctly', () => {
+      // Test boundary values
+      process.env.COLORFGBG = '15;7'; // Highest dark value
+      expect(detectTerminalTheme()).toBe('dark');
+
+      process.env.COLORFGBG = '0;8'; // Lowest light value
+      expect(detectTerminalTheme()).toBe('light');
+    });
   });
 
   describe('getThemeColors', () => {
@@ -96,6 +138,13 @@ describe('theme module', () => {
         'ready',
         'inProgress',
         'done',
+        'phaseRefine',
+        'phaseResearch',
+        'phasePlan',
+        'phaseImplement',
+        'phaseVerify',
+        'reviewAction',
+        'phaseComplete',
       ];
 
       for (const method of requiredMethods) {
@@ -169,6 +218,85 @@ describe('theme module', () => {
       expect(colors.ready('ready')).toBeTruthy();
       expect(colors.inProgress('in-progress')).toBeTruthy();
       expect(colors.done('done')).toBeTruthy();
+    });
+  });
+
+  describe('RPIV phase colors', () => {
+    it('should return colors for all phase methods in dark theme', () => {
+      delete process.env.NO_COLOR;
+      const colors = getThemeColors('dark');
+
+      expect(typeof colors.phaseRefine('Refine')).toBe('string');
+      expect(typeof colors.phaseResearch('Research')).toBe('string');
+      expect(typeof colors.phasePlan('Plan')).toBe('string');
+      expect(typeof colors.phaseImplement('Implement')).toBe('string');
+      expect(typeof colors.phaseVerify('Verify')).toBe('string');
+    });
+
+    it('should return colors for all phase methods in light theme', () => {
+      delete process.env.NO_COLOR;
+      const colors = getThemeColors('light');
+
+      expect(typeof colors.phaseRefine('Refine')).toBe('string');
+      expect(typeof colors.phaseResearch('Research')).toBe('string');
+      expect(typeof colors.phasePlan('Plan')).toBe('string');
+      expect(typeof colors.phaseImplement('Implement')).toBe('string');
+      expect(typeof colors.phaseVerify('Verify')).toBe('string');
+    });
+
+    it('should return unstyled text for phase methods when NO_COLOR is set', () => {
+      process.env.NO_COLOR = '1';
+      const colors = getThemeColors('dark');
+
+      expect(colors.phaseRefine('Refine')).toBe('Refine');
+      expect(colors.phaseResearch('Research')).toBe('Research');
+      expect(colors.phasePlan('Plan')).toBe('Plan');
+      expect(colors.phaseImplement('Implement')).toBe('Implement');
+      expect(colors.phaseVerify('Verify')).toBe('Verify');
+
+      delete process.env.NO_COLOR;
+    });
+
+    it('should return unstyled text for phase methods when theme is none', () => {
+      const colors = getThemeColors('none');
+
+      expect(colors.phaseRefine('Refine')).toBe('Refine');
+      expect(colors.phaseResearch('Research')).toBe('Research');
+      expect(colors.phasePlan('Plan')).toBe('Plan');
+      expect(colors.phaseImplement('Implement')).toBe('Implement');
+      expect(colors.phaseVerify('Verify')).toBe('Verify');
+    });
+
+    it('should provide reviewAction color method', () => {
+      delete process.env.NO_COLOR;
+      const colors = getThemeColors('dark');
+
+      expect(typeof colors.reviewAction('Review')).toBe('string');
+    });
+
+    it('should return unstyled text for reviewAction when NO_COLOR is set', () => {
+      process.env.NO_COLOR = '1';
+      const colors = getThemeColors('dark');
+
+      expect(colors.reviewAction('Review')).toBe('Review');
+
+      delete process.env.NO_COLOR;
+    });
+
+    it('should provide phaseComplete color method', () => {
+      delete process.env.NO_COLOR;
+      const colors = getThemeColors('dark');
+
+      expect(typeof colors.phaseComplete('Complete')).toBe('string');
+    });
+
+    it('should return unstyled text for phaseComplete when NO_COLOR is set', () => {
+      process.env.NO_COLOR = '1';
+      const colors = getThemeColors('dark');
+
+      expect(colors.phaseComplete('Complete')).toBe('Complete');
+
+      delete process.env.NO_COLOR;
     });
   });
 });

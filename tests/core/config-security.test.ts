@@ -172,7 +172,7 @@ describe('Configuration Security Tests', () => {
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Invalid AGENTIC_SDLC_MAX_RETRIES value')
       );
-      expect(config.reviewConfig.maxRetries).toBe(3); // Default
+      expect(config.reviewConfig.maxRetries).toBe(Infinity); // Default (infinite)
     });
 
     it('should reject negative AGENTIC_SDLC_MAX_RETRIES', () => {
@@ -184,7 +184,7 @@ describe('Configuration Security Tests', () => {
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Invalid AGENTIC_SDLC_MAX_RETRIES value')
       );
-      expect(config.reviewConfig.maxRetries).toBe(3); // Default
+      expect(config.reviewConfig.maxRetries).toBe(Infinity); // Default (infinite)
     });
 
     it('should reject AGENTIC_SDLC_MAX_RETRIES above 100', () => {
@@ -196,7 +196,7 @@ describe('Configuration Security Tests', () => {
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Invalid AGENTIC_SDLC_MAX_RETRIES value')
       );
-      expect(config.reviewConfig.maxRetries).toBe(3); // Default
+      expect(config.reviewConfig.maxRetries).toBe(Infinity); // Default (infinite)
     });
 
     it('should accept valid AGENTIC_SDLC_MAX_RETRIES', () => {

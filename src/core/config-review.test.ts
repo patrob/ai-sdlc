@@ -110,16 +110,16 @@ describe('review config validation', () => {
       expect(config.reviewConfig.autoRestartOnRejection).toBe(false);
     });
 
-    it('should validate environment variable overrides', () => {
+    it('should ignore invalid negative environment variable values', () => {
       process.env.AGENTIC_SDLC_MAX_RETRIES = '-5';
       const config = loadConfig();
-      expect(config.reviewConfig.maxRetries).toBe(0); // validated to 0
+      expect(config.reviewConfig.maxRetries).toBe(3); // invalid, uses default
     });
 
-    it('should cap environment variable maxRetries at upperBound', () => {
+    it('should allow environment variable maxRetries up to 100', () => {
       process.env.AGENTIC_SDLC_MAX_RETRIES = '20';
       const config = loadConfig();
-      expect(config.reviewConfig.maxRetries).toBe(10); // capped at upperBound
+      expect(config.reviewConfig.maxRetries).toBe(20); // env var raises upper bound
     });
   });
 

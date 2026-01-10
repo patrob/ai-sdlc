@@ -16,6 +16,11 @@ When researching a story, you should:
 
 Output your research findings in markdown format. Be specific about file paths and code patterns.`;
 
+export interface AgentOptions {
+  /** Context from a previous review failure - must address these issues */
+  reworkContext?: string;
+}
+
 /**
  * Research Agent
  *
@@ -24,7 +29,8 @@ Output your research findings in markdown format. Be specific about file paths a
  */
 export async function runResearchAgent(
   storyPath: string,
-  sdlcRoot: string
+  sdlcRoot: string,
+  options: AgentOptions = {}
 ): Promise<AgentResult> {
   const story = parseStory(storyPath);
   const changesMade: string[] = [];
@@ -33,7 +39,8 @@ export async function runResearchAgent(
     // Gather codebase context
     const codebaseContext = await gatherCodebaseContext(sdlcRoot);
 
-    const prompt = `Please research how to implement this story:
+    // Build the prompt, including rework context if this is a refinement iteration
+    let prompt = `Please research how to implement this story:
 
 Title: ${story.frontmatter.title}
 
@@ -41,7 +48,21 @@ Story content:
 ${story.content}
 
 Codebase context:
-${codebaseContext}
+${codebaseContext}`;
+
+    if (options.reworkContext) {
+      prompt += `
+
+---
+${options.reworkContext}
+---
+
+IMPORTANT: This is a refinement iteration. The previous implementation did not pass review.
+You MUST address all the issues listed above in your research. Focus on finding solutions
+to the specific problems identified by reviewers.`;
+    }
+
+    prompt += `
 
 Provide research findings including:
 1. Relevant existing patterns and code to reference

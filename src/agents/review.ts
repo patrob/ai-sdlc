@@ -3,7 +3,67 @@ import path from 'path';
 import { parseStory, writeStory, moveStory, appendToSection, updateStoryField, isAtMaxRetries, appendReviewHistory, snapshotMaxRetries, getEffectiveMaxRetries } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
 import { loadConfig } from '../core/config.js';
-import { Story, AgentResult, ReviewResult, ReviewIssue, ReviewIssueSeverity, ReviewDecision, ReviewSeverity, ReviewAttempt } from '../types/index.js';
+import { Story, AgentResult, ReviewResult, ReviewIssue, ReviewIssueSeverity, ReviewDecision, ReviewSeverity, ReviewAttempt, Config } from '../types/index.js';
+
+/**
+ * Result of running build/test commands
+ */
+interface VerificationResult {
+  buildPassed: boolean;
+  buildOutput: string;
+  testsPassed: boolean;
+  testsOutput: string;
+}
+
+/**
+ * Run build and test commands before review
+ * Returns structured results that can be included in review context
+ */
+function runVerification(workingDir: string, config: Config): VerificationResult {
+  const result: VerificationResult = {
+    buildPassed: true,
+    buildOutput: '',
+    testsPassed: true,
+    testsOutput: '',
+  };
+
+  // Run build command if configured
+  if (config.buildCommand) {
+    try {
+      result.buildOutput = execSync(config.buildCommand, {
+        cwd: workingDir,
+        encoding: 'utf-8',
+        timeout: 120000, // 2 minute timeout
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      result.buildPassed = true;
+    } catch (error: any) {
+      result.buildPassed = false;
+      result.buildOutput = error.stdout || error.stderr || error.message || 'Build failed';
+    }
+  }
+
+  // Run test command if configured
+  if (config.testCommand) {
+    try {
+      result.testsOutput = execSync(config.testCommand, {
+        cwd: workingDir,
+        encoding: 'utf-8',
+        timeout: 300000, // 5 minute timeout for tests
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      result.testsPassed = true;
+    } catch (error: any) {
+      result.testsPassed = false;
+      // Capture both stdout and stderr for test output
+      result.testsOutput = [error.stdout, error.stderr, error.message]
+        .filter(Boolean)
+        .join('\n') || 'Tests failed';
+    }
+  }
+
+  return result;
+}
 
 const REVIEW_OUTPUT_FORMAT = `
 Output your review as a JSON object with this structure:
@@ -250,17 +310,68 @@ export async function runReviewAgent(
       };
     }
 
-    // Run all reviews in parallel
+    // Run build and tests BEFORE reviews
+    changesMade.push('Running build and test verification...');
+    const verification = runVerification(workingDir, config);
+
+    // Create verification issues if build/tests failed
+    const verificationIssues: ReviewIssue[] = [];
+    let verificationContext = '';
+
+    if (config.buildCommand) {
+      if (verification.buildPassed) {
+        changesMade.push(`Build passed: ${config.buildCommand}`);
+        verificationContext += `\n## Build Results ✅\nBuild command \`${config.buildCommand}\` passed successfully.\n`;
+      } else {
+        changesMade.push(`Build FAILED: ${config.buildCommand}`);
+        verificationIssues.push({
+          severity: 'blocker',
+          category: 'build',
+          description: `Build failed. Command: ${config.buildCommand}`,
+          suggestedFix: 'Fix build errors before review can proceed.',
+        });
+        verificationContext += `\n## Build Results ❌\nBuild command \`${config.buildCommand}\` FAILED:\n\`\`\`\n${verification.buildOutput.substring(0, 2000)}\n\`\`\`\n`;
+      }
+    }
+
+    if (config.testCommand) {
+      if (verification.testsPassed) {
+        changesMade.push(`Tests passed: ${config.testCommand}`);
+        verificationContext += `\n## Test Results ✅\nTest command \`${config.testCommand}\` passed successfully.\n`;
+        // Include summary of test output (last 500 chars typically has summary)
+        const testSummary = verification.testsOutput.slice(-500);
+        if (testSummary) {
+          verificationContext += `\`\`\`\n${testSummary}\n\`\`\`\n`;
+        }
+      } else {
+        changesMade.push(`Tests FAILED: ${config.testCommand}`);
+        verificationIssues.push({
+          severity: 'blocker',
+          category: 'testing',
+          description: `Tests failed. Command: ${config.testCommand}`,
+          suggestedFix: 'Fix failing tests before review can proceed.',
+        });
+        verificationContext += `\n## Test Results ❌\nTest command \`${config.testCommand}\` FAILED:\n\`\`\`\n${verification.testsOutput.substring(0, 3000)}\n\`\`\`\n`;
+      }
+    }
+
+    // Run all reviews in parallel, passing verification context
     const [codeReview, securityReview, poReview] = await Promise.all([
-      runSubReview(story, CODE_REVIEW_PROMPT, 'Code Review', workingDir),
-      runSubReview(story, SECURITY_REVIEW_PROMPT, 'Security Review', workingDir),
-      runSubReview(story, PO_REVIEW_PROMPT, 'Product Owner Review', workingDir),
+      runSubReview(story, CODE_REVIEW_PROMPT, 'Code Review', workingDir, verificationContext),
+      runSubReview(story, SECURITY_REVIEW_PROMPT, 'Security Review', workingDir, verificationContext),
+      runSubReview(story, PO_REVIEW_PROMPT, 'Product Owner Review', workingDir, verificationContext),
     ]);
 
     // Parse each review response into structured issues
     const codeResult = parseReviewResponse(codeReview, 'Code Review');
     const securityResult = parseReviewResponse(securityReview, 'Security Review');
     const poResult = parseReviewResponse(poReview, 'Product Owner Review');
+
+    // Add verification issues to code result (they're code-quality related)
+    codeResult.issues.unshift(...verificationIssues);
+    if (verificationIssues.length > 0) {
+      codeResult.passed = false;
+    }
 
     // Aggregate all issues and determine overall pass/fail
     const { passed, allIssues, severity } = aggregateReviews(codeResult, securityResult, poResult);
@@ -292,11 +403,11 @@ ${passed ? '✅ **PASSED** - All reviews approved' : '❌ **FAILED** - Issues mu
     // Determine decision
     const decision = passed ? ReviewDecision.APPROVED : ReviewDecision.REJECTED;
 
-    // Create review attempt record
+    // Create review attempt record (omit undefined fields to avoid YAML serialization errors)
     const reviewAttempt: ReviewAttempt = {
       timestamp: new Date().toISOString(),
       decision,
-      severity: passed ? undefined : severity,
+      ...(passed ? {} : { severity }),
       feedback: passed ? 'All reviews passed' : formatIssuesForDisplay(allIssues),
       blockers: allIssues.filter(i => i.severity === 'blocker').map(i => i.description),
       codeReviewPassed: codeResult.passed,
@@ -322,7 +433,7 @@ ${passed ? '✅ **PASSED** - All reviews approved' : '❌ **FAILED** - Issues mu
       changesMade,
       passed,
       decision,
-      severity: passed ? undefined : severity,
+      ...(passed ? {} : { severity }),
       reviewType: 'combined',
       issues: allIssues,
       feedback: passed ? 'All reviews passed' : formatIssuesForDisplay(allIssues),
@@ -355,13 +466,14 @@ async function runSubReview(
   story: Story,
   systemPrompt: string,
   reviewType: string,
-  workingDir: string
+  workingDir: string,
+  verificationContext: string = ''
 ): Promise<string> {
   try {
     const prompt = `Review this story implementation:
 
 Title: ${story.frontmatter.title}
-
+${verificationContext ? `\n---\n# Build & Test Verification Results\n${verificationContext}\n---\n` : ''}
 Full story content:
 ${story.content}
 

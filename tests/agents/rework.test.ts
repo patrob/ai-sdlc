@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { runReworkAgent, determineTargetPhase, packageReworkContext } from '../../src/agents/rework.js';
-import { createStory, parseStory } from '../../src/core/story.js';
+import { createStory, parseStory, writeStory } from '../../src/core/story.js';
 import { ReviewResult, ReviewDecision, ReviewSeverity } from '../../src/types/index.js';
 
 describe('Rework Agent', () => {
@@ -156,6 +156,7 @@ describe('Rework Agent', () => {
       { iteration: 2, agentType: 'implement', startedAt: new Date().toISOString(), result: 'failed' },
       { iteration: 3, agentType: 'implement', startedAt: new Date().toISOString(), result: 'failed' },
     ];
+    writeStory(story); // Persist to disk so runReworkAgent reads the updated state
 
     const reviewFeedback: ReviewResult = {
       success: true,

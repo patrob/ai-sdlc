@@ -9,7 +9,7 @@ import { runResearchAgent } from '../agents/research.js';
 import { runPlanningAgent } from '../agents/planning.js';
 import { runImplementationAgent } from '../agents/implementation.js';
 import { runReviewAgent, createPullRequest } from '../agents/review.js';
-import { runReworkAgent } from '../agents/rework.js';
+import { runReworkAgent, packageReworkContext } from '../agents/rework.js';
 import { getThemedChalk } from '../core/theme.js';
 
 export interface RunOptions {
@@ -199,14 +199,18 @@ export class WorkflowRunner {
           const c = getThemedChalk(config);
           console.log(c.info(`\n  ↳ Triggering ${reworkContext.targetPhase} agent for refinement...`));
 
-          // Execute the appropriate agent based on target phase
+          // Package the review feedback as context for the agent
+          const story = parseStory(action.storyPath);
+          const agentReworkContext = packageReworkContext(story, reworkContext.reviewFeedback);
+
+          // Execute the appropriate agent based on target phase, passing the rework context
           switch (reworkContext.targetPhase) {
             case 'research':
-              return runResearchAgent(action.storyPath, this.sdlcRoot);
+              return runResearchAgent(action.storyPath, this.sdlcRoot, { reworkContext: agentReworkContext });
             case 'plan':
-              return runPlanningAgent(action.storyPath, this.sdlcRoot);
+              return runPlanningAgent(action.storyPath, this.sdlcRoot, { reworkContext: agentReworkContext });
             case 'implement':
-              return runImplementationAgent(action.storyPath, this.sdlcRoot);
+              return runImplementationAgent(action.storyPath, this.sdlcRoot, { reworkContext: agentReworkContext });
             default:
               throw new Error(`Unknown target phase: ${reworkContext.targetPhase}`);
           }

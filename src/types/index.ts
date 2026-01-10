@@ -4,6 +4,14 @@ export type StoryType = 'feature' | 'bug' | 'chore' | 'spike';
 export type EffortEstimate = 'small' | 'medium' | 'large';
 
 /**
+ * Source for loading filesystem-based settings from the Agent SDK.
+ * - `'user'` - Global user settings (`~/.claude/settings.json`)
+ * - `'project'` - Project settings (`.claude/settings.json` and CLAUDE.md)
+ * - `'local'` - Local settings (`.claude/settings.local.json`)
+ */
+export type SettingSource = 'user' | 'project' | 'local';
+
+/**
  * Severity levels for review issues
  */
 export type ReviewIssueSeverity = 'blocker' | 'critical' | 'major' | 'minor';
@@ -180,6 +188,22 @@ export interface Config {
   reviewConfig: ReviewConfig;
   defaultLabels: string[];
   theme: ThemePreference;
+  /** Command to run tests (e.g., 'npm test'). If set, runs before review. */
+  testCommand?: string;
+  /** Command to build/compile (e.g., 'npm run build'). If set, runs before review. */
+  buildCommand?: string;
+  /**
+   * Control which filesystem settings to load for the Agent SDK.
+   * - `'user'` - Global user settings (`~/.claude/settings.json`)
+   * - `'project'` - Project settings (`.claude/settings.json` and CLAUDE.md)
+   * - `'local'` - Local settings (`.claude/settings.local.json`)
+   *
+   * When omitted or empty array, no filesystem settings are loaded (SDK isolation mode).
+   * Must include `'project'` to automatically load CLAUDE.md files from `.claude/` directory.
+   *
+   * @default []
+   */
+  settingSources?: SettingSource[];
 }
 
 // Agent types

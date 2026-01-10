@@ -3,8 +3,8 @@ import ora from 'ora';
 import fs from 'fs';
 import { getSdlcRoot, loadConfig, initConfig } from '../core/config.js';
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoryById } from '../core/kanban.js';
-import { createStory, parseStory } from '../core/story.js';
-import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord } from '../types/index.js';
+import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries } from '../core/story.js';
+import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
 import {
   saveWorkflowState,
@@ -14,6 +14,8 @@ import {
   calculateStoryHash,
   hasWorkflowState,
 } from '../core/workflow-state.js';
+import { renderStories } from './table-renderer.js';
+import { getStoryFlags as getStoryFlagsUtil, formatStatus as formatStatusUtil } from './story-utils.js';
 
 /**
  * Initialize the .agentic-sdlc folder structure
@@ -68,7 +70,7 @@ export async function status(): Promise<void> {
   console.log(c.bold('═══ Agentic SDLC Board ═══'));
   console.log();
 
-  // Show each column
+  // Show each column with new table format
   const columns: { name: string; folder: KanbanFolder; color: any }[] = [
     { name: 'BACKLOG', folder: 'backlog', color: c.backlog },
     { name: 'READY', folder: 'ready', color: c.ready },
@@ -85,14 +87,8 @@ export async function status(): Promise<void> {
       : col.folder === 'in-progress' ? assessment.inProgressItems
       : assessment.doneItems;
 
-    if (stories.length === 0) {
-      console.log(c.dim('  (empty)'));
-    } else {
-      for (const story of stories) {
-        const flags = getStoryFlags(story, c);
-        console.log(`  [${story.frontmatter.priority}] ${story.slug} - ${story.frontmatter.title}${flags}`);
-      }
-    }
+    // Use new table renderer
+    console.log(renderStories(stories, c));
     console.log();
   }
 
@@ -463,31 +459,96 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     }
   }
 
-  // Process actions
-  const totalActions = actionsToProcess.length;
+  // Process actions with retry support for Full SDLC mode
+  let currentActions = [...actionsToProcess];
   let currentActionIndex = 0;
+  let retryAttempt = 0;
+  const MAX_DISPLAY_RETRIES = 3; // For display purposes
 
-  for (const action of actionsToProcess) {
-    currentActionIndex++;
+  while (currentActionIndex < currentActions.length) {
+    const action = currentActions[currentActionIndex];
+    const totalActions = currentActions.length;
 
     // Enhanced progress indicator for full SDLC mode
     if (isFullSDLC && totalActions > 1) {
-      console.log(c.info(`\n═══ Phase ${currentActionIndex}/${totalActions}: ${action.type.toUpperCase()} ═══`));
+      const retryIndicator = retryAttempt > 0 ? ` (retry ${retryAttempt})` : '';
+      console.log(c.info(`\n═══ Phase ${currentActionIndex + 1}/${totalActions}: ${action.type.toUpperCase()}${retryIndicator} ═══`));
     }
 
-    const actionSuccess = await executeAction(action, sdlcRoot);
+    const actionResult = await executeAction(action, sdlcRoot);
 
     // Handle action failure in full SDLC mode
-    if (!actionSuccess && isFullSDLC) {
+    if (!actionResult.success && isFullSDLC) {
       console.log();
       console.log(c.error(`✗ Phase ${action.type} failed`));
-      console.log(c.dim(`Completed ${currentActionIndex - 1} of ${totalActions} phases`));
+      console.log(c.dim(`Completed ${currentActionIndex} of ${totalActions} phases`));
       console.log(c.info('Fix the error above and use --continue to resume.'));
       return;
     }
 
+    // Handle review rejection in Full SDLC mode - trigger retry loop
+    if (isFullSDLC && action.type === 'review' && actionResult.reviewResult) {
+      const reviewResult = actionResult.reviewResult;
+
+      if (reviewResult.decision === ReviewDecision.REJECTED) {
+        // Load fresh story state and config for retry check
+        const story = parseStory(action.storyPath);
+        const config = loadConfig();
+
+        // Check if we're at max retries
+        if (isAtMaxRetries(story, config)) {
+          console.log();
+          console.log(c.error('═'.repeat(50)));
+          console.log(c.error(`✗ Review failed - maximum retries reached`));
+          console.log(c.error('═'.repeat(50)));
+          console.log(c.dim(`Story has reached the maximum retry limit.`));
+          console.log(c.dim(`Issues found: ${reviewResult.issues.length}`));
+          console.log(c.warning('Manual intervention required to address the review feedback.'));
+          console.log(c.info('You can:'));
+          console.log(c.dim('  1. Fix issues manually and run again'));
+          console.log(c.dim('  2. Reset retry count in the story frontmatter'));
+          await clearWorkflowState(sdlcRoot);
+          return;
+        }
+
+        // We can retry - reset RPIV cycle and loop back
+        const currentRetry = (story.frontmatter.retry_count || 0) + 1;
+        const maxRetries = story.frontmatter.max_retries || config.reviewConfig?.maxRetries || 3;
+
+        console.log();
+        console.log(c.warning(`⟳ Review rejected with ${reviewResult.issues.length} issue(s) - initiating rework (attempt ${currentRetry}/${maxRetries})`));
+
+        // Reset the RPIV cycle (this increments retry_count and resets flags)
+        resetRPIVCycle(story, reviewResult.feedback);
+
+        // Log what's being reset
+        console.log(c.dim(`  → Reset plan_complete, implementation_complete, reviews_complete`));
+        console.log(c.dim(`  → Retry count: ${currentRetry}/${maxRetries}`));
+
+        // Regenerate actions starting from the phase that needs rework
+        // For now, we restart from 'plan' since that's the typical flow after research
+        const freshStory = parseStory(action.storyPath);
+        const newActions = generateFullSDLCActions(freshStory, c);
+
+        if (newActions.length > 0) {
+          // Replace remaining actions with the new sequence
+          currentActions = newActions;
+          currentActionIndex = 0;
+          retryAttempt++;
+
+          console.log(c.info(`  → Restarting SDLC from ${newActions[0].type} phase`));
+          console.log();
+          continue; // Restart the loop with new actions
+        } else {
+          // No actions to retry (shouldn't happen but handle gracefully)
+          console.log(c.error('Error: No actions generated for retry. Manual intervention required.'));
+          return;
+        }
+      }
+    }
+
     // Save checkpoint after successful action
-    if (actionSuccess) {
+    if (actionResult.success) {
       completedActions.push({
         type: action.type,
         storyId: action.storyId,
@@ -517,20 +578,34 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       console.log(c.dim(`  ✓ Progress saved (${completedActions.length} actions completed)`));
     }
 
+    currentActionIndex++;
+
     // Re-assess after each action in auto mode
     if (options.auto) {
-      // For full SDLC mode, check if all phases are complete
+      // For full SDLC mode, check if all phases are complete (and review passed)
       if (isFullSDLC) {
         // Check if we've completed all actions in our sequence
-        if (currentActionIndex >= totalActions) {
-          console.log();
-          console.log(c.success('═'.repeat(50)));
-          console.log(c.success(`✓ Full SDLC completed successfully!`));
-          console.log(c.success('═'.repeat(50)));
-          console.log(c.dim(`Completed phases: ${totalActions}/${totalActions}`));
-          console.log(c.dim(`Story is now ready for PR creation.`));
-          await clearWorkflowState(sdlcRoot);
-          console.log(c.dim('Checkpoint cleared.'));
+        if (currentActionIndex >= currentActions.length) {
+          // Verify the review actually passed (reviews_complete should be true)
+          const finalStory = parseStory(action.storyPath);
+          if (finalStory.frontmatter.reviews_complete) {
+            console.log();
+            console.log(c.success('═'.repeat(50)));
+            console.log(c.success(`✓ Full SDLC completed successfully!`));
+            console.log(c.success('═'.repeat(50)));
+            console.log(c.dim(`Completed phases: ${currentActions.length}`));
+            if (retryAttempt > 0) {
+              console.log(c.dim(`Retry attempts: ${retryAttempt}`));
+            }
+            console.log(c.dim(`Story is now ready for PR creation.`));
+            await clearWorkflowState(sdlcRoot);
+            console.log(c.dim('Checkpoint cleared.'));
+          } else {
+            // This shouldn't happen if our logic is correct, but handle it
+            console.log();
+            console.log(c.warning('All phases executed but reviews_complete is false.'));
+            console.log(c.dim('This may indicate an issue with the review process.'));
+          }
           break;
         }
       } else {
@@ -570,11 +645,19 @@ function resolveStoryPath(action: Action, sdlcRoot: string): string | null {
 }
 
 /**
+ * Result from executing an action
+ */
+interface ActionExecutionResult {
+  success: boolean;
+  reviewResult?: ReviewResult;  // Present when action.type === 'review'
+}
+
+/**
  * Execute a specific action
  *
- * @returns true if action succeeded, false if it failed
+ * @returns ActionExecutionResult with success status and optional review result
  */
-async function executeAction(action: Action, sdlcRoot: string): Promise<boolean> {
+async function executeAction(action: Action, sdlcRoot: string): Promise<ActionExecutionResult> {
   const config = loadConfig();
   const c = getThemedChalk(config);
 
@@ -585,7 +668,7 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<boolean>
     console.log(c.dim(`  Story ID: ${action.storyId}`));
     console.log(c.dim(`  Original path: ${action.storyPath}`));
     console.log(c.dim('  The story file may have been moved or deleted.'));
-    return false;
+    return { success: false };
   }
 
   // Update action path if it was stale
@@ -643,7 +726,7 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<boolean>
       if (result.error) {
         console.error(c.error(`  Error: ${result.error}`));
       }
-      return false;
+      return { success: false };
     }
 
     spinner.succeed(c.success(formatAction(action)));
@@ -655,7 +738,12 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<boolean>
       }
     }
 
-    return true;
+    // Return review result for review actions
+    if (action.type === 'review' && result) {
+      return { success: true, reviewResult: result as ReviewResult };
+    }
+
+    return { success: true };
   } catch (error) {
     spinner.fail(c.error(`Failed: ${formatAction(action)}`));
     console.error(error);
@@ -664,7 +752,7 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<boolean>
     const story = parseStory(action.storyPath);
     story.frontmatter.last_error = error instanceof Error ? error.message : String(error);
     // Don't throw - let the workflow continue if in auto mode
-    return false;
+    return { success: false };
   }
 }
 
@@ -688,18 +776,12 @@ function formatAction(action: Action): string {
 }
 
 /**
- * Get status flags for a story
+ * Get status flags for a story (wrapper for shared utility)
+ * Adds dim styling and error color for backward compatibility
  */
 function getStoryFlags(story: Story, c: any): string {
-  const flags: string[] = [];
-
-  if (story.frontmatter.research_complete) flags.push('R');
-  if (story.frontmatter.plan_complete) flags.push('P');
-  if (story.frontmatter.implementation_complete) flags.push('I');
-  if (story.frontmatter.reviews_complete) flags.push('V');
-  if (story.frontmatter.last_error) flags.push(c.error('!'));
-
-  return flags.length > 0 ? c.dim(` [${flags.join('')}]`) : '';
+  const flags = getStoryFlagsUtil(story, c);
+  return flags ? c.dim(` ${flags}`) : '';
 }
 
 /**
@@ -822,21 +904,10 @@ export async function details(idOrSlug: string): Promise<void> {
 }
 
 /**
- * Format status with appropriate color
+ * Format status with appropriate color (wrapper for shared utility)
  */
 function formatStatus(status: string, c: any): string {
-  switch (status) {
-    case 'backlog':
-      return c.backlog(status);
-    case 'ready':
-      return c.ready(status);
-    case 'in-progress':
-      return c.inProgress(status);
-    case 'done':
-      return c.done(status);
-    default:
-      return status;
-  }
+  return formatStatusUtil(status, c);
 }
 
 /**

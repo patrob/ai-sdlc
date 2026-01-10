@@ -2,6 +2,7 @@ import { parseStory, writeStory, appendToSection, updateStoryField } from '../co
 import { runAgentQuery } from '../core/client.js';
 import { Story, AgentResult } from '../types/index.js';
 import path from 'path';
+import { AgentOptions } from './research.js';
 
 const PLANNING_SYSTEM_PROMPT = `You are a technical planning specialist. Your job is to create detailed, step-by-step implementation plans for user stories.
 
@@ -21,18 +22,33 @@ Output your plan in markdown format with checkboxes. Each task should be small e
  */
 export async function runPlanningAgent(
   storyPath: string,
-  sdlcRoot: string
+  sdlcRoot: string,
+  options: AgentOptions = {}
 ): Promise<AgentResult> {
   const story = parseStory(storyPath);
   const changesMade: string[] = [];
 
   try {
-    const prompt = `Please create an implementation plan for this story:
+    let prompt = `Please create an implementation plan for this story:
 
 Title: ${story.frontmatter.title}
 
 Story content:
-${story.content}
+${story.content}`;
+
+    if (options.reworkContext) {
+      prompt += `
+
+---
+${options.reworkContext}
+---
+
+IMPORTANT: This is a refinement iteration. The previous implementation did not pass review.
+Your plan MUST specifically address all the issues listed above. Include explicit tasks
+to fix each identified problem. Do not repeat the same approach that failed.`;
+    }
+
+    prompt += `
 
 Create a detailed implementation plan including:
 1. Phases (e.g., Setup, Implementation, Testing, Verification)

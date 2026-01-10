@@ -1,6 +1,6 @@
 // Agent exports
 export { runRefinementAgent } from './refinement.js';
-export { runResearchAgent } from './research.js';
+export { runResearchAgent, AgentOptions } from './research.js';
 export { runPlanningAgent } from './planning.js';
 export { runImplementationAgent } from './implementation.js';
 export { runReviewAgent, createPullRequest } from './review.js';

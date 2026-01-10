@@ -4,7 +4,7 @@ title: >-
   Ability to see details of a story - maybe have story have an id and use flag
   'details <id>' to get it
 priority: 3
-status: in-progress
+status: done
 type: feature
 created: '2026-01-09'
 labels:

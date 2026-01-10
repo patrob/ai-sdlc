@@ -3,6 +3,7 @@ import path from 'path';
 import { parseStory, writeStory, moveStory, updateStoryField } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
 import { Story, AgentResult } from '../types/index.js';
+import { AgentOptions } from './research.js';
 
 const IMPLEMENTATION_SYSTEM_PROMPT = `You are a senior software engineer implementing features based on a detailed plan. Your job is to execute each phase of the implementation plan.
 
@@ -25,7 +26,8 @@ You have access to tools for reading and writing files, running commands, and se
  */
 export async function runImplementationAgent(
   storyPath: string,
-  sdlcRoot: string
+  sdlcRoot: string,
+  options: AgentOptions = {}
 ): Promise<AgentResult> {
   const story = parseStory(storyPath);
   const changesMade: string[] = [];
@@ -66,12 +68,26 @@ export async function runImplementationAgent(
       changesMade.push('Moved story to in-progress/');
     }
 
-    const prompt = `Implement this story based on the plan:
+    let prompt = `Implement this story based on the plan:
 
 Title: ${story.frontmatter.title}
 
 Story content:
-${story.content}
+${story.content}`;
+
+    if (options.reworkContext) {
+      prompt += `
+
+---
+${options.reworkContext}
+---
+
+IMPORTANT: This is a refinement iteration. The previous implementation did not pass review.
+You MUST fix all the issues listed above. Pay special attention to blocker and critical
+severity issues - these must be resolved. Review the specific feedback and make targeted fixes.`;
+    }
+
+    prompt += `
 
 Execute the implementation plan. For each task:
 1. Read relevant existing files

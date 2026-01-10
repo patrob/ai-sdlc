@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { createStory, moveStory, appendReviewHistory, parseStory } from '../../src/core/story.js';
+import { createStory, moveStory, appendReviewHistory, parseStory, writeStory } from '../../src/core/story.js';
 import { assessState } from '../../src/core/kanban.js';
 import { runReworkAgent } from '../../src/agents/rework.js';
 import { ReviewDecision, ReviewSeverity, ReviewResult } from '../../src/types/index.js';
@@ -135,6 +135,10 @@ describe('Refinement Loop Integration', () => {
       securityReviewPassed: true,
       poReviewPassed: true,
     });
+
+    // Mark reviews complete after approval
+    story.frontmatter.reviews_complete = true;
+    writeStory(story);
 
     // Step 8: Assess state - should generate create_pr action, not rework
     assessment = assessState(sdlcRoot);

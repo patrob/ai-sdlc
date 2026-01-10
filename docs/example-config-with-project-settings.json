@@ -1,0 +1,24 @@
+{
+  "sdlcFolder": ".agentic-sdlc",
+  "stageGates": {
+    "requireApprovalBeforeImplementation": false,
+    "requireApprovalBeforePR": false,
+    "autoMergeOnApproval": false
+  },
+  "refinement": {
+    "maxIterations": 3,
+    "escalateOnMaxAttempts": "manual",
+    "enableCircuitBreaker": true
+  },
+  "reviewConfig": {
+    "maxRetries": 3,
+    "maxRetriesUpperBound": 10,
+    "autoCompleteOnApproval": true,
+    "autoRestartOnRejection": true
+  },
+  "defaultLabels": [],
+  "theme": "auto",
+  "testCommand": "npm test",
+  "buildCommand": "npm run build",
+  "settingSources": ["project"]
+}

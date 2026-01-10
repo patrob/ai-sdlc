@@ -39,6 +39,7 @@ Transform the current flat-file story architecture into a folder-based structure
 - [ ] The planning agent can create implementation documentation within the story folder
 - [ ] All file path references in agents are updated to handle the folder-based structure
 - [ ] Existing flat-file stories can be migrated to the new structure (migration script or manual process documented)
+- [ ] **All existing stories in the current board MUST be migrated to the new folder format as part of implementation** - do not leave any stories in the old flat-file format
 - [ ] Documentation is updated to reflect the new folder-based architecture
 
 ## Constraints & Edge Cases

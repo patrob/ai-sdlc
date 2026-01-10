@@ -4,15 +4,15 @@ title: >-
   Fix review flow: auto-complete on approval, restart RPIV on rejection, with
   configurable max retries (default 3)
 priority: 3
-status: in-progress
+status: done
 type: feature
 created: '2026-01-09'
 labels:
   - s
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 updated: '2026-01-09'
 branch: agentic-sdlc/fix-review-flow-auto-complete-on-approval-restart-
 ---
@@ -34,16 +34,16 @@ The system should support configurable maximum retries (defaulting to 3) to bala
 
 ## Acceptance Criteria
 
-- [ ] When a review is approved, the system automatically transitions the story/task to "completed" status
-- [ ] When a review is rejected, the system automatically initiates a new RPIV cycle starting from the planning phase
-- [ ] Maximum retry limit is configurable via a system setting or environment variable
-- [ ] Default maximum retry limit is set to 3 attempts
-- [ ] After reaching the maximum retry limit, the system halts automatic retries and flags the story for manual intervention
-- [ ] Review rejection feedback is persisted and made available to subsequent RPIV cycles
-- [ ] The current retry count is visible in the story/task metadata
-- [ ] System logs all review decisions (approval/rejection) with timestamps and retry counts
-- [ ] Edge case: If review agent fails or times out, it counts as neither approval nor rejection and allows manual retry
-- [ ] Configuration changes to max retries apply to new review cycles, not in-progress ones
+- [x] When a review is approved, the system automatically transitions the story/task to "completed" status
+- [x] When a review is rejected, the system automatically initiates a new RPIV cycle starting from the planning phase
+- [x] Maximum retry limit is configurable via a system setting or environment variable
+- [x] Default maximum retry limit is set to 3 attempts
+- [x] After reaching the maximum retry limit, the system halts automatic retries and flags the story for manual intervention
+- [x] Review rejection feedback is persisted and made available to subsequent RPIV cycles
+- [x] The current retry count is visible in the story/task metadata
+- [x] System logs all review decisions (approval/rejection) with timestamps and retry counts
+- [x] Edge case: If review agent fails or times out, it counts as neither approval nor rejection and allows manual retry
+- [x] Configuration changes to max retries apply to new review cycles, not in-progress ones
 
 ## Edge Cases & Constraints
 

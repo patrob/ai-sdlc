@@ -27,14 +27,61 @@ export const DEFAULT_CONFIG: Config = {
   },
   defaultLabels: [],
   theme: 'auto',
+  // Test and build commands - auto-detected from package.json if present
+  testCommand: 'npm test',
+  buildCommand: 'npm run build',
+  // Agent SDK settings sources - empty array maintains SDK isolation mode (default)
+  settingSources: [],
 };
 
 /**
  * Get the SDLC root folder path
+ * Respects AGENTIC_SDLC_ROOT env var if set (useful for testing)
  */
 export function getSdlcRoot(workingDir: string = process.cwd()): string {
+  // Check for test override first
+  if (process.env.AGENTIC_SDLC_ROOT) {
+    return process.env.AGENTIC_SDLC_ROOT;
+  }
   const config = loadConfig(workingDir);
   return path.join(workingDir, config.sdlcFolder);
+}
+
+/**
+ * Validate and sanitize user configuration to prevent prototype pollution
+ */
+function sanitizeUserConfig(userConfig: any): Partial<Config> {
+  // Check for prototype pollution attempts
+  if (
+    Object.prototype.hasOwnProperty.call(userConfig, '__proto__') ||
+    Object.prototype.hasOwnProperty.call(userConfig, 'constructor') ||
+    Object.prototype.hasOwnProperty.call(userConfig, 'prototype')
+  ) {
+    throw new Error('Invalid configuration: prototype pollution attempt detected');
+  }
+
+  // Validate settingSources if present
+  if (userConfig.settingSources !== undefined) {
+    if (!Array.isArray(userConfig.settingSources)) {
+      console.warn('Invalid settingSources in config (must be array), ignoring');
+      delete userConfig.settingSources;
+    } else {
+      const validSources = ['user', 'project', 'local'];
+      const invalidSources = userConfig.settingSources.filter(
+        (s: any) => typeof s !== 'string' || !validSources.includes(s)
+      );
+      if (invalidSources.length > 0) {
+        console.warn(
+          `Invalid settingSources values in config: ${invalidSources.join(', ')}. Valid values: ${validSources.join(', ')}`
+        );
+        userConfig.settingSources = userConfig.settingSources.filter((s: any) =>
+          validSources.includes(s)
+        );
+      }
+    }
+  }
+
+  return userConfig;
 }
 
 /**
@@ -50,7 +97,8 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
   } else {
     try {
       const content = fs.readFileSync(configPath, 'utf-8');
-      const userConfig = JSON.parse(content) as Partial<Config>;
+      const parsedConfig = JSON.parse(content);
+      const userConfig = sanitizeUserConfig(parsedConfig) as Partial<Config>;
 
       config = {
         ...DEFAULT_CONFIG,
@@ -69,16 +117,27 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
         },
       };
     } catch (error) {
+      // Re-throw security-related errors (prototype pollution, etc.)
+      if (error instanceof Error && error.message.includes('prototype pollution')) {
+        throw error;
+      }
       console.warn(`Warning: Could not parse ${CONFIG_FILENAME}, using defaults`);
       config = { ...DEFAULT_CONFIG };
     }
   }
 
-  // Apply environment variable overrides
+  // Apply environment variable overrides with validation
   if (process.env.AGENTIC_SDLC_MAX_RETRIES) {
     const maxRetries = parseInt(process.env.AGENTIC_SDLC_MAX_RETRIES, 10);
-    if (!isNaN(maxRetries)) {
+    if (!isNaN(maxRetries) && maxRetries >= 0 && maxRetries <= 100) {
       config.reviewConfig.maxRetries = maxRetries;
+      // If user sets maxRetries via env, raise upper bound to allow it
+      config.reviewConfig.maxRetriesUpperBound = Math.max(
+        config.reviewConfig.maxRetriesUpperBound,
+        maxRetries
+      );
+    } else {
+      console.warn('Invalid AGENTIC_SDLC_MAX_RETRIES value, ignoring');
     }
   }
 

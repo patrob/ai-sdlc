@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import fs from 'fs';
 import {
   getEffectiveMaxRetries,
   isAtMaxRetries,
@@ -7,6 +8,15 @@ import {
 } from './story.js';
 import { Story, Config, ReviewAttempt, ReviewDecision, ReviewSeverity } from '../types/index.js';
 import { DEFAULT_CONFIG } from './config.js';
+
+// Mock fs to prevent actual file writes
+vi.mock('fs');
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  // Mock writeFileSync to do nothing (functions modify story in memory and write to disk)
+  vi.mocked(fs.writeFileSync).mockImplementation(() => {});
+});
 
 describe('story retry functions', () => {
   const mockStory: Story = {
@@ -119,7 +129,7 @@ describe('story retry functions', () => {
 
   describe('resetRPIVCycle', () => {
     it('should reset workflow flags except research', () => {
-      const story = { ...mockStory };
+      const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
       const result = resetRPIVCycle(story, 'Test rejection reason');
 
       expect(result.frontmatter.research_complete).toBe(true);
@@ -142,14 +152,14 @@ describe('story retry functions', () => {
     });
 
     it('should initialize retry_count to 1 if undefined', () => {
-      const story = { ...mockStory };
+      const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
       const result = resetRPIVCycle(story, 'Test rejection reason');
 
       expect(result.frontmatter.retry_count).toBe(1);
     });
 
     it('should set last_restart_reason and timestamp', () => {
-      const story = { ...mockStory };
+      const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
       const result = resetRPIVCycle(story, 'Code quality issues found');
 
       expect(result.frontmatter.last_restart_reason).toBe('Code quality issues found');
@@ -159,7 +169,7 @@ describe('story retry functions', () => {
 
   describe('appendReviewHistory', () => {
     it('should initialize review_history array if not present', () => {
-      const story = { ...mockStory };
+      const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
       const attempt: ReviewAttempt = {
         timestamp: new Date().toISOString(),
         decision: ReviewDecision.REJECTED,
@@ -227,7 +237,7 @@ describe('story retry functions', () => {
         poReviewPassed: false,
       }));
 
-      let story = { ...mockStory };
+      let story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
       for (const attempt of attempts) {
         story = appendReviewHistory(story, attempt);
       }

@@ -5,7 +5,7 @@ title: >-
   context if failed review (automatically in auto mode) to rework or perform
   additional work in order to pass review
 priority: 2
-status: in-progress
+status: done
 type: feature
 created: '2026-01-09'
 labels:
@@ -13,7 +13,7 @@ labels:
 research_complete: true
 plan_complete: true
 implementation_complete: true
-reviews_complete: false
+reviews_complete: true
 updated: '2026-01-09'
 branch: agentic-sdlc/ability-to-send-work-back-to-an-agent-for-refineme
 ---

@@ -1,9 +1,9 @@
 ---
-id: story-mk6z6yo1-wyw3
+id: story-mk755q8f-iyz3
 title: >-
-  Update package.json with author field and repository/bugs URLs pointing to
-  GitHub
-priority: 10
+  Change status output layout to kanban-style: display columns left-to-right
+  (Backlog | Ready | In-Progress | Done) instead of top-to-bottom
+priority: 12
 status: backlog
 type: feature
 created: '2026-01-09'
@@ -13,7 +13,7 @@ plan_complete: false
 implementation_complete: false
 reviews_complete: false
 ---
-# Update package.json with author field and repository/bugs URLs pointing to GitHub
+# Change status output layout to kanban-style: display columns left-to-right (Backlog | Ready | In-Progress | Done) instead of top-to-bottom
 
 ## Summary
 

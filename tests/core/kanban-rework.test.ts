@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { assessState } from '../../src/core/kanban.js';
-import { createStory, moveStory, appendReviewHistory } from '../../src/core/story.js';
+import { createStory, moveStory, appendReviewHistory, writeStory } from '../../src/core/story.js';
 import { ReviewDecision, ReviewSeverity } from '../../src/types/index.js';
 
 describe('Kanban Rework Detection', () => {
@@ -104,6 +104,10 @@ describe('Kanban Rework Detection', () => {
       poReviewPassed: true,
     });
 
+    // Mark reviews complete after approval
+    story.frontmatter.reviews_complete = true;
+    writeStory(story);
+
     const assessment = assessState(sdlcRoot);
 
     // Should have create_pr action, not rework
@@ -162,11 +166,13 @@ describe('Kanban Rework Detection', () => {
     story1 = moveStory(story1, 'in-progress', sdlcRoot);
     story1.frontmatter.implementation_complete = true;
     story1.frontmatter.priority = 5;
+    writeStory(story1); // Persist changes to disk
 
     let story2 = createStory('Story 2', sdlcRoot);
     story2 = moveStory(story2, 'in-progress', sdlcRoot);
     story2.frontmatter.implementation_complete = true;
     story2.frontmatter.priority = 1; // Higher base priority
+    writeStory(story2); // Persist changes to disk
 
     // Story 1 has rejected review (needs rework)
     appendReviewHistory(story1, {

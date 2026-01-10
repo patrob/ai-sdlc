@@ -4,7 +4,7 @@ title: >-
   Improve workflow terminal UI: show RPIV phase indicator, distinguish review
   actions, display progress bar or phase completion status during run
 priority: 1
-status: in-progress
+status: done
 type: feature
 created: '2026-01-09'
 labels:
@@ -12,7 +12,7 @@ labels:
 research_complete: true
 plan_complete: true
 implementation_complete: true
-reviews_complete: false
+reviews_complete: true
 updated: '2026-01-10'
 branch: agentic-sdlc/improve-workflow-terminal-ui-show-rpiv-phase-indic
 review_history:

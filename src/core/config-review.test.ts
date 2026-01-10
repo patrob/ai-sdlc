@@ -116,10 +116,10 @@ describe('review config validation', () => {
       expect(config.reviewConfig.maxRetries).toBe(Infinity); // invalid, uses default (infinite)
     });
 
-    it('should allow environment variable maxRetries up to 100', () => {
-      process.env.AGENTIC_SDLC_MAX_RETRIES = '20';
+    it('should allow environment variable maxRetries up to 10', () => {
+      process.env.AGENTIC_SDLC_MAX_RETRIES = '10';
       const config = loadConfig();
-      expect(config.reviewConfig.maxRetries).toBe(20); // env var raises upper bound
+      expect(config.reviewConfig.maxRetries).toBe(10); // env var raises upper bound (max 10)
     });
   });
 

@@ -56,6 +56,45 @@ export function getSdlcRoot(workingDir: string = process.cwd()): string {
 }
 
 /**
+ * Security: Validate command string to prevent command injection
+ * Whitelists common package managers and build tools
+ */
+function validateCommand(command: string, fieldName: string): boolean {
+  if (!command || typeof command !== 'string') {
+    return false;
+  }
+
+  // Whitelist of allowed executables
+  const allowedExecutables = ['npm', 'yarn', 'pnpm', 'node', 'npx', 'bun', 'make', 'mvn', 'gradle'];
+
+  // Extract first word (executable name)
+  const parts = command.trim().split(/\s+/);
+  const executable = parts[0];
+
+  // Check if executable is in whitelist
+  if (!allowedExecutables.includes(executable)) {
+    console.warn(`Warning: ${fieldName} uses non-whitelisted executable "${executable}". Allowed: ${allowedExecutables.join(', ')}`);
+    return false;
+  }
+
+  // Check for dangerous shell metacharacters
+  const dangerousPatterns = [
+    /[;&|`$()]/,      // Shell operators
+    /\$\{/,           // Variable substitution
+    /\$\(/,           // Command substitution
+  ];
+
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(command)) {
+      console.warn(`Warning: ${fieldName} contains potentially dangerous shell metacharacters: ${command}`);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
  * Validate and sanitize user configuration to prevent prototype pollution
  */
 function sanitizeUserConfig(userConfig: any): Partial<Config> {
@@ -66,6 +105,21 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
     Object.prototype.hasOwnProperty.call(userConfig, 'prototype')
   ) {
     throw new Error('Invalid configuration: prototype pollution attempt detected');
+  }
+
+  // Security: Validate command strings before using them
+  if (userConfig.testCommand !== undefined) {
+    if (!validateCommand(userConfig.testCommand, 'testCommand')) {
+      console.warn('Invalid or unsafe testCommand in config, removing');
+      delete userConfig.testCommand;
+    }
+  }
+
+  if (userConfig.buildCommand !== undefined) {
+    if (!validateCommand(userConfig.buildCommand, 'buildCommand')) {
+      console.warn('Invalid or unsafe buildCommand in config, removing');
+      delete userConfig.buildCommand;
+    }
   }
 
   // Validate settingSources if present
@@ -89,7 +143,10 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
     }
   }
 
-  // Validate timeouts if present
+  // Security: Enforce hard limits on timeout values
+  const MIN_TIMEOUT_MS = 5000;      // 5 seconds minimum
+  const MAX_TIMEOUT_MS = 3600000;   // 1 hour maximum
+
   if (userConfig.timeouts !== undefined) {
     if (typeof userConfig.timeouts !== 'object' || userConfig.timeouts === null) {
       console.warn('Invalid timeouts in config (must be object), ignoring');
@@ -99,13 +156,15 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
       for (const field of timeoutFields) {
         if (userConfig.timeouts[field] !== undefined) {
           const value = userConfig.timeouts[field];
-          if (typeof value !== 'number' || value < 0 || !Number.isFinite(value)) {
-            console.warn(`Invalid ${field} in config (must be positive number), using default`);
+          if (typeof value !== 'number' || !Number.isFinite(value) || isNaN(value)) {
+            console.warn(`Invalid ${field} in config (must be finite number), using default`);
             delete userConfig.timeouts[field];
-          } else if (value < 1000) {
-            console.warn(`Warning: ${field} is less than 1 second (${value}ms) - this may cause premature timeouts`);
-          } else if (value > 3600000) {
-            console.warn(`Warning: ${field} is more than 1 hour (${value}ms) - this is unusually long`);
+          } else if (value < MIN_TIMEOUT_MS) {
+            console.warn(`${field} is below minimum (${MIN_TIMEOUT_MS}ms), setting to minimum`);
+            userConfig.timeouts[field] = MIN_TIMEOUT_MS;
+          } else if (value > MAX_TIMEOUT_MS) {
+            console.warn(`${field} exceeds maximum (${MAX_TIMEOUT_MS}ms), setting to maximum`);
+            userConfig.timeouts[field] = MAX_TIMEOUT_MS;
           }
         }
       }
@@ -161,10 +220,12 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
     }
   }
 
-  // Apply environment variable overrides with validation
+  // Security: Apply environment variable overrides with strict validation
   if (process.env.AGENTIC_SDLC_MAX_RETRIES) {
     const maxRetries = parseInt(process.env.AGENTIC_SDLC_MAX_RETRIES, 10);
-    if (!isNaN(maxRetries) && maxRetries >= 0 && maxRetries <= 100) {
+    // Security: Limit to 0-10 range (not 0-100) to prevent resource exhaustion
+    if (!isNaN(maxRetries) && maxRetries >= 0 && maxRetries <= 10) {
+      console.log(`Environment override: maxRetries set to ${maxRetries}`);
       config.reviewConfig.maxRetries = maxRetries;
       // If user sets maxRetries via env, raise upper bound to allow it
       config.reviewConfig.maxRetriesUpperBound = Math.max(
@@ -172,16 +233,28 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
         maxRetries
       );
     } else {
-      console.warn('Invalid AGENTIC_SDLC_MAX_RETRIES value, ignoring');
+      console.warn(`Invalid AGENTIC_SDLC_MAX_RETRIES value "${process.env.AGENTIC_SDLC_MAX_RETRIES}" (must be 0-10), ignoring`);
     }
   }
 
   if (process.env.AGENTIC_SDLC_AUTO_COMPLETE) {
-    config.reviewConfig.autoCompleteOnApproval = process.env.AGENTIC_SDLC_AUTO_COMPLETE === 'true';
+    const value = process.env.AGENTIC_SDLC_AUTO_COMPLETE;
+    if (value === 'true' || value === 'false') {
+      console.log(`Environment override: autoCompleteOnApproval set to ${value}`);
+      config.reviewConfig.autoCompleteOnApproval = value === 'true';
+    } else {
+      console.warn(`Invalid AGENTIC_SDLC_AUTO_COMPLETE value "${value}" (must be "true" or "false"), ignoring`);
+    }
   }
 
   if (process.env.AGENTIC_SDLC_AUTO_RESTART) {
-    config.reviewConfig.autoRestartOnRejection = process.env.AGENTIC_SDLC_AUTO_RESTART === 'true';
+    const value = process.env.AGENTIC_SDLC_AUTO_RESTART;
+    if (value === 'true' || value === 'false') {
+      console.log(`Environment override: autoRestartOnRejection set to ${value}`);
+      config.reviewConfig.autoRestartOnRejection = value === 'true';
+    } else {
+      console.warn(`Invalid AGENTIC_SDLC_AUTO_RESTART value "${value}" (must be "true" or "false"), ignoring`);
+    }
   }
 
   // Validate review config

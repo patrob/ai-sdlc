@@ -819,7 +819,8 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
 
     // Display phase progress after successful action
     if (result && result.success) {
-      const story = parseStory(action.storyPath);
+      // Use the story from result if available (handles moved files like refine)
+      const story = result.story || parseStory(action.storyPath);
       const progress = calculatePhaseProgress(story);
 
       // Show phase checklist
@@ -875,12 +876,15 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
     spinner.fail(c.error(`Failed: ${formatAction(action, true, c)}`));
     console.error(error);
 
-    // Show phase checklist with error indication
-    const story = parseStory(action.storyPath);
-    console.log(c.dim(`  Progress: ${renderPhaseChecklist(story, c)}`));
-
-    // Update story with error
-    story.frontmatter.last_error = error instanceof Error ? error.message : String(error);
+    // Show phase checklist with error indication (if file still exists)
+    try {
+      const story = parseStory(action.storyPath);
+      console.log(c.dim(`  Progress: ${renderPhaseChecklist(story, c)}`));
+      // Update story with error
+      story.frontmatter.last_error = error instanceof Error ? error.message : String(error);
+    } catch {
+      // File may have been moved - skip progress display
+    }
     // Don't throw - let the workflow continue if in auto mode
     return { success: false };
   }

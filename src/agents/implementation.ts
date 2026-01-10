@@ -32,7 +32,8 @@ export async function runImplementationAgent(
   sdlcRoot: string,
   options: AgentOptions = {}
 ): Promise<AgentResult> {
-  const story = parseStory(storyPath);
+  let story = parseStory(storyPath);
+  let currentStoryPath = storyPath;
   const changesMade: string[] = [];
   const workingDir = path.dirname(sdlcRoot);
 
@@ -67,7 +68,8 @@ export async function runImplementationAgent(
 
     // Move story to in-progress if not already there
     if (story.frontmatter.status !== 'in-progress') {
-      moveStory(story, 'in-progress', sdlcRoot);
+      story = moveStory(story, 'in-progress', sdlcRoot);
+      currentStoryPath = story.path;
       changesMade.push('Moved story to in-progress/');
     }
 
@@ -115,7 +117,7 @@ ${implementationResult}
 `;
 
     // Append to story content
-    const updatedStory = parseStory(storyPath);
+    const updatedStory = parseStory(currentStoryPath);
     updatedStory.content += '\n\n' + implementationNotes;
     writeStory(updatedStory);
     changesMade.push('Added implementation notes');
@@ -126,7 +128,7 @@ ${implementationResult}
 
     return {
       success: true,
-      story: parseStory(storyPath),
+      story: parseStory(currentStoryPath),
       changesMade,
     };
   } catch (error) {

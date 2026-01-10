@@ -219,12 +219,12 @@ describe('Configuration Security Tests', () => {
       expect(config.reviewConfig.maxRetries).toBe(0);
     });
 
-    it('should accept 100 as valid AGENTIC_SDLC_MAX_RETRIES', () => {
-      process.env.AGENTIC_SDLC_MAX_RETRIES = '100';
+    it('should accept 10 as max valid AGENTIC_SDLC_MAX_RETRIES', () => {
+      process.env.AGENTIC_SDLC_MAX_RETRIES = '10';
 
       const config = loadConfig(tempDir);
 
-      expect(config.reviewConfig.maxRetries).toBe(100);
+      expect(config.reviewConfig.maxRetries).toBe(10);
     });
   });
 });

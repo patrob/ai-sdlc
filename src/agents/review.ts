@@ -1,9 +1,120 @@
 import { execSync, spawn } from 'child_process';
 import path from 'path';
+import fs from 'fs';
+import { z } from 'zod';
 import { parseStory, writeStory, moveStory, appendToSection, updateStoryField, isAtMaxRetries, appendReviewHistory, snapshotMaxRetries, getEffectiveMaxRetries } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from '../core/config.js';
 import { Story, AgentResult, ReviewResult, ReviewIssue, ReviewIssueSeverity, ReviewDecision, ReviewSeverity, ReviewAttempt, Config } from '../types/index.js';
+
+/**
+ * Security: Validate Git branch name to prevent command injection
+ * Only allows alphanumeric characters, hyphens, underscores, and forward slashes
+ */
+function validateGitBranchName(branchName: string): boolean {
+  return /^[a-zA-Z0-9/_-]+$/.test(branchName);
+}
+
+/**
+ * Security: Escape shell arguments for safe use in commands
+ * For use with execSync when shell execution is required
+ */
+function escapeShellArg(arg: string): string {
+  // Replace single quotes with '\'' and wrap in single quotes
+  return `'${arg.replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * Security: Validate and normalize working directory path
+ * Prevents path traversal attacks
+ */
+function validateWorkingDirectory(workingDir: string): void {
+  // Normalize the path
+  const normalized = path.resolve(workingDir);
+
+  // Check if it's an absolute path
+  if (!path.isAbsolute(normalized)) {
+    throw new Error(`Invalid working directory: must be absolute path (got: ${workingDir})`);
+  }
+
+  // Check for path traversal patterns
+  if (workingDir.includes('../') || workingDir.includes('..\\')) {
+    throw new Error(`Invalid working directory: path traversal detected (${workingDir})`);
+  }
+
+  // Verify directory exists
+  if (!fs.existsSync(normalized)) {
+    throw new Error(`Invalid working directory: does not exist (${normalized})`);
+  }
+
+  // Verify it's actually a directory
+  if (!fs.statSync(normalized).isDirectory()) {
+    throw new Error(`Invalid working directory: not a directory (${normalized})`);
+  }
+}
+
+/**
+ * Security: Sanitize error messages to prevent information leakage
+ * Removes absolute paths, environment details, and stack traces
+ */
+function sanitizeErrorMessage(message: string, workingDir: string): string {
+  let sanitized = message;
+
+  // Replace absolute paths with [PROJECT_ROOT]
+  const normalizedWorkingDir = path.resolve(workingDir);
+  sanitized = sanitized.replace(new RegExp(normalizedWorkingDir, 'g'), '[PROJECT_ROOT]');
+
+  // Remove home directory paths
+  if (process.env.HOME) {
+    sanitized = sanitized.replace(new RegExp(process.env.HOME, 'g'), '~');
+  }
+
+  // Strip stack traces (keep only first line of error)
+  const lines = sanitized.split('\n');
+  if (lines.length > 3) {
+    sanitized = lines.slice(0, 3).join('\n') + '\n... (stack trace removed)';
+  }
+
+  return sanitized;
+}
+
+/**
+ * Security: Sanitize command output before display
+ * Strips ANSI codes, control characters, and potential secrets
+ */
+function sanitizeCommandOutput(output: string): string {
+  let sanitized = output;
+
+  // Strip ANSI escape codes
+  sanitized = sanitized.replace(/\x1b\[[0-9;]*m/g, '');
+
+  // Strip other control characters except newlines and tabs
+  sanitized = sanitized.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+
+  // Redact potential secrets (basic patterns)
+  // API keys: long alphanumeric strings after key= or token=
+  sanitized = sanitized.replace(/(api[_-]?key|token|password|secret)[\s=:]+[a-zA-Z0-9_-]{20,}/gi, '$1=[REDACTED]');
+
+  return sanitized;
+}
+
+/**
+ * Security: Zod schema for validating LLM review responses
+ * Prevents malicious or malformed JSON from causing issues
+ */
+const ReviewIssueSchema = z.object({
+  severity: z.enum(['blocker', 'critical', 'major', 'minor']),
+  category: z.string().max(100),
+  description: z.string().max(5000),
+  file: z.string().optional(),
+  line: z.number().int().positive().optional(),
+  suggestedFix: z.string().max(2000).optional(),
+});
+
+const ReviewResponseSchema = z.object({
+  passed: z.boolean(),
+  issues: z.array(ReviewIssueSchema),
+});
 
 /**
  * Result of running build/test commands
@@ -14,6 +125,11 @@ interface VerificationResult {
   testsPassed: boolean;
   testsOutput: string;
 }
+
+/**
+ * Maximum size for test output before truncation (10KB)
+ */
+const MAX_TEST_OUTPUT_SIZE = 10000;
 
 /**
  * Progress callback for verification steps
@@ -38,9 +154,10 @@ async function runCommandAsync(
     const executable = parts[0];
     const args = parts.slice(1).map(arg => arg.replace(/^"|"$/g, ''));
 
+    // Security: Use spawn without shell to prevent command injection
+    // Commands must be parseable as: executable + space-separated args
     const child = spawn(executable, args, {
       cwd: workingDir,
-      shell: true,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
@@ -81,9 +198,10 @@ async function runCommandAsync(
 
     child.on('error', (error) => {
       clearTimeout(timeoutId);
+      const sanitizedError = sanitizeErrorMessage(error.message, workingDir);
       resolve({
         success: false,
-        output: outputChunks.join('') + `\n[Command error: ${error.message}]`,
+        output: outputChunks.join('') + `\n[Command error: ${sanitizedError}]`,
       });
     });
   });
@@ -143,58 +261,6 @@ async function runVerificationAsync(
   return result;
 }
 
-/**
- * Run build and test commands before review (sync version for backward compatibility)
- * @deprecated Use runVerificationAsync instead
- */
-function runVerification(workingDir: string, config: Config): VerificationResult {
-  const result: VerificationResult = {
-    buildPassed: true,
-    buildOutput: '',
-    testsPassed: true,
-    testsOutput: '',
-  };
-
-  const buildTimeout = config.timeouts?.buildTimeout ?? DEFAULT_TIMEOUTS.buildTimeout;
-  const testTimeout = config.timeouts?.testTimeout ?? DEFAULT_TIMEOUTS.testTimeout;
-
-  // Run build command if configured
-  if (config.buildCommand) {
-    try {
-      result.buildOutput = execSync(config.buildCommand, {
-        cwd: workingDir,
-        encoding: 'utf-8',
-        timeout: buildTimeout,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      result.buildPassed = true;
-    } catch (error: any) {
-      result.buildPassed = false;
-      result.buildOutput = error.stdout || error.stderr || error.message || 'Build failed';
-    }
-  }
-
-  // Run test command if configured
-  if (config.testCommand) {
-    try {
-      result.testsOutput = execSync(config.testCommand, {
-        cwd: workingDir,
-        encoding: 'utf-8',
-        timeout: testTimeout,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      result.testsPassed = true;
-    } catch (error: any) {
-      result.testsPassed = false;
-      // Capture both stdout and stderr for test output
-      result.testsOutput = [error.stdout, error.stderr, error.message]
-        .filter(Boolean)
-        .join('\n') || 'Tests failed';
-    }
-  }
-
-  return result;
-}
 
 const REVIEW_OUTPUT_FORMAT = `
 Output your review as a JSON object with this structure:
@@ -247,6 +313,7 @@ ${REVIEW_OUTPUT_FORMAT}`;
 
 /**
  * Parse review response and extract structured issues
+ * Security: Uses zod schema validation to prevent malicious JSON
  */
 function parseReviewResponse(response: string, reviewType: string): { passed: boolean; issues: ReviewIssue[] } {
   try {
@@ -259,22 +326,35 @@ function parseReviewResponse(response: string, reviewType: string): { passed: bo
 
     const parsed = JSON.parse(jsonMatch[0]);
 
-    // Validate and normalize the structure
-    const issues: ReviewIssue[] = (parsed.issues || []).map((issue: any) => ({
-      severity: (issue.severity || 'major') as ReviewIssueSeverity,
-      category: issue.category || reviewType.toLowerCase().replace(' ', '_'),
-      description: issue.description || String(issue),
+    // Security: Validate against zod schema before using the data
+    const validationResult = ReviewResponseSchema.safeParse(parsed);
+
+    if (!validationResult.success) {
+      // Log validation errors for debugging
+      console.warn('Review response failed schema validation:', validationResult.error);
+      // Fallback to text analysis
+      return parseTextReview(response, reviewType);
+    }
+
+    const validated = validationResult.data;
+
+    // Map validated data to ReviewIssue format (additional sanitization)
+    const issues: ReviewIssue[] = validated.issues.map((issue) => ({
+      severity: issue.severity as ReviewIssueSeverity,
+      category: issue.category,
+      description: issue.description,
       file: issue.file,
       line: issue.line,
       suggestedFix: issue.suggestedFix,
     }));
 
     return {
-      passed: parsed.passed !== false && issues.filter(i => i.severity === 'blocker' || i.severity === 'critical').length === 0,
+      passed: validated.passed !== false && issues.filter(i => i.severity === 'blocker' || i.severity === 'critical').length === 0,
       issues,
     };
   } catch (error) {
     // Fallback to text analysis if JSON parsing fails
+    console.warn('Review response parsing error:', error);
     return parseTextReview(response, reviewType);
   }
 }
@@ -418,6 +498,29 @@ export async function runReviewAgent(
   const story = parseStory(storyPath);
   const changesMade: string[] = [];
   const workingDir = path.dirname(sdlcRoot);
+
+  // Security: Validate working directory before any operations
+  try {
+    validateWorkingDirectory(workingDir);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      story,
+      changesMade,
+      error: errorMsg,
+      passed: false,
+      decision: ReviewDecision.FAILED,
+      reviewType: 'combined',
+      issues: [{
+        severity: 'blocker',
+        category: 'security',
+        description: `Working directory validation failed: ${errorMsg}`,
+      }],
+      feedback: errorMsg,
+    };
+  }
+
   const config = loadConfig(workingDir);
 
   try {
@@ -465,13 +568,14 @@ export async function runReviewAgent(
         verificationContext += `\n## Build Results ✅\nBuild command \`${config.buildCommand}\` passed successfully.\n`;
       } else {
         changesMade.push(`Build FAILED: ${config.buildCommand}`);
+        const sanitizedBuildOutput = sanitizeCommandOutput(verification.buildOutput);
         verificationIssues.push({
           severity: 'blocker',
           category: 'build',
           description: `Build failed. Command: ${config.buildCommand}`,
           suggestedFix: 'Fix build errors before review can proceed.',
         });
-        verificationContext += `\n## Build Results ❌\nBuild command \`${config.buildCommand}\` FAILED:\n\`\`\`\n${verification.buildOutput.substring(0, 2000)}\n\`\`\`\n`;
+        verificationContext += `\n## Build Results ❌\nBuild command \`${config.buildCommand}\` FAILED:\n\`\`\`\n${sanitizedBuildOutput.substring(0, 2000)}\n\`\`\`\n`;
       }
     }
 
@@ -486,17 +590,45 @@ export async function runReviewAgent(
         }
       } else {
         changesMade.push(`Tests FAILED: ${config.testCommand}`);
+
+        // Sanitize and truncate test output if too large, preserving readability
+        let testOutput = sanitizeCommandOutput(verification.testsOutput);
+        let truncationNote = '';
+        if (testOutput.length > MAX_TEST_OUTPUT_SIZE) {
+          testOutput = testOutput.substring(0, MAX_TEST_OUTPUT_SIZE);
+          truncationNote = '\n\n... (output truncated - showing first 10KB)';
+        }
+
         verificationIssues.push({
           severity: 'blocker',
           category: 'testing',
-          description: `Tests failed. Command: ${config.testCommand}`,
+          description: `Tests must pass before code review can proceed.\n\nCommand: ${config.testCommand}\n\nTest output:\n\`\`\`\n${testOutput}${truncationNote}\n\`\`\``,
           suggestedFix: 'Fix failing tests before review can proceed.',
         });
-        verificationContext += `\n## Test Results ❌\nTest command \`${config.testCommand}\` FAILED:\n\`\`\`\n${verification.testsOutput.substring(0, 3000)}\n\`\`\`\n`;
+        verificationContext += `\n## Test Results ❌\nTest command \`${config.testCommand}\` FAILED:\n\`\`\`\n${testOutput}${truncationNote}\n\`\`\`\n`;
       }
     }
 
-    // Run all reviews in parallel, passing verification context
+    // OPTIMIZATION: If verification failed (build or tests), skip LLM-based reviews to save tokens and time.
+    // Return immediately with BLOCKER issues - developers should fix verification issues before review feedback is useful.
+    if (verificationIssues.length > 0) {
+      changesMade.push('Skipping code/security/PO reviews - verification must pass first');
+
+      return {
+        success: true, // Agent executed successfully
+        story: parseStory(storyPath),
+        changesMade,
+        passed: false, // Review did not pass
+        decision: ReviewDecision.REJECTED,
+        severity: ReviewSeverity.CRITICAL,
+        reviewType: 'combined',
+        issues: verificationIssues,
+        feedback: formatIssuesForDisplay(verificationIssues),
+      };
+    }
+
+    // Verification passed - proceed with all reviews in parallel, passing verification context
+    changesMade.push('Verification passed - proceeding with code/security/PO reviews');
     const [codeReview, securityReview, poReview] = await Promise.all([
       runSubReview(story, CODE_REVIEW_PROMPT, 'Code Review', workingDir, verificationContext),
       runSubReview(story, SECURITY_REVIEW_PROMPT, 'Security Review', workingDir, verificationContext),
@@ -637,12 +769,37 @@ export async function createPullRequest(
   storyPath: string,
   sdlcRoot: string
 ): Promise<AgentResult> {
-  const story = parseStory(storyPath);
+  let story = parseStory(storyPath);
   const changesMade: string[] = [];
   const workingDir = path.dirname(sdlcRoot);
 
+  // Security: Validate working directory
+  try {
+    validateWorkingDirectory(workingDir);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      story,
+      changesMade,
+      error: errorMsg,
+    };
+  }
+
   try {
     const branchName = story.frontmatter.branch || `agentic-sdlc/${story.slug}`;
+
+    // Security: Validate branch name to prevent command injection
+    if (!validateGitBranchName(branchName)) {
+      const errorMsg = `Invalid branch name: ${branchName} (only alphanumeric, hyphens, underscores, and slashes allowed)`;
+      changesMade.push(errorMsg);
+      return {
+        success: false,
+        story,
+        changesMade,
+        error: errorMsg,
+      };
+    }
 
     // Check if gh CLI is available
     try {
@@ -651,12 +808,12 @@ export async function createPullRequest(
       changesMade.push('GitHub CLI not available - PR creation skipped');
 
       // Still move to done for MVP
-      moveStory(story, 'done', sdlcRoot);
+      story = moveStory(story, 'done', sdlcRoot);
       changesMade.push('Moved story to done/');
 
       return {
         success: true,
-        story: parseStory(storyPath),
+        story,
         changesMade,
       };
     }
@@ -664,21 +821,26 @@ export async function createPullRequest(
     // Create PR using gh CLI
     try {
       // First, ensure we're on the right branch and have changes committed
+      // Security: Branch name is already validated above
       execSync(`git checkout ${branchName}`, { cwd: workingDir, stdio: 'pipe' });
 
       // Check for uncommitted changes and commit them
       const status = execSync('git status --porcelain', { cwd: workingDir, encoding: 'utf-8' });
       if (status.trim()) {
         execSync('git add -A', { cwd: workingDir, stdio: 'pipe' });
-        execSync(`git commit -m "feat: ${story.frontmatter.title}"`, { cwd: workingDir, stdio: 'pipe' });
+        // Security: Escape shell arguments for commit message
+        const commitMsg = `feat: ${story.frontmatter.title}`;
+        execSync(`git commit -m ${escapeShellArg(commitMsg)}`, { cwd: workingDir, stdio: 'pipe' });
         changesMade.push('Committed changes');
       }
 
-      // Push branch
+      // Push branch (already validated)
       execSync(`git push -u origin ${branchName}`, { cwd: workingDir, stdio: 'pipe' });
       changesMade.push(`Pushed branch: ${branchName}`);
 
-      // Create PR
+      // Create PR using gh CLI with safe arguments
+      // Security: Use escaped arguments to prevent shell injection
+      const prTitle = story.frontmatter.title;
       const prBody = `## Summary
 
 ${story.frontmatter.title}
@@ -698,7 +860,7 @@ ${story.content.substring(0, 1000)}...
 *Created by agentic-sdlc*`;
 
       const prOutput = execSync(
-        `gh pr create --title "${story.frontmatter.title}" --body "${prBody.replace(/"/g, '\\"')}"`,
+        `gh pr create --title ${escapeShellArg(prTitle)} --body ${escapeShellArg(prBody)}`,
         { cwd: workingDir, encoding: 'utf-8' }
       );
 
@@ -706,24 +868,32 @@ ${story.content.substring(0, 1000)}...
       updateStoryField(story, 'pr_url', prUrl);
       changesMade.push(`Created PR: ${prUrl}`);
     } catch (error) {
-      changesMade.push(`PR creation failed: ${error instanceof Error ? error.message : String(error)}`);
+      const sanitizedError = sanitizeErrorMessage(
+        error instanceof Error ? error.message : String(error),
+        workingDir
+      );
+      changesMade.push(`PR creation failed: ${sanitizedError}`);
     }
 
     // Move story to done
-    moveStory(story, 'done', sdlcRoot);
+    story = moveStory(story, 'done', sdlcRoot);
     changesMade.push('Moved story to done/');
 
     return {
       success: true,
-      story: parseStory(storyPath),
+      story,
       changesMade,
     };
   } catch (error) {
+    const sanitizedError = sanitizeErrorMessage(
+      error instanceof Error ? error.message : String(error),
+      workingDir
+    );
     return {
       success: false,
       story,
       changesMade,
-      error: error instanceof Error ? error.message : String(error),
+      error: sanitizedError,
     };
   }
 }

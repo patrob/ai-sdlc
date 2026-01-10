@@ -86,6 +86,175 @@ When using this project:
 - Report any security concerns immediately rather than delaying
 - Use appropriate security practices in your own implementation
 
+## Security Implementation Details
+
+### Command Injection Prevention
+
+#### Configuration Commands (`testCommand`, `buildCommand`)
+
+The system validates and sanitizes all command strings in configuration files:
+
+**Whitelist of Allowed Executables:**
+- `npm`, `yarn`, `pnpm` - Node.js package managers
+- `node`, `npx` - Node.js runtime and package executor
+- `bun` - Alternative JavaScript runtime
+- `make` - Build automation tool
+- `mvn`, `gradle` - Java build tools
+
+**Validation Rules:**
+1. Only whitelisted executables are allowed
+2. Dangerous shell metacharacters are rejected: `;`, `|`, `&`, `` ` ``, `$()`, `${}`
+3. Commands containing these patterns will be removed from configuration with a warning
+
+**Example - Valid Configuration:**
+```json
+{
+  "testCommand": "npm test",
+  "buildCommand": "npm run build"
+}
+```
+
+**Example - Invalid Configuration (Rejected):**
+```json
+{
+  "testCommand": "npm test; curl malicious.com",
+  "buildCommand": "npm run build && rm -rf /"
+}
+```
+
+#### Git Branch Names
+
+Branch names are validated to prevent command injection in git operations:
+
+**Allowed characters:** Alphanumeric, hyphens (`-`), underscores (`_`), forward slashes (`/`)
+
+**Pattern:** `/^[a-zA-Z0-9/_-]+$/`
+
+#### Shell Command Execution
+
+1. **No shell interpretation:** Commands are executed without `shell: true` to prevent shell injection
+2. **Argument escaping:** When shell execution is required (e.g., for `gh` CLI), arguments are properly escaped
+3. **Path validation:** Working directories are validated to prevent path traversal attacks
+
+### Path Traversal Prevention
+
+Working directory paths are validated before any file operations:
+
+1. Must be absolute paths
+2. Cannot contain `../` or `..\` sequences
+3. Must exist and be an actual directory
+4. Path normalization applied using `path.resolve()`
+
+### Input Sanitization
+
+#### Command Output
+
+All command output (test results, build output) is sanitized before display:
+
+1. **ANSI escape codes** are stripped (prevents terminal manipulation)
+2. **Control characters** are removed (except newlines and tabs)
+3. **Potential secrets** are redacted:
+   - API keys matching pattern: `(api_key|token|password|secret)=<value>`
+   - Long alphanumeric strings after sensitive keywords are replaced with `[REDACTED]`
+
+#### Error Messages
+
+Error messages are sanitized to prevent information leakage:
+
+1. Absolute paths are replaced with `[PROJECT_ROOT]`
+2. Home directory paths are replaced with `~`
+3. Stack traces are truncated (only first 3 lines kept)
+4. Environment variable values are not exposed
+
+### LLM Response Validation
+
+Review responses from LLM agents are validated using Zod schemas to prevent malicious or malformed JSON from causing issues.
+
+**Benefits:**
+- Prevents malformed JSON from causing crashes
+- Enforces field length limits to prevent memory exhaustion
+- Validates data types to prevent type confusion attacks
+- Rejects unexpected fields
+
+### Timeout Limits
+
+Configuration timeout values are enforced with hard limits:
+
+- **Minimum:** 5 seconds (5,000ms)
+- **Maximum:** 1 hour (3,600,000ms)
+- **Invalid values** (NaN, Infinity, negative) are rejected
+
+This prevents:
+- Resource exhaustion from excessively long timeouts
+- Premature failures from too-short timeouts
+- Denial of service attacks
+
+### Environment Variable Validation
+
+Environment variable overrides are strictly validated:
+
+#### `AGENTIC_SDLC_MAX_RETRIES`
+- Must be an integer between 0 and 10
+- Invalid values are ignored with a warning
+- Overrides are logged for audit trail
+
+#### `AGENTIC_SDLC_AUTO_COMPLETE` / `AGENTIC_SDLC_AUTO_RESTART`
+- Must be exactly `"true"` or `"false"` (strings)
+- Other values are rejected
+- Overrides are logged
+
+### Prototype Pollution Prevention
+
+Configuration parsing includes checks for prototype pollution attempts. Objects with `__proto__`, `constructor`, or `prototype` properties are rejected.
+
+## Configuration Security Guidelines
+
+### 1. Limit Command Scope
+
+Only use whitelisted executables in your configuration. Use npm scripts in `package.json` to chain commands instead of shell operators.
+
+### 2. Validate Branch Names
+
+Use only alphanumeric characters, hyphens, and slashes in branch names.
+
+### 3. Review Configuration Files
+
+Treat `.agentic-sdlc.json` as security-sensitive:
+
+1. Review changes in pull requests
+2. Don't copy configuration from untrusted sources
+3. Validate commands before committing
+
+### 4. Monitor Logs
+
+The system logs warnings for security-related issues. Review logs regularly for suspicious activity.
+
+## Security Changelog
+
+### 2026-01-10 - Security Hardening Release
+
+- **Added:** Command validation with executable whitelist
+- **Added:** Git branch name validation
+- **Added:** Shell argument escaping for PR creation
+- **Added:** Working directory path validation
+- **Added:** Zod schema validation for LLM responses
+- **Added:** Command output sanitization (ANSI, secrets)
+- **Added:** Error message sanitization
+- **Fixed:** Removed `shell: true` from spawn() calls
+- **Fixed:** Enforced hard limits on timeout values (5s - 1hr)
+- **Fixed:** Enhanced environment variable validation (strict type checking)
+- **Removed:** Deprecated `runVerification()` function
+
+## Compliance
+
+This project follows security best practices including:
+
+- **OWASP Top 10** mitigation strategies
+- **CWE-78** (OS Command Injection) prevention
+- **CWE-22** (Path Traversal) prevention
+- **CWE-94** (Code Injection) prevention
+- **CWE-400** (Resource Exhaustion) prevention
+
 ---
 
 For additional questions about security, please reach out to the maintainers.

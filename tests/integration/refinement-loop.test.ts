@@ -1,11 +1,20 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { createStory, moveStory, appendReviewHistory, parseStory, writeStory } from '../../src/core/story.js';
 import { assessState } from '../../src/core/kanban.js';
 import { runReworkAgent } from '../../src/agents/rework.js';
+import { runReviewAgent } from '../../src/agents/review.js';
 import { ReviewDecision, ReviewSeverity, ReviewResult } from '../../src/types/index.js';
+import { spawn } from 'child_process';
+
+// Mock child_process for test execution simulation
+vi.mock('child_process');
+// Mock client for LLM calls
+vi.mock('../../src/core/client.js', () => ({
+  runAgentQuery: vi.fn(),
+}));
 
 describe('Refinement Loop Integration', () => {
   let testDir: string;
@@ -303,4 +312,280 @@ describe('Refinement Loop Integration', () => {
     expect(story.content).toContain('Refinement Iteration 1');
     expect(story.content).toContain('Refinement Iteration 2');
   });
+});
+
+describe('Review Agent Pre-check Integration', () => {
+  let testDir: string;
+  let sdlcRoot: string;
+
+  beforeEach(() => {
+    // Create temporary test directory
+    testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentic-sdlc-precheck-test-'));
+    sdlcRoot = path.join(testDir, '.agentic-sdlc');
+
+    // Create SDLC folder structure
+    fs.mkdirSync(sdlcRoot, { recursive: true });
+    fs.mkdirSync(path.join(sdlcRoot, 'backlog'));
+    fs.mkdirSync(path.join(sdlcRoot, 'ready'));
+    fs.mkdirSync(path.join(sdlcRoot, 'in-progress'));
+    fs.mkdirSync(path.join(sdlcRoot, 'done'));
+
+    // Create default config with test/build commands
+    const config = {
+      sdlcFolder: '.agentic-sdlc',
+      testCommand: 'npm test',
+      buildCommand: 'npm run build',
+      refinement: {
+        maxIterations: 3,
+        escalateOnMaxAttempts: 'manual',
+        enableCircuitBreaker: true,
+      },
+      reviewConfig: {
+        maxRetries: 3,
+        maxRetriesUpperBound: 10,
+        autoCompleteOnApproval: true,
+        autoRestartOnRejection: true,
+      },
+      stageGates: {
+        requireApprovalBeforeImplementation: false,
+        requireApprovalBeforePR: false,
+        autoMergeOnApproval: false,
+      },
+      defaultLabels: [],
+      theme: 'auto',
+      timeouts: {
+        agentTimeout: 600000,
+        buildTimeout: 120000,
+        testTimeout: 300000,
+      },
+    };
+    fs.writeFileSync(
+      path.join(testDir, '.agentic-sdlc.json'),
+      JSON.stringify(config, null, 2)
+    );
+
+    // Reset mocks
+    vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    // Clean up test directory
+    fs.rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('should block review and skip LLM calls when tests fail', async () => {
+    // Setup: Create a story with completed implementation
+    let story = createStory('Feature with Failing Tests', sdlcRoot);
+    story = moveStory(story, 'in-progress', sdlcRoot);
+    story.frontmatter.implementation_complete = true;
+
+    // Mock spawn to simulate failed test execution
+    const mockSpawn = vi.mocked(spawn);
+    mockSpawn.mockImplementation(((command: string, args: string[]) => {
+      const mockProcess: any = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn((event, callback) => {
+          if (event === 'close') {
+            // First call (build) passes, second call (test) fails
+            const isTest = args.includes('test');
+            const exitCode = isTest ? 1 : 0;
+            setTimeout(() => callback(exitCode), 10);
+          }
+        }),
+      };
+
+      // Simulate test failure output
+      setTimeout(() => {
+        if (args.includes('test')) {
+          const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+          if (stdoutCallback) {
+            stdoutCallback(Buffer.from('FAIL src/example.test.ts\n  ✗ should validate input\n    Expected: true\n    Received: false\n'));
+          }
+        }
+      }, 5);
+
+      return mockProcess;
+    }) as any);
+
+    // Execute review
+    const result = await runReviewAgent(story.path, testDir);
+
+    // Verify: Review blocked with BLOCKER
+    expect(result.success).toBe(true); // Agent executed successfully
+    expect(result.passed).toBe(false); // Review did not pass
+    expect(result.decision).toBe(ReviewDecision.REJECTED);
+    expect(result.severity).toBe(ReviewSeverity.CRITICAL);
+
+    // Verify: BLOCKER issue includes test failure details
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0].severity).toBe('blocker');
+    expect(result.issues[0].category).toBe('testing');
+    expect(result.issues[0].description).toContain('Tests must pass before code review can proceed');
+    expect(result.issues[0].description).toContain('npm test');
+    expect(result.issues[0].description).toContain('should validate input');
+
+    // Verify: Early return - changesMade indicates reviews were skipped
+    expect(result.changesMade).toContain('Skipping code/security/PO reviews - verification must pass first');
+
+    // Verify: LLM reviews were NOT called (token savings)
+    const { runAgentQuery } = await import('../../src/core/client.js');
+    expect(runAgentQuery).not.toHaveBeenCalled();
+  });
+
+  it('should proceed with reviews when tests pass', async () => {
+    // Setup: Create a story with completed implementation
+    let story = createStory('Feature with Passing Tests', sdlcRoot);
+    story = moveStory(story, 'in-progress', sdlcRoot);
+    story.frontmatter.implementation_complete = true;
+
+    // Mock spawn to simulate successful test execution
+    const mockSpawn = vi.mocked(spawn);
+    mockSpawn.mockImplementation((() => {
+      const mockProcess: any = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn((event, callback) => {
+          if (event === 'close') {
+            setTimeout(() => callback(0), 10); // All pass
+          }
+        }),
+      };
+
+      setTimeout(() => {
+        const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+        if (stdoutCallback) {
+          stdoutCallback(Buffer.from('PASS all tests\n  ✓ All tests passed\n'));
+        }
+      }, 5);
+
+      return mockProcess;
+    }) as any);
+
+    // Mock LLM to return approval
+    const { runAgentQuery } = await import('../../src/core/client.js');
+    vi.mocked(runAgentQuery).mockResolvedValue('APPROVED\n\nNo issues found.');
+
+    // Execute review
+    const result = await runReviewAgent(story.path, testDir);
+
+    // Verify: Reviews proceeded normally
+    expect(result.changesMade).toContain('Verification passed - proceeding with code/security/PO reviews');
+    expect(result.changesMade).toContain('Tests passed: npm test');
+
+    // Verify: LLM reviews WERE called (3 times: code, security, PO)
+    expect(runAgentQuery).toHaveBeenCalledTimes(3);
+  });
+
+  it('should truncate large test output in BLOCKER issue', async () => {
+    // Setup: Create a story
+    let story = createStory('Feature with Verbose Test Failure', sdlcRoot);
+    story = moveStory(story, 'in-progress', sdlcRoot);
+    story.frontmatter.implementation_complete = true;
+
+    // Mock spawn to return very large test output (>10KB)
+    const largeOutput = 'FAIL test output\n'.repeat(1000); // ~18KB
+    const mockSpawn = vi.mocked(spawn);
+    mockSpawn.mockImplementation(((command: string, args: string[]) => {
+      const isTestCommand = args.includes('test');
+
+      const mockProcess: any = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn((event, callback) => {
+          if (event === 'close') {
+            // Build passes, test fails with large output
+            const exitCode = isTestCommand ? 1 : 0;
+            setTimeout(() => callback(exitCode), 10);
+          }
+        }),
+      };
+
+      setTimeout(() => {
+        const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+        if (stdoutCallback) {
+          if (isTestCommand) {
+            stdoutCallback(Buffer.from(largeOutput));
+          } else {
+            stdoutCallback(Buffer.from('Build successful\n'));
+          }
+        }
+      }, 5);
+
+      return mockProcess;
+    }) as any);
+
+    // Execute review
+    const result = await runReviewAgent(story.path, testDir);
+
+    // Verify: Output was truncated
+    expect(result.issues[0].description.length).toBeLessThan(largeOutput.length + 500); // Allow overhead for message text
+    expect(result.issues[0].description).toContain('(output truncated - showing first 10KB)');
+  });
+
+  it('should handle test timeout gracefully', async () => {
+    // Setup: Create a story
+    let story = createStory('Feature with Hanging Tests', sdlcRoot);
+    story = moveStory(story, 'in-progress', sdlcRoot);
+    story.frontmatter.implementation_complete = true;
+
+    // Mock spawn to simulate timeout scenario
+    const mockSpawn = vi.mocked(spawn);
+    let processKilled = false;
+    mockSpawn.mockImplementation(((command: string, args: string[]) => {
+      const isTestCommand = args.includes('test');
+
+      const mockProcess: any = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn((event, callback) => {
+          if (event === 'close') {
+            if (isTestCommand) {
+              // Simulate timeout by delaying callback, then the kill handler will call it
+              const timeoutId = setTimeout(() => {
+                if (!processKilled) {
+                  callback(1); // Timeout results in failure
+                }
+              }, 100);
+              // Store timeout ID so kill can clear it
+              (mockProcess as any)._timeoutId = timeoutId;
+            } else {
+              // Build succeeds immediately
+              setTimeout(() => callback(0), 10);
+            }
+          }
+        }),
+        kill: vi.fn((signal) => {
+          processKilled = true;
+          if ((mockProcess as any)._timeoutId) {
+            clearTimeout((mockProcess as any)._timeoutId);
+          }
+          // Trigger close callback after kill
+          const closeCallback = mockProcess.on.mock.calls.find((call: any) => call[0] === 'close')?.[1];
+          if (closeCallback) {
+            closeCallback(1); // Killed process exits with error code
+          }
+        }),
+      };
+
+      // Add timeout message to stderr when killed
+      if (!isTestCommand) {
+        setTimeout(() => {
+          const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+          if (stdoutCallback) {
+            stdoutCallback(Buffer.from('Build successful\n'));
+          }
+        }, 5);
+      }
+
+      return mockProcess;
+    }) as any);
+
+    // Execute review - will timeout due to test hanging
+    const result = await runReviewAgent(story.path, testDir);
+
+    // Verify timeout was handled
+    expect(result).toBeDefined();
+    expect(result.passed).toBe(false);
+  }, 10000); // Increase test timeout to 10 seconds
 });

@@ -263,8 +263,9 @@ export class WorkflowRunner {
 
         // Reset RPIV cycle
         const retryCount = (story.frontmatter.retry_count || 0) + 1;
-        const maxRetries = story.frontmatter.max_retries || config.reviewConfig.maxRetries;
-        console.log(c.warning(`\n🔄 Review rejected. Restarting RPIV cycle (attempt ${retryCount}/${maxRetries})`));
+        const maxRetries = story.frontmatter.max_retries ?? config.reviewConfig.maxRetries;
+        const maxRetriesDisplay = Number.isFinite(maxRetries) ? maxRetries : '∞';
+        console.log(c.warning(`\n🔄 Review rejected. Restarting RPIV cycle (attempt ${retryCount}/${maxRetriesDisplay})`));
         console.log(c.dim(`Reason: ${reviewResult.feedback.substring(0, 200)}...`));
 
         resetRPIVCycle(story, reviewResult.feedback);

@@ -1,8 +1,8 @@
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import path from 'path';
 import { parseStory, writeStory, moveStory, appendToSection, updateStoryField, isAtMaxRetries, appendReviewHistory, snapshotMaxRetries, getEffectiveMaxRetries } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
-import { loadConfig } from '../core/config.js';
+import { loadConfig, DEFAULT_TIMEOUTS } from '../core/config.js';
 import { Story, AgentResult, ReviewResult, ReviewIssue, ReviewIssueSeverity, ReviewDecision, ReviewSeverity, ReviewAttempt, Config } from '../types/index.js';
 
 /**
@@ -16,8 +16,136 @@ interface VerificationResult {
 }
 
 /**
- * Run build and test commands before review
+ * Progress callback for verification steps
+ */
+export type VerificationProgressCallback = (phase: 'build' | 'test', status: 'starting' | 'running' | 'passed' | 'failed', message?: string) => void;
+
+/**
+ * Run a command asynchronously with timeout and progress updates
+ */
+async function runCommandAsync(
+  command: string,
+  workingDir: string,
+  timeout: number,
+  onProgress?: (output: string) => void
+): Promise<{ success: boolean; output: string }> {
+  return new Promise((resolve) => {
+    const outputChunks: string[] = [];
+    let killed = false;
+
+    // Parse command into executable and args (simple split, handles most cases)
+    const parts = command.match(/(?:[^\s"]+|"[^"]*")+/g) || [command];
+    const executable = parts[0];
+    const args = parts.slice(1).map(arg => arg.replace(/^"|"$/g, ''));
+
+    const child = spawn(executable, args, {
+      cwd: workingDir,
+      shell: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    const timeoutId = setTimeout(() => {
+      killed = true;
+      child.kill('SIGTERM');
+      // Force kill after 5 seconds if SIGTERM didn't work
+      setTimeout(() => child.kill('SIGKILL'), 5000);
+    }, timeout);
+
+    child.stdout?.on('data', (data: Buffer) => {
+      const text = data.toString();
+      outputChunks.push(text);
+      onProgress?.(text);
+    });
+
+    child.stderr?.on('data', (data: Buffer) => {
+      const text = data.toString();
+      outputChunks.push(text);
+      onProgress?.(text);
+    });
+
+    child.on('close', (code) => {
+      clearTimeout(timeoutId);
+      const output = outputChunks.join('');
+      if (killed) {
+        resolve({
+          success: false,
+          output: output + `\n[Command timed out after ${Math.round(timeout / 1000)} seconds]`,
+        });
+      } else {
+        resolve({
+          success: code === 0,
+          output,
+        });
+      }
+    });
+
+    child.on('error', (error) => {
+      clearTimeout(timeoutId);
+      resolve({
+        success: false,
+        output: outputChunks.join('') + `\n[Command error: ${error.message}]`,
+      });
+    });
+  });
+}
+
+/**
+ * Run build and test commands before review (async version with progress)
  * Returns structured results that can be included in review context
+ */
+async function runVerificationAsync(
+  workingDir: string,
+  config: Config,
+  onProgress?: VerificationProgressCallback
+): Promise<VerificationResult> {
+  const result: VerificationResult = {
+    buildPassed: true,
+    buildOutput: '',
+    testsPassed: true,
+    testsOutput: '',
+  };
+
+  const buildTimeout = config.timeouts?.buildTimeout ?? DEFAULT_TIMEOUTS.buildTimeout;
+  const testTimeout = config.timeouts?.testTimeout ?? DEFAULT_TIMEOUTS.testTimeout;
+
+  // Run build command if configured
+  if (config.buildCommand) {
+    onProgress?.('build', 'starting', config.buildCommand);
+
+    const buildResult = await runCommandAsync(
+      config.buildCommand,
+      workingDir,
+      buildTimeout,
+      (output) => onProgress?.('build', 'running', output)
+    );
+
+    result.buildPassed = buildResult.success;
+    result.buildOutput = buildResult.output;
+    onProgress?.('build', buildResult.success ? 'passed' : 'failed');
+  }
+
+  // Run test command if configured
+  if (config.testCommand) {
+    onProgress?.('test', 'starting', config.testCommand);
+
+    const testResult = await runCommandAsync(
+      config.testCommand,
+      workingDir,
+      testTimeout,
+      (output) => onProgress?.('test', 'running', output)
+    );
+
+    result.testsPassed = testResult.success;
+    result.testsOutput = testResult.output;
+    onProgress?.('test', testResult.success ? 'passed' : 'failed');
+  }
+
+  return result;
+}
+
+/**
+ * Run build and test commands before review (sync version for backward compatibility)
+ * @deprecated Use runVerificationAsync instead
  */
 function runVerification(workingDir: string, config: Config): VerificationResult {
   const result: VerificationResult = {
@@ -27,13 +155,16 @@ function runVerification(workingDir: string, config: Config): VerificationResult
     testsOutput: '',
   };
 
+  const buildTimeout = config.timeouts?.buildTimeout ?? DEFAULT_TIMEOUTS.buildTimeout;
+  const testTimeout = config.timeouts?.testTimeout ?? DEFAULT_TIMEOUTS.testTimeout;
+
   // Run build command if configured
   if (config.buildCommand) {
     try {
       result.buildOutput = execSync(config.buildCommand, {
         cwd: workingDir,
         encoding: 'utf-8',
-        timeout: 120000, // 2 minute timeout
+        timeout: buildTimeout,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
       result.buildPassed = true;
@@ -49,7 +180,7 @@ function runVerification(workingDir: string, config: Config): VerificationResult
       result.testsOutput = execSync(config.testCommand, {
         cwd: workingDir,
         encoding: 'utf-8',
-        timeout: 300000, // 5 minute timeout for tests
+        timeout: testTimeout,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
       result.testsPassed = true;
@@ -266,6 +397,14 @@ function formatIssuesForDisplay(issues: ReviewIssue[]): string {
 }
 
 /**
+ * Options for running the review agent
+ */
+export interface ReviewAgentOptions {
+  /** Callback for verification progress updates */
+  onVerificationProgress?: VerificationProgressCallback;
+}
+
+/**
  * Review Agent
  *
  * Orchestrates code review, security review, and PO acceptance.
@@ -273,7 +412,8 @@ function formatIssuesForDisplay(issues: ReviewIssue[]): string {
  */
 export async function runReviewAgent(
   storyPath: string,
-  sdlcRoot: string
+  sdlcRoot: string,
+  options?: ReviewAgentOptions
 ): Promise<ReviewResult> {
   const story = parseStory(storyPath);
   const changesMade: string[] = [];
@@ -288,7 +428,8 @@ export async function runReviewAgent(
     if (isAtMaxRetries(story, config)) {
       const retryCount = story.frontmatter.retry_count || 0;
       const maxRetries = getEffectiveMaxRetries(story, config);
-      const errorMsg = `Story has reached maximum retry limit (${retryCount}/${maxRetries}). Manual intervention required.`;
+      const maxRetriesDisplay = Number.isFinite(maxRetries) ? maxRetries : '∞';
+      const errorMsg = `Story has reached maximum retry limit (${retryCount}/${maxRetriesDisplay}). Manual intervention required.`;
 
       updateStoryField(story, 'last_error', errorMsg);
       changesMade.push(errorMsg);
@@ -310,9 +451,9 @@ export async function runReviewAgent(
       };
     }
 
-    // Run build and tests BEFORE reviews
+    // Run build and tests BEFORE reviews (async with progress)
     changesMade.push('Running build and test verification...');
-    const verification = runVerification(workingDir, config);
+    const verification = await runVerificationAsync(workingDir, config, options?.onVerificationProgress);
 
     // Create verification issues if build/tests failed
     const verificationIssues: ReviewIssue[] = [];

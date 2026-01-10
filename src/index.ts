@@ -62,6 +62,7 @@ program
   .option('--continue', 'Resume workflow from last checkpoint')
   .option('--story <id-or-slug>', 'Target a specific story by ID or slug')
   .option('--step <phase>', 'Run a specific phase (refine, research, plan, implement, review) - cannot be combined with --auto --story')
+  .option('--max-iterations <number>', 'Maximum retry iterations (default: infinite)')
   .action((options) => {
     if (!options.dryRun) {
       checkApiKey();

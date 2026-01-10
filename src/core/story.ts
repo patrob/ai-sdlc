@@ -313,10 +313,18 @@ export function getEffectiveMaxRetries(story: Story, config: Config): number {
 
 /**
  * Check if a story has reached its maximum retry limit
+ * @param maxIterationsOverride Optional CLI override for max iterations (takes precedence)
  */
-export function isAtMaxRetries(story: Story, config: Config): boolean {
+export function isAtMaxRetries(story: Story, config: Config, maxIterationsOverride?: number): boolean {
   const currentRetryCount = story.frontmatter.retry_count || 0;
-  const maxRetries = getEffectiveMaxRetries(story, config);
+  // CLI override takes precedence, then story-specific, then config default
+  const maxRetries = maxIterationsOverride !== undefined
+    ? maxIterationsOverride
+    : getEffectiveMaxRetries(story, config);
+  // Infinity means no limit
+  if (!Number.isFinite(maxRetries)) {
+    return false;
+  }
   return currentRetryCount >= maxRetries;
 }
 

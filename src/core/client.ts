@@ -1,31 +1,56 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { configureAgentSdkAuth, getApiKey, getCredentialType, CredentialType } from './auth.js';
-import { loadConfig } from './config.js';
-import fs from 'fs';
+import { loadConfig, DEFAULT_TIMEOUTS } from './config.js';
 import path from 'path';
+
+/**
+ * Error thrown when an agent query times out
+ */
+export class AgentTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    const timeoutSec = Math.round(timeoutMs / 1000);
+    super(`Agent query timed out after ${timeoutSec} seconds. Consider increasing 'timeouts.agentTimeout' in .agentic-sdlc.json`);
+    this.name = 'AgentTimeoutError';
+  }
+}
+
+/**
+ * Progress event types from the Agent SDK
+ */
+export type AgentProgressEvent =
+  | { type: 'session_start'; sessionId: string }
+  | { type: 'tool_start'; toolName: string; input?: Record<string, unknown> }
+  | { type: 'tool_end'; toolName: string; result?: unknown }
+  | { type: 'assistant_message'; content: string }
+  | { type: 'completion' }
+  | { type: 'error'; message: string };
+
+/**
+ * Callback for receiving real-time progress from agent execution
+ */
+export type AgentProgressCallback = (event: AgentProgressEvent) => void;
 
 export interface AgentQueryOptions {
   prompt: string;
   systemPrompt?: string;
   workingDirectory?: string;
   model?: string;
+  /** Timeout in milliseconds. Defaults to config value or 10 minutes. */
+  timeout?: number;
+  /** Callback for real-time progress updates */
+  onProgress?: AgentProgressCallback;
 }
 
 export interface AgentMessage {
   type: string;
   subtype?: string;
-  content?: string | Array<{ type: string; text?: string }>;
+  content?: string | Array<{ type: string; text?: string; name?: string }>;
   tool_name?: string;
   input?: Record<string, unknown>;
   result?: unknown;
-  error?: { message: string };
+  error?: { message: string; type?: string; tool?: string };
   session_id?: string;
 }
-
-// Constants
-const CLAUDE_MD_PATH = '.claude/CLAUDE.md';
-const MAX_FILE_SIZE = 1024 * 1024; // 1MB
-const HARD_FILE_SIZE_LIMIT = 10 * 1024 * 1024; // 10MB
 
 /**
  * Validate that the working directory is within safe boundaries
@@ -36,68 +61,15 @@ function isValidWorkingDirectory(workingDir: string): boolean {
     const projectRoot = path.resolve(process.cwd());
     // Allow working directory to be the project root or any subdirectory
     return normalized.startsWith(projectRoot) || normalized === projectRoot;
-  } catch (error) {
+  } catch {
     return false;
-  }
-}
-
-/**
- * Validate CLAUDE.md file is safe to load
- */
-function validateClaudeMdFile(filePath: string, workingDir: string): { valid: boolean; warning?: string; error?: string } {
-  try {
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      return { valid: true }; // File not existing is not an error
-    }
-
-    // Resolve symlinks and verify target is within project boundaries
-    const realPath = fs.realpathSync(filePath);
-    const normalizedWorkingDir = path.resolve(workingDir);
-    if (!realPath.startsWith(normalizedWorkingDir)) {
-      return {
-        valid: false,
-        error: 'CLAUDE.md symlink points outside project directory, ignoring for security'
-      };
-    }
-
-    // Check file size
-    const stats = fs.statSync(filePath);
-    if (stats.size > HARD_FILE_SIZE_LIMIT) {
-      return {
-        valid: false,
-        error: `CLAUDE.md file is too large (${stats.size} bytes, max: ${HARD_FILE_SIZE_LIMIT})`
-      };
-    }
-    if (stats.size > MAX_FILE_SIZE) {
-      return {
-        valid: true,
-        warning: `CLAUDE.md is large (${stats.size} bytes, recommended max: ${MAX_FILE_SIZE}). This may affect performance.`
-      };
-    }
-
-    // Basic content validation
-    const content = fs.readFileSync(filePath, 'utf-8');
-    // Check for excessive control characters (excluding common ones like newline, tab)
-    if (/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(content)) {
-      return {
-        valid: true,
-        warning: 'CLAUDE.md contains unexpected control characters'
-      };
-    }
-
-    return { valid: true };
-  } catch (error: any) {
-    if (error.code === 'EACCES') {
-      return { valid: false, error: 'Permission denied reading CLAUDE.md' };
-    }
-    return { valid: false, error: `Error validating CLAUDE.md: ${error.message}` };
   }
 }
 
 /**
  * Run an agent query using the Claude Agent SDK.
  * Automatically configures authentication from environment or keychain.
+ * CLAUDE.md discovery is handled automatically by the SDK when settingSources includes 'project'.
  */
 export async function runAgentQuery(options: AgentQueryOptions): Promise<string> {
   // Configure authentication
@@ -112,35 +84,10 @@ export async function runAgentQuery(options: AgentQueryOptions): Promise<string>
     throw new Error('Invalid working directory: path is outside project boundaries');
   }
 
-  // Load configuration to get settingSources
+  // Load configuration to get settingSources and timeout
   const config = loadConfig(workingDir);
   const settingSources = config.settingSources || [];
-
-  // Debug logging for CLAUDE.md discovery
-  if (settingSources.includes('project')) {
-    try {
-      const claudeMdPath = path.join(workingDir, CLAUDE_MD_PATH);
-      const validation = validateClaudeMdFile(claudeMdPath, workingDir);
-
-      if (!validation.valid) {
-        if (validation.error) {
-          console.warn(`Warning: ${validation.error}`);
-        }
-      } else {
-        if (fs.existsSync(claudeMdPath)) {
-          console.debug('Debug: Found CLAUDE.md in project settings');
-          if (validation.warning) {
-            console.warn(`Warning: ${validation.warning}`);
-          }
-        } else {
-          console.debug('Debug: CLAUDE.md not found in project settings');
-        }
-      }
-    } catch (error: any) {
-      // Log errors for debugging but don't throw
-      console.debug(`File system error during CLAUDE.md discovery: ${error.message || 'Unknown error'}`);
-    }
-  }
+  const timeout = options.timeout ?? config.timeouts?.agentTimeout ?? DEFAULT_TIMEOUTS.agentTimeout;
 
   const results: string[] = [];
 
@@ -155,29 +102,82 @@ export async function runAgentQuery(options: AgentQueryOptions): Promise<string>
     },
   });
 
-  for await (const message of response as AsyncGenerator<AgentMessage>) {
-    if (message.type === 'assistant') {
-      const content = message.content;
-      if (typeof content === 'string') {
-        results.push(content);
-      } else if (Array.isArray(content)) {
-        for (const block of content) {
-          if (block.type === 'text' && block.text) {
-            results.push(block.text);
-          }
+  // Create a timeout promise
+  let timeoutId: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new AgentTimeoutError(timeout));
+    }, timeout);
+  });
+
+  // Process the async generator with timeout
+  const processMessages = async (): Promise<string> => {
+    try {
+      for await (const message of response as AsyncGenerator<AgentMessage>) {
+        switch (message.type) {
+          case 'system':
+            if (message.subtype === 'init' && message.session_id) {
+              options.onProgress?.({ type: 'session_start', sessionId: message.session_id });
+            } else if (message.subtype === 'completion') {
+              options.onProgress?.({ type: 'completion' });
+            }
+            break;
+
+          case 'assistant':
+            const content = message.content;
+            if (typeof content === 'string') {
+              results.push(content);
+              options.onProgress?.({ type: 'assistant_message', content });
+            } else if (Array.isArray(content)) {
+              for (const block of content) {
+                if (block.type === 'text' && block.text) {
+                  results.push(block.text);
+                  options.onProgress?.({ type: 'assistant_message', content: block.text });
+                } else if (block.type === 'tool_use' && block.name) {
+                  // Tool use request from assistant
+                  options.onProgress?.({ type: 'tool_start', toolName: block.name });
+                }
+              }
+            }
+            break;
+
+          case 'tool_call':
+            options.onProgress?.({
+              type: 'tool_start',
+              toolName: message.tool_name || 'unknown',
+              input: message.input
+            });
+            break;
+
+          case 'tool_result':
+            options.onProgress?.({
+              type: 'tool_end',
+              toolName: message.tool_name || 'unknown',
+              result: message.result
+            });
+            break;
+
+          case 'result':
+            if (message.subtype === 'success' && typeof message.result === 'string') {
+              results.push(message.result);
+            }
+            break;
+
+          case 'error':
+            options.onProgress?.({ type: 'error', message: message.error?.message || 'Agent error' });
+            throw new Error(message.error?.message || 'Agent error');
         }
       }
-    } else if (message.type === 'result' && message.subtype === 'success') {
-      // Final result
-      if (typeof message.result === 'string') {
-        results.push(message.result);
+      return results.join('\n');
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
-    } else if (message.type === 'error') {
-      throw new Error(message.error?.message || 'Agent error');
     }
-  }
+  };
 
-  return results.join('\n');
+  // Race between the agent query and the timeout
+  return Promise.race([processMessages(), timeoutPromise]);
 }
 
 /**

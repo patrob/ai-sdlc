@@ -1,12 +1,18 @@
 import fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, TimeoutConfig } from '../types/index.js';
 
 const CONFIG_FILENAME = '.agentic-sdlc.json';
 
 /**
- * Default configuration
+ * Default timeout configuration
  */
+export const DEFAULT_TIMEOUTS: TimeoutConfig = {
+  agentTimeout: 600000,   // 10 minutes
+  buildTimeout: 120000,   // 2 minutes
+  testTimeout: 300000,    // 5 minutes
+};
+
 export const DEFAULT_CONFIG: Config = {
   sdlcFolder: '.agentic-sdlc',
   stageGates: {
@@ -20,8 +26,8 @@ export const DEFAULT_CONFIG: Config = {
     enableCircuitBreaker: true,
   },
   reviewConfig: {
-    maxRetries: 3,
-    maxRetriesUpperBound: 10,
+    maxRetries: Infinity,
+    maxRetriesUpperBound: Infinity,
     autoCompleteOnApproval: true,
     autoRestartOnRejection: true,
   },
@@ -32,6 +38,8 @@ export const DEFAULT_CONFIG: Config = {
   buildCommand: 'npm run build',
   // Agent SDK settings sources - empty array maintains SDK isolation mode (default)
   settingSources: [],
+  // Timeout configuration
+  timeouts: { ...DEFAULT_TIMEOUTS },
 };
 
 /**
@@ -81,6 +89,29 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
     }
   }
 
+  // Validate timeouts if present
+  if (userConfig.timeouts !== undefined) {
+    if (typeof userConfig.timeouts !== 'object' || userConfig.timeouts === null) {
+      console.warn('Invalid timeouts in config (must be object), ignoring');
+      delete userConfig.timeouts;
+    } else {
+      const timeoutFields = ['agentTimeout', 'buildTimeout', 'testTimeout'] as const;
+      for (const field of timeoutFields) {
+        if (userConfig.timeouts[field] !== undefined) {
+          const value = userConfig.timeouts[field];
+          if (typeof value !== 'number' || value < 0 || !Number.isFinite(value)) {
+            console.warn(`Invalid ${field} in config (must be positive number), using default`);
+            delete userConfig.timeouts[field];
+          } else if (value < 1000) {
+            console.warn(`Warning: ${field} is less than 1 second (${value}ms) - this may cause premature timeouts`);
+          } else if (value > 3600000) {
+            console.warn(`Warning: ${field} is more than 1 hour (${value}ms) - this is unusually long`);
+          }
+        }
+      }
+    }
+  }
+
   return userConfig;
 }
 
@@ -114,6 +145,10 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
         reviewConfig: {
           ...DEFAULT_CONFIG.reviewConfig,
           ...userConfig.reviewConfig,
+        },
+        timeouts: {
+          ...DEFAULT_TIMEOUTS,
+          ...userConfig.timeouts,
         },
       };
     } catch (error) {
@@ -233,24 +268,30 @@ export function getMaxRefinementIterations(workingDir: string = process.cwd()): 
 export function validateReviewConfig(reviewConfig: ReviewConfig): ReviewConfig {
   const validated = { ...reviewConfig };
 
+  // Handle Infinity as valid "no limit" value
+  if (validated.maxRetries === Infinity) {
+    return validated;
+  }
+
   // Ensure maxRetries is within valid bounds
   if (validated.maxRetries < 0) {
     console.warn(`Warning: maxRetries cannot be negative, using 0`);
     validated.maxRetries = 0;
   }
 
-  if (validated.maxRetries > validated.maxRetriesUpperBound) {
-    console.warn(
-      `Warning: maxRetries (${validated.maxRetries}) exceeds upper bound (${validated.maxRetriesUpperBound}), capping at ${validated.maxRetriesUpperBound}`
-    );
-    validated.maxRetries = validated.maxRetriesUpperBound;
+  // Only apply upper bound check for finite values
+  if (Number.isFinite(validated.maxRetries) && Number.isFinite(validated.maxRetriesUpperBound)) {
+    if (validated.maxRetries > validated.maxRetriesUpperBound) {
+      console.warn(
+        `Warning: maxRetries (${validated.maxRetries}) exceeds upper bound (${validated.maxRetriesUpperBound}), capping at ${validated.maxRetriesUpperBound}`
+      );
+      validated.maxRetries = validated.maxRetriesUpperBound;
+    }
   }
 
   // Log unusual values
   if (validated.maxRetries === 0) {
     console.warn('Warning: maxRetries is set to 0 - auto-retry is disabled');
-  } else if (validated.maxRetries > 5) {
-    console.warn(`Warning: maxRetries is set to ${validated.maxRetries} - this is higher than recommended (3-5)`);
   }
 
   return validated;

@@ -1,7 +1,8 @@
 import { parseStory, writeStory, moveStory } from '../core/story.js';
-import { runAgentQuery } from '../core/client.js';
+import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
 import { Story, AgentResult } from '../types/index.js';
 import path from 'path';
+import { AgentOptions } from './research.js';
 
 const REFINEMENT_SYSTEM_PROMPT = `You are a product refinement specialist. Your job is to take raw story ideas from the backlog and transform them into well-defined, actionable user stories.
 
@@ -26,7 +27,8 @@ At the end of your response, include:
  */
 export async function runRefinementAgent(
   storyPath: string,
-  sdlcRoot: string
+  sdlcRoot: string,
+  options: AgentOptions = {}
 ): Promise<AgentResult> {
   const story = parseStory(storyPath);
   const changesMade: string[] = [];
@@ -52,6 +54,7 @@ Format your response as markdown that will replace the story content.`;
       prompt,
       systemPrompt: REFINEMENT_SYSTEM_PROMPT,
       workingDirectory: path.dirname(sdlcRoot),
+      onProgress: options.onProgress,
     });
 
     // Parse effort estimate from the response

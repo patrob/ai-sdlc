@@ -206,8 +206,12 @@ function generateFullSDLCActions(story: Story, c?: any): Action[] {
 /**
  * Run the workflow (process one action or all)
  */
-export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string }): Promise<void> {
+export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string; maxIterations?: string }): Promise<void> {
   const config = loadConfig();
+  // Parse maxIterations from CLI (undefined means use config default which is Infinity)
+  const maxIterationsOverride = options.maxIterations !== undefined
+    ? parseInt(options.maxIterations, 10)
+    : undefined;
   const sdlcRoot = getSdlcRoot();
   const c = getThemedChalk(config);
 
@@ -495,8 +499,8 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
         const story = parseStory(action.storyPath);
         const config = loadConfig();
 
-        // Check if we're at max retries
-        if (isAtMaxRetries(story, config)) {
+        // Check if we're at max retries (pass CLI override if provided)
+        if (isAtMaxRetries(story, config, maxIterationsOverride)) {
           console.log();
           console.log(c.error('═'.repeat(50)));
           console.log(c.error(`✗ Review failed - maximum retries reached`));
@@ -513,17 +517,21 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
         // We can retry - reset RPIV cycle and loop back
         const currentRetry = (story.frontmatter.retry_count || 0) + 1;
-        const maxRetries = story.frontmatter.max_retries || config.reviewConfig?.maxRetries || 3;
+        // Use CLI override, then story-specific, then config default
+        const effectiveMaxRetries = maxIterationsOverride !== undefined
+          ? maxIterationsOverride
+          : (story.frontmatter.max_retries ?? config.reviewConfig?.maxRetries ?? Infinity);
+        const maxRetriesDisplay = Number.isFinite(effectiveMaxRetries) ? effectiveMaxRetries : '∞';
 
         console.log();
-        console.log(c.warning(`⟳ Review rejected with ${reviewResult.issues.length} issue(s) - initiating rework (attempt ${currentRetry}/${maxRetries})`));
+        console.log(c.warning(`⟳ Review rejected with ${reviewResult.issues.length} issue(s) - initiating rework (attempt ${currentRetry}/${maxRetriesDisplay})`));
 
         // Reset the RPIV cycle (this increments retry_count and resets flags)
         resetRPIVCycle(story, reviewResult.feedback);
 
         // Log what's being reset
         console.log(c.dim(`  → Reset plan_complete, implementation_complete, reviews_complete`));
-        console.log(c.dim(`  → Retry count: ${currentRetry}/${maxRetries}`));
+        console.log(c.dim(`  → Retry count: ${currentRetry}/${maxRetriesDisplay}`));
 
         // Regenerate actions starting from the phase that needs rework
         // For now, we restart from 'plan' since that's the typical flow after research
@@ -679,7 +687,40 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
     action.storyPath = resolvedPath;
   }
 
-  const spinner = ora(formatAction(action)).start();
+  // Store phase completion state BEFORE action execution (to detect transitions)
+  const storyBeforeAction = parseStory(action.storyPath);
+  const prevPhaseState = {
+    research_complete: storyBeforeAction.frontmatter.research_complete,
+    plan_complete: storyBeforeAction.frontmatter.plan_complete,
+    implementation_complete: storyBeforeAction.frontmatter.implementation_complete,
+    reviews_complete: storyBeforeAction.frontmatter.reviews_complete,
+    status: storyBeforeAction.frontmatter.status,
+  };
+
+  const spinner = ora(formatAction(action, true, c)).start();
+  const baseText = formatAction(action, true, c);
+
+  // Create agent progress callback for real-time updates
+  const onAgentProgress = (event: { type: string; toolName?: string; sessionId?: string }) => {
+    switch (event.type) {
+      case 'session_start':
+        spinner.text = `${baseText} ${c.dim('(session started)')}`;
+        break;
+      case 'tool_start':
+        // Show which tool is being executed
+        const toolName = event.toolName || 'unknown';
+        const shortName = toolName.replace(/^(mcp__|Mcp)/, '').substring(0, 30);
+        spinner.text = `${baseText} ${c.dim(`→ ${shortName}`)}`;
+        break;
+      case 'tool_end':
+        // Keep showing the action, tool completed
+        spinner.text = baseText;
+        break;
+      case 'completion':
+        spinner.text = `${baseText} ${c.dim('(completing...)')}`;
+        break;
+    }
+  };
 
   try {
     // Import and run the appropriate agent
@@ -688,32 +729,70 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
     switch (action.type) {
       case 'refine':
         const { runRefinementAgent } = await import('../agents/refinement.js');
-        result = await runRefinementAgent(action.storyPath, sdlcRoot);
+        result = await runRefinementAgent(action.storyPath, sdlcRoot, { onProgress: onAgentProgress });
         break;
 
       case 'research':
         const { runResearchAgent } = await import('../agents/research.js');
-        result = await runResearchAgent(action.storyPath, sdlcRoot);
+        result = await runResearchAgent(action.storyPath, sdlcRoot, { onProgress: onAgentProgress });
         break;
 
       case 'plan':
         const { runPlanningAgent } = await import('../agents/planning.js');
-        result = await runPlanningAgent(action.storyPath, sdlcRoot);
+        result = await runPlanningAgent(action.storyPath, sdlcRoot, { onProgress: onAgentProgress });
         break;
 
       case 'implement':
         const { runImplementationAgent } = await import('../agents/implementation.js');
-        result = await runImplementationAgent(action.storyPath, sdlcRoot);
+        result = await runImplementationAgent(action.storyPath, sdlcRoot, { onProgress: onAgentProgress });
         break;
 
       case 'review':
         const { runReviewAgent } = await import('../agents/review.js');
-        result = await runReviewAgent(action.storyPath, sdlcRoot);
+        result = await runReviewAgent(action.storyPath, sdlcRoot, {
+          onVerificationProgress: (phase, status, message) => {
+            const phaseLabel = phase === 'build' ? 'Building' : 'Testing';
+            switch (status) {
+              case 'starting':
+                spinner.text = c.dim(`${phaseLabel}: ${message || ''}`);
+                break;
+              case 'running':
+                // Keep spinner spinning, optionally could show last line of output
+                break;
+              case 'passed':
+                spinner.text = c.success(`${phaseLabel}: passed`);
+                break;
+              case 'failed':
+                spinner.text = c.error(`${phaseLabel}: failed`);
+                break;
+            }
+          },
+        });
+        break;
+
+      case 'rework':
+        const { runReworkAgent } = await import('../agents/rework.js');
+        if (!action.context) {
+          throw new Error('Rework action requires context with review feedback');
+        }
+        result = await runReworkAgent(action.storyPath, sdlcRoot, action.context as ReworkContext);
         break;
 
       case 'create_pr':
         const { createPullRequest } = await import('../agents/review.js');
         result = await createPullRequest(action.storyPath, sdlcRoot);
+        break;
+
+      case 'move_to_done':
+        // Move story to done folder
+        const { moveStory } = await import('../core/story.js');
+        const storyToMove = parseStory(action.storyPath);
+        const movedStory = moveStory(storyToMove, 'done', sdlcRoot);
+        result = {
+          success: true,
+          story: movedStory,
+          changesMade: ['Moved story to done/'],
+        };
         break;
 
       default:
@@ -722,19 +801,67 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
 
     // Check if agent succeeded
     if (result && !result.success) {
-      spinner.fail(c.error(`Failed: ${formatAction(action)}`));
+      spinner.fail(c.error(`Failed: ${formatAction(action, true, c)}`));
       if (result.error) {
         console.error(c.error(`  Error: ${result.error}`));
       }
       return { success: false };
     }
 
-    spinner.succeed(c.success(formatAction(action)));
+    spinner.succeed(c.success(formatAction(action, true, c)));
 
     // Show changes made
     if (result && result.changesMade.length > 0) {
       for (const change of result.changesMade) {
         console.log(c.dim(`  → ${change}`));
+      }
+    }
+
+    // Display phase progress after successful action
+    if (result && result.success) {
+      const story = parseStory(action.storyPath);
+      const progress = calculatePhaseProgress(story);
+
+      // Show phase checklist
+      console.log(c.dim(`  Progress: ${renderPhaseChecklist(story, c)}`));
+
+      // Check if a phase just completed (detect transition from false → true)
+      const phaseInfo = getPhaseInfo(action.type, c);
+      if (phaseInfo) {
+        let phaseJustCompleted = false;
+        switch (action.type) {
+          case 'refine':
+            // Refine completes when status changes from backlog to something else
+            phaseJustCompleted = prevPhaseState.status === 'backlog' && story.frontmatter.status !== 'backlog';
+            break;
+          case 'research':
+            // Research completes when research_complete transitions from false to true
+            phaseJustCompleted = !prevPhaseState.research_complete && story.frontmatter.research_complete;
+            break;
+          case 'plan':
+            // Plan completes when plan_complete transitions from false to true
+            phaseJustCompleted = !prevPhaseState.plan_complete && story.frontmatter.plan_complete;
+            break;
+          case 'implement':
+            // Implement completes when implementation_complete transitions from false to true
+            phaseJustCompleted = !prevPhaseState.implementation_complete && story.frontmatter.implementation_complete;
+            break;
+          case 'review':
+            // Review completes when reviews_complete transitions from false to true
+            phaseJustCompleted = !prevPhaseState.reviews_complete && story.frontmatter.reviews_complete;
+            break;
+          case 'rework':
+            // Rework doesn't have a specific completion flag
+            phaseJustCompleted = false;
+            break;
+        }
+
+        // Only show completion message if phase transitioned to complete
+        if (phaseJustCompleted) {
+          const useAscii = process.env.NO_COLOR !== undefined;
+          const completionSymbol = useAscii ? '[X]' : '✓';
+          console.log(c.phaseComplete(`  ${completionSymbol} ${phaseInfo.name} phase complete`));
+        }
       }
     }
 
@@ -745,11 +872,14 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
 
     return { success: true };
   } catch (error) {
-    spinner.fail(c.error(`Failed: ${formatAction(action)}`));
+    spinner.fail(c.error(`Failed: ${formatAction(action, true, c)}`));
     console.error(error);
 
-    // Update story with error
+    // Show phase checklist with error indication
     const story = parseStory(action.storyPath);
+    console.log(c.dim(`  Progress: ${renderPhaseChecklist(story, c)}`));
+
+    // Update story with error
     story.frontmatter.last_error = error instanceof Error ? error.message : String(error);
     // Don't throw - let the workflow continue if in auto mode
     return { success: false };
@@ -757,9 +887,207 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
 }
 
 /**
- * Format an action for display
+ * Phase information for RPIV display
  */
-function formatAction(action: Action): string {
+export interface PhaseInfo {
+  name: string;
+  icon: string;
+  iconAscii: string;
+  colorFn: (str: string) => string;
+}
+
+/**
+ * Get phase information for an action type
+ * Returns null for non-RPIV actions (create_pr, move_to_done)
+ *
+ * @param actionType - The type of action to get phase info for
+ * @param colors - The theme colors object
+ * @returns Phase information object or null for non-RPIV actions
+ */
+export function getPhaseInfo(actionType: ActionType, colors: any): PhaseInfo | null {
+  const useAscii = process.env.NO_COLOR !== undefined;
+
+  switch (actionType) {
+    case 'refine':
+      return {
+        name: 'Refine',
+        icon: '✨',
+        iconAscii: '[RF]', // Changed from [R] to avoid collision with Research
+        colorFn: colors.phaseRefine,
+      };
+    case 'research':
+      return {
+        name: 'Research',
+        icon: '🔍',
+        iconAscii: '[R]',
+        colorFn: colors.phaseResearch,
+      };
+    case 'plan':
+      return {
+        name: 'Plan',
+        icon: '📋',
+        iconAscii: '[P]',
+        colorFn: colors.phasePlan,
+      };
+    case 'implement':
+      return {
+        name: 'Implement',
+        icon: '🔨',
+        iconAscii: '[I]',
+        colorFn: colors.phaseImplement,
+      };
+    case 'review':
+      return {
+        name: 'Verify',
+        icon: '✓',
+        iconAscii: '[V]',
+        colorFn: colors.phaseVerify,
+      };
+    case 'rework':
+      return {
+        name: 'Rework',
+        icon: '🔄',
+        iconAscii: '[RW]',
+        colorFn: colors.warning,
+      };
+    default:
+      return null; // create_pr, move_to_done are not RPIV phases
+  }
+}
+
+/**
+ * Calculate phase progress for a story
+ *
+ * @param story - The story to calculate progress for
+ * @returns Object containing current phase, completed phases, and all phases
+ */
+export function calculatePhaseProgress(story: Story): {
+  currentPhase: string;
+  completedPhases: string[];
+  allPhases: string[];
+} {
+  const allPhases = ['Refine', 'Research', 'Plan', 'Implement', 'Verify'];
+  const completedPhases: string[] = [];
+  let currentPhase = 'Refine';
+
+  // Check each phase completion status
+  if (story.frontmatter.status !== 'backlog') {
+    completedPhases.push('Refine');
+    currentPhase = 'Research';
+  }
+
+  if (story.frontmatter.research_complete) {
+    completedPhases.push('Research');
+    currentPhase = 'Plan';
+  }
+
+  if (story.frontmatter.plan_complete) {
+    completedPhases.push('Plan');
+    currentPhase = 'Implement';
+  }
+
+  if (story.frontmatter.implementation_complete) {
+    completedPhases.push('Implement');
+    currentPhase = 'Verify';
+  }
+
+  if (story.frontmatter.reviews_complete) {
+    completedPhases.push('Verify');
+    currentPhase = 'Complete';
+  }
+
+  return { currentPhase, completedPhases, allPhases };
+}
+
+/**
+ * Render phase checklist for progress display
+ *
+ * @param story - The story to render progress for
+ * @param colors - The theme colors object
+ * @returns Formatted checklist string with symbols and colors
+ */
+export function renderPhaseChecklist(story: Story, colors: any): string {
+  const { currentPhase, completedPhases, allPhases } = calculatePhaseProgress(story);
+  const useAscii = process.env.NO_COLOR !== undefined;
+
+  const symbols = {
+    complete: useAscii ? '[X]' : '✓',
+    current: useAscii ? '[>]' : '●',
+    pending: useAscii ? '[ ]' : '○',
+    arrow: useAscii ? '->' : '→',
+  };
+
+  const parts = allPhases.map(phase => {
+    if (completedPhases.includes(phase)) {
+      return colors.success(symbols.complete) + ' ' + colors.dim(phase);
+    } else if (phase === currentPhase) {
+      return colors.info(symbols.current) + ' ' + colors.bold(phase);
+    } else {
+      return colors.dim(symbols.pending + ' ' + phase);
+    }
+  });
+
+  return parts.join(colors.dim(' ' + symbols.arrow + ' '));
+}
+
+/**
+ * Truncate story slug if it exceeds terminal width
+ *
+ * @param text - The text to truncate
+ * @param maxWidth - Maximum width (defaults to terminal columns or 80)
+ * @returns Truncated text with ellipsis if needed
+ */
+export function truncateForTerminal(text: string, maxWidth?: number): string {
+  // Enforce minimum 40 and maximum 1000 width to prevent memory/performance issues
+  const terminalWidth = Math.min(1000, Math.max(40, maxWidth || process.stdout.columns || 80));
+  const minWidth = 40; // Reserve space for phase indicators and verbs
+
+  if (text.length + minWidth <= terminalWidth) {
+    return text;
+  }
+
+  const availableWidth = terminalWidth - minWidth - 3; // -3 for "..."
+  if (availableWidth <= 0) {
+    // When there's no room for truncation indicator, just return what fits
+    return text.slice(0, 10);
+  }
+
+  return text.slice(0, availableWidth) + '...';
+}
+
+/**
+ * Sanitize story slug by removing ANSI escape codes
+ *
+ * This function prevents ANSI injection attacks by stripping escape sequences
+ * that could manipulate terminal output (colors, cursor movement, screen clearing, etc.)
+ *
+ * @security Prevents ANSI injection attacks through malicious story titles
+ * @param text - The text to sanitize
+ * @returns Sanitized text without ANSI codes
+ */
+export function sanitizeStorySlug(text: string): string {
+  // Remove ANSI escape codes (security: prevent ANSI injection attacks)
+  // Comprehensive regex that covers:
+  // - SGR (Select Graphic Rendition): \x1b\[[0-9;]*m
+  // - Cursor positioning and other CSI sequences: \x1b\[[0-9;]*[A-Za-z]
+  // - OSC (Operating System Command): \x1b\][^\x07]*\x07
+  // - Incomplete sequences: \x1b\[[^\x1b]*
+  return text
+    .replace(/\x1b\[[0-9;]*m/g, '') // SGR color codes (complete)
+    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '') // Other CSI sequences (cursor movement, etc.)
+    .replace(/\x1b\][^\x07]*\x07/g, '') // OSC sequences (complete)
+    .replace(/\x1b\[[^\x1b]*/g, ''); // Incomplete CSI sequences
+}
+
+/**
+ * Format an action for display with phase indicator
+ *
+ * @param action - The action to format
+ * @param includePhaseIndicator - Whether to include phase indicator brackets
+ * @param colors - The theme colors object (parameter renamed for clarity)
+ * @returns Formatted action string
+ */
+function formatAction(action: Action, includePhaseIndicator: boolean = false, colors?: any): string {
   const actionVerbs: Record<Action['type'], string> = {
     refine: 'Refine',
     research: 'Research',
@@ -772,7 +1100,33 @@ function formatAction(action: Action): string {
   };
 
   const storySlug = action.storyPath.split('/').pop()?.replace('.md', '') || action.storyId;
-  return `${actionVerbs[action.type]} "${storySlug}"`;
+  const sanitizedSlug = sanitizeStorySlug(storySlug); // Security: sanitize ANSI codes
+  const truncatedSlug = truncateForTerminal(sanitizedSlug);
+  const verb = actionVerbs[action.type];
+
+  // If no color context or phase indicator not requested, return simple format
+  if (!includePhaseIndicator || !colors) {
+    return `${verb} "${truncatedSlug}"`;
+  }
+
+  // Get phase info for RPIV actions
+  const phaseInfo = getPhaseInfo(action.type, colors);
+  if (!phaseInfo) {
+    // Non-RPIV actions (create_pr, move_to_done) don't get phase indicators
+    return `${verb} "${truncatedSlug}"`;
+  }
+
+  // Format with phase indicator
+  const useAscii = process.env.NO_COLOR !== undefined;
+  const icon = useAscii ? phaseInfo.iconAscii : phaseInfo.icon;
+  const phaseLabel = phaseInfo.colorFn(`[${phaseInfo.name}]`);
+
+  // Special formatting for review actions
+  if (action.type === 'review') {
+    return `${phaseLabel} ${icon} ${colors.reviewAction(verb)} "${truncatedSlug}"`;
+  }
+
+  return `${phaseLabel} ${icon} ${verb} "${truncatedSlug}"`;
 }
 
 /**

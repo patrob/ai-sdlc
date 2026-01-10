@@ -15,9 +15,24 @@ export function detectTerminalTheme(): 'light' | 'dark' {
     const parts = colorFgBg.split(';');
     if (parts.length >= 2) {
       const bg = parseInt(parts[1], 10);
-      // Background values 0-7 are dark, 8-15 are light
-      if (!isNaN(bg)) {
+      // Background values 0-7 are dark, 8-15 are light (standard ANSI)
+      // Security: validate range to prevent unexpected behavior
+      if (!isNaN(bg) && bg >= 0 && bg <= 15) {
+        // Standard 16-color ANSI palette
         return bg > 7 ? 'light' : 'dark';
+      } else if (!isNaN(bg) && bg >= 16 && bg <= 231) {
+        // 256-color palette: RGB cube (16-231)
+        // Calculate luminance approximation from 6x6x6 RGB cube
+        const colorIndex = bg - 16;
+        const r = Math.floor(colorIndex / 36);
+        const g = Math.floor((colorIndex % 36) / 6);
+        const b = colorIndex % 6;
+        // Simple luminance: if sum > 9 (out of 15), it's light
+        return (r + g + b) > 9 ? 'light' : 'dark';
+      } else if (!isNaN(bg) && bg >= 232 && bg <= 255) {
+        // 256-color palette: grayscale ramp (232-255)
+        // Values above 243 (midpoint) are light
+        return bg > 243 ? 'light' : 'dark';
       }
     }
   }
@@ -51,6 +66,14 @@ export function getThemeColors(preference: ThemePreference): ThemeColors {
       ready: (str: string) => str,
       inProgress: (str: string) => str,
       done: (str: string) => str,
+      // RPIV phase colors (no color)
+      phaseRefine: (str: string) => str,
+      phaseResearch: (str: string) => str,
+      phasePlan: (str: string) => str,
+      phaseImplement: (str: string) => str,
+      phaseVerify: (str: string) => str,
+      reviewAction: (str: string) => str,
+      phaseComplete: (str: string) => str,
     };
   }
 
@@ -75,6 +98,14 @@ export function getThemeColors(preference: ThemePreference): ThemeColors {
       ready: chalk.blue.bold,
       inProgress: chalk.hex('#CC6600'), // Darker orange instead of yellow
       done: chalk.green.bold,
+      // RPIV phase colors (darker for light backgrounds)
+      phaseRefine: chalk.hex('#9932CC').bold,    // Dark purple/magenta
+      phaseResearch: chalk.blue.bold,            // Blue
+      phasePlan: chalk.hex('#008B8B').bold,      // Dark cyan
+      phaseImplement: chalk.hex('#CC6600').bold, // Dark orange
+      phaseVerify: chalk.green.bold,             // Green
+      reviewAction: chalk.hex('#008B8B').bold,   // Distinct cyan with bold
+      phaseComplete: chalk.green.bold,           // Success green
     };
   }
 
@@ -90,6 +121,14 @@ export function getThemeColors(preference: ThemePreference): ThemeColors {
     ready: chalk.blue,
     inProgress: chalk.yellow,
     done: chalk.green,
+    // RPIV phase colors (bright for dark backgrounds)
+    phaseRefine: chalk.magenta,     // Magenta/purple
+    phaseResearch: chalk.blue,      // Blue
+    phasePlan: chalk.cyan,          // Cyan
+    phaseImplement: chalk.yellow,   // Yellow
+    phaseVerify: chalk.green,       // Green
+    reviewAction: chalk.cyan.bold,  // Distinct cyan with bold
+    phaseComplete: chalk.green,     // Success green
   };
 }
 

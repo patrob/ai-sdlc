@@ -1,9 +1,12 @@
 import { execSync } from 'child_process';
 import path from 'path';
 import { parseStory, writeStory, moveStory, updateStoryField } from '../core/story.js';
-import { runAgentQuery } from '../core/client.js';
+import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
 import { Story, AgentResult } from '../types/index.js';
 import { AgentOptions } from './research.js';
+
+// Re-export for convenience
+export type { AgentProgressCallback };
 
 const IMPLEMENTATION_SYSTEM_PROMPT = `You are a senior software engineer implementing features based on a detailed plan. Your job is to execute each phase of the implementation plan.
 
@@ -101,6 +104,7 @@ Use the available tools to read files, write code, and run commands as needed.`;
       prompt,
       systemPrompt: IMPLEMENTATION_SYSTEM_PROMPT,
       workingDirectory: workingDir,
+      onProgress: options.onProgress,
     });
 
     // Add implementation notes to the story

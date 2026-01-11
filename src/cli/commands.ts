@@ -1,9 +1,11 @@
 import chalk from 'chalk';
 import ora from 'ora';
 import fs from 'fs';
+import path from 'path';
 import { getSdlcRoot, loadConfig, initConfig } from '../core/config.js';
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoryById } from '../core/kanban.js';
-import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries } from '../core/story.js';
+import { createStory, createStoryFromFile, parseStory, resetRPIVCycle, isAtMaxRetries } from '../core/story.js';
+import { FileValidationError } from '../core/file-validators.js';
 import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
 import {
@@ -117,29 +119,86 @@ export async function status(options?: { active?: boolean }): Promise<void> {
 }
 
 /**
- * Add a new story to the backlog
+ * Options for the add command
  */
-export async function add(title: string): Promise<void> {
+export interface AddOptions {
+  file?: string;
+}
+
+/**
+ * Add a new story to the backlog
+ * Can create from title text or from a file
+ */
+export async function add(title?: string, options?: AddOptions): Promise<void> {
+  const config = loadConfig();
+  const sdlcRoot = getSdlcRoot();
+  const c = getThemedChalk(config);
+
+  // Validate inputs
+  if (!title && !options?.file) {
+    console.log(c.error('Error: Must provide either a title or --file option'));
+    console.log(c.dim('Usage:'));
+    console.log(c.dim('  ai-sdlc add "Story title"'));
+    console.log(c.dim('  ai-sdlc add --file path/to/story.md'));
+    return;
+  }
+
+  if (!kanbanExists(sdlcRoot)) {
+    console.log(c.warning('ai-sdlc not initialized. Run `ai-sdlc init` first.'));
+    return;
+  }
+
   const spinner = ora('Creating story...').start();
 
   try {
-    const config = loadConfig();
-    const sdlcRoot = getSdlcRoot();
-    const c = getThemedChalk(config);
+    let story;
 
-    if (!kanbanExists(sdlcRoot)) {
-      spinner.fail('ai-sdlc not initialized. Run `ai-sdlc init` first.');
+    if (options?.file) {
+      // Create story from file
+      const filePath = path.resolve(options.file);
+      spinner.text = `Creating story from file: ${path.basename(filePath)}`;
+      story = createStoryFromFile(filePath, sdlcRoot);
+    } else if (title) {
+      // Create story from title
+      story = createStory(title, sdlcRoot);
+    } else {
+      // This shouldn't happen due to validation above, but handle it
+      spinner.fail('No title or file provided');
       return;
     }
 
-    const story = createStory(title, sdlcRoot);
-
     spinner.succeed(c.success(`Created: ${story.path}`));
     console.log(c.dim(`  ID: ${story.frontmatter.id}`));
+    console.log(c.dim(`  Title: ${story.frontmatter.title}`));
     console.log(c.dim(`  Slug: ${story.slug}`));
     console.log();
     console.log(c.info('Next step:'), `ai-sdlc run`);
   } catch (error) {
+    // Handle file validation errors with specific messages
+    if (error instanceof FileValidationError) {
+      spinner.fail(c.error(`File error: ${error.message}`));
+      switch (error.code) {
+        case 'FILE_NOT_FOUND':
+          console.log(c.dim('Check that the file path is correct.'));
+          break;
+        case 'FILE_TOO_LARGE':
+          console.log(c.dim('Try splitting the file into smaller parts.'));
+          break;
+        case 'INVALID_EXTENSION':
+          console.log(c.dim('Supported formats: .md, .txt'));
+          break;
+        case 'EMPTY_CONTENT':
+          console.log(c.dim('The file must contain text content.'));
+          break;
+        case 'BINARY_CONTENT':
+          console.log(c.dim('Only text files are supported.'));
+          break;
+        default:
+          console.log(c.dim('Please check the file and try again.'));
+      }
+      return;
+    }
+
     spinner.fail('Failed to create story');
     console.error(error);
     process.exit(1);

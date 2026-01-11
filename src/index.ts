@@ -45,9 +45,10 @@ program
   .action((options) => status(options));
 
 program
-  .command('add <title>')
+  .command('add [title]')
   .description('Add a new story to the backlog')
-  .action(add);
+  .option('-f, --file <path>', 'Create story from a markdown or text file')
+  .action((title, options) => add(title, options));
 
 program
   .command('details <id>')

@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config } from '../types/index.js';
+import { parseStoryFile, ParsedStoryContent } from './file-parser.js';
+import { FileValidationError } from './file-validators.js';
 
 /**
  * Parse a story markdown file into a Story object
@@ -156,6 +158,161 @@ export function createStory(
 
   writeStory(story);
   return story;
+}
+
+/**
+ * Create a new story from a file (markdown or plaintext)
+ * Parses the file content and creates a story in the backlog
+ *
+ * @param filePath - Absolute path to the source file
+ * @param sdlcRoot - Root folder for the SDLC structure
+ * @returns The created Story object
+ * @throws {FileValidationError} If file validation fails
+ */
+export function createStoryFromFile(
+  filePath: string,
+  sdlcRoot: string
+): Story {
+  // Resolve the path to absolute
+  const absolutePath = path.resolve(filePath);
+
+  // Parse the file (this also validates it)
+  const parsed = parseStoryFile(absolutePath);
+
+  // Derive title from parsed content or filename
+  const title = parsed.title || titleFromFilename(absolutePath);
+
+  const backlogFolder = path.join(sdlcRoot, 'backlog');
+
+  // Ensure backlog folder exists
+  if (!fs.existsSync(backlogFolder)) {
+    fs.mkdirSync(backlogFolder, { recursive: true });
+  }
+
+  // Get existing stories to determine priority
+  const existingFiles = fs.readdirSync(backlogFolder).filter(f => f.endsWith('.md'));
+  const priority = existingFiles.length + 1;
+
+  const slug = slugify(title);
+  const filename = `${String(priority).padStart(2, '0')}-${slug}.md`;
+  const storyPath = path.join(backlogFolder, filename);
+
+  // Build frontmatter from parsed content + defaults
+  // Start with defaults, then spread parsed frontmatter, then override critical fields
+  const storyId = generateStoryId();
+  const frontmatter: StoryFrontmatter = {
+    // Spread parsed frontmatter first (so it can be overridden)
+    ...parsed.frontmatter,
+    // Required fields - always set these
+    id: storyId,
+    title,
+    priority,
+    status: 'backlog',
+    type: parsed.frontmatter?.type || 'feature',
+    created: new Date().toISOString().split('T')[0],
+    labels: parsed.frontmatter?.labels || [],
+    // Workflow flags - always start fresh
+    research_complete: false,
+    plan_complete: false,
+    implementation_complete: false,
+    reviews_complete: false,
+  };
+
+  // Build content from parsed sections or use raw content
+  let content: string;
+
+  if (parsed.sections?.summary || parsed.sections?.acceptanceCriteria) {
+    // Use structured content from file
+    content = `# ${title}
+
+## Summary
+
+${parsed.sections.summary || '(Describe the feature, bug, or task here)'}
+
+## Acceptance Criteria
+
+${parsed.sections.acceptanceCriteria || '- [ ] (Define acceptance criteria)'}
+
+## Research
+
+<!-- Populated by research agent -->
+
+## Implementation Plan
+
+<!-- Populated by planning agent -->
+
+## Review Notes
+
+<!-- Populated by review agents -->`;
+  } else if (parsed.content) {
+    // Use raw content if it has meaningful text
+    content = `# ${title}
+
+${parsed.content}
+
+## Research
+
+<!-- Populated by research agent -->
+
+## Implementation Plan
+
+<!-- Populated by planning agent -->
+
+## Review Notes
+
+<!-- Populated by review agents -->`;
+  } else {
+    // Fallback to default template
+    content = `# ${title}
+
+## Summary
+
+(Describe the feature, bug, or task here)
+
+## Acceptance Criteria
+
+- [ ] (Define acceptance criteria)
+
+## Research
+
+<!-- Populated by research agent -->
+
+## Implementation Plan
+
+<!-- Populated by planning agent -->
+
+## Review Notes
+
+<!-- Populated by review agents -->`;
+  }
+
+  const story: Story = {
+    path: storyPath,
+    slug,
+    frontmatter,
+    content,
+  };
+
+  writeStory(story);
+  return story;
+}
+
+/**
+ * Derives a title from a filename
+ * Removes extension and converts kebab-case/snake_case to Title Case
+ */
+function titleFromFilename(filePath: string): string {
+  // Get basename without extension
+  const basename = path.basename(filePath, path.extname(filePath));
+
+  // Remove priority prefix if present (e.g., "01-" or "1-")
+  const withoutPriority = basename.replace(/^\d+-/, '');
+
+  // Convert kebab-case and snake_case to spaces, then title case
+  return withoutPriority
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .trim();
 }
 
 /**

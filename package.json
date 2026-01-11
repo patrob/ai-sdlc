@@ -58,7 +58,6 @@
     "write-file-atomic": "^5.0.1"
   },
   "devDependencies": {
-    "@types/cli-table3": "^0.6.9",
     "@types/node": "^20.0.0",
     "@types/write-file-atomic": "^4.0.3",
     "tsx": "^4.0.0",

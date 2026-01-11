@@ -35,12 +35,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/patrob/agentic-workflow.git"
+    "url": "git+https://github.com/patrob/ai-sdlc.git"
   },
   "bugs": {
-    "url": "https://github.com/patrob/agentic-workflow/issues"
+    "url": "https://github.com/patrob/ai-sdlc/issues"
   },
-  "homepage": "https://github.com/patrob/agentic-workflow#readme",
+  "homepage": "https://github.com/patrob/ai-sdlc#readme",
   "files": [
     "dist",
     "templates",

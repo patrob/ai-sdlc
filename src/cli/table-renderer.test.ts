@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Story } from '../../src/types/index.js';
+import { Story } from '../types/index.js';
 import {
   renderStoryTable,
   renderCompactView,
   shouldUseCompactView,
   renderStories,
-} from '../../src/cli/table-renderer.js';
+} from './table-renderer.js';
 
 // Mock themed chalk
 const mockThemedChalk = {

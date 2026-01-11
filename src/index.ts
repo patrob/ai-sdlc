@@ -64,8 +64,9 @@ program
   .option('--story <id-or-slug>', 'Target a specific story by ID or slug')
   .option('--step <phase>', 'Run a specific phase (refine, research, plan, implement, review) - cannot be combined with --auto --story')
   .option('--max-iterations <number>', 'Maximum retry iterations (default: infinite)')
+  .option('--watch', 'Run in daemon mode, continuously processing backlog')
   .action((options) => {
-    if (!options.dryRun) {
+    if (!options.dryRun && !options.watch) {
       checkApiKey();
     }
     return run(options);

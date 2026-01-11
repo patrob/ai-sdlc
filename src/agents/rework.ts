@@ -88,7 +88,8 @@ export async function runReworkAgent(
  */
 export function determineTargetPhase(reviewResult: ReviewResult): 'research' | 'plan' | 'implement' {
   // Check issue categories to determine which phase to target
-  const categories = reviewResult.issues.map(i => i.category.toLowerCase());
+  const issues = reviewResult.issues || [];
+  const categories = issues.map(i => i.category.toLowerCase());
 
   // If missing research or requirements issues, go back to research
   if (
@@ -122,9 +123,10 @@ export function determineTargetPhase(reviewResult: ReviewResult): 'research' | '
  * Format feedback summary for frontmatter storage
  */
 function formatFeedbackSummary(reviewResult: ReviewResult): string {
-  const blockerCount = reviewResult.issues.filter(i => i.severity === 'blocker').length;
-  const criticalCount = reviewResult.issues.filter(i => i.severity === 'critical').length;
-  const majorCount = reviewResult.issues.filter(i => i.severity === 'major').length;
+  const issues = reviewResult.issues || [];
+  const blockerCount = issues.filter(i => i.severity === 'blocker').length;
+  const criticalCount = issues.filter(i => i.severity === 'critical').length;
+  const majorCount = issues.filter(i => i.severity === 'major').length;
 
   const parts: string[] = [];
   if (blockerCount > 0) parts.push(`${blockerCount} blocker(s)`);

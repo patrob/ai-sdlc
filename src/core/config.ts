@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, TimeoutConfig } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, TimeoutConfig, DaemonConfig } from '../types/index.js';
 
 const CONFIG_FILENAME = '.ai-sdlc.json';
 
@@ -11,6 +11,19 @@ export const DEFAULT_TIMEOUTS: TimeoutConfig = {
   agentTimeout: 600000,   // 10 minutes
   buildTimeout: 120000,   // 2 minutes
   testTimeout: 300000,    // 5 minutes
+};
+
+/**
+ * Default daemon configuration
+ */
+export const DEFAULT_DAEMON_CONFIG: DaemonConfig = {
+  enabled: false,
+  pollingInterval: 5000,              // 5 seconds
+  watchPatterns: ['.ai-sdlc/backlog/*.md'],
+  processDelay: 500,                  // 500ms debounce
+  shutdownTimeout: 30000,             // 30 seconds
+  enableEscShutdown: false,           // MVP: Ctrl+C only
+  escTimeout: 500,                    // 500ms for Esc+Esc
 };
 
 export const DEFAULT_CONFIG: Config = {
@@ -40,6 +53,8 @@ export const DEFAULT_CONFIG: Config = {
   settingSources: [],
   // Timeout configuration
   timeouts: { ...DEFAULT_TIMEOUTS },
+  // Daemon configuration
+  daemon: { ...DEFAULT_DAEMON_CONFIG },
 };
 
 /**
@@ -208,6 +223,10 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
         timeouts: {
           ...DEFAULT_TIMEOUTS,
           ...userConfig.timeouts,
+        },
+        daemon: {
+          ...DEFAULT_DAEMON_CONFIG,
+          ...userConfig.daemon,
         },
       };
     } catch (error) {

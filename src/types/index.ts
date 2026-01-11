@@ -203,6 +203,26 @@ export interface TimeoutConfig {
   testTimeout: number;
 }
 
+/**
+ * Daemon/watch mode configuration
+ */
+export interface DaemonConfig {
+  /** Enable daemon mode. @default false */
+  enabled: boolean;
+  /** Polling interval fallback if chokidar fails (ms). @default 5000 */
+  pollingInterval: number;
+  /** Glob patterns to watch for new stories. @default ['.ai-sdlc/backlog/*.md'] */
+  watchPatterns: string[];
+  /** Debounce delay for file changes (ms). @default 500 */
+  processDelay: number;
+  /** Max time to wait for graceful shutdown (ms). @default 30000 */
+  shutdownTimeout: number;
+  /** Enable Esc+Esc shutdown (Phase 2 feature). @default false */
+  enableEscShutdown: boolean;
+  /** Max time between Esc presses (ms). @default 500 */
+  escTimeout: number;
+}
+
 export interface Config {
   sdlcFolder: string;
   stageGates: StageGateConfig;
@@ -231,6 +251,11 @@ export interface Config {
    * All values are in milliseconds.
    */
   timeouts: TimeoutConfig;
+  /**
+   * Daemon/watch mode configuration.
+   * Controls continuous backlog monitoring.
+   */
+  daemon?: DaemonConfig;
 }
 
 // Agent types

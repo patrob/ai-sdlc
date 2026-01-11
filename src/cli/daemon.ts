@@ -1,0 +1,441 @@
+import chokidar, { FSWatcher } from 'chokidar';
+import path from 'path';
+import { getSdlcRoot, loadConfig } from '../core/config.js';
+import { assessState } from '../core/kanban.js';
+import { getThemedChalk } from '../core/theme.js';
+import { runRefinementAgent } from '../agents/refinement.js';
+import { runResearchAgent } from '../agents/research.js';
+import { runPlanningAgent } from '../agents/planning.js';
+import { runImplementationAgent } from '../agents/implementation.js';
+import { runReviewAgent } from '../agents/review.js';
+import { runReworkAgent } from '../agents/rework.js';
+import { Action } from '../types/index.js';
+
+/**
+ * DaemonRunner - Continuous backlog monitoring and processing
+ *
+ * Watches the backlog folder for new story files and automatically
+ * processes them through the workflow pipeline.
+ */
+export class DaemonRunner {
+  private sdlcRoot: string;
+  private config: ReturnType<typeof loadConfig>;
+  private isShuttingDown: boolean = false;
+  private currentProcessing: Promise<void> | null = null;
+  private processedStoryIds: Set<string> = new Set();
+  private processingQueue: string[] = [];
+  private watcher: FSWatcher | null = null;
+  private isProcessingQueue: boolean = false;
+  private ctrlCCount: number = 0;
+  private lastCtrlCTime: number = 0;
+
+  constructor() {
+    this.sdlcRoot = getSdlcRoot();
+    this.config = loadConfig();
+  }
+
+  /**
+   * Start the daemon and begin watching for new stories
+   */
+  async start(): Promise<void> {
+    const c = getThemedChalk(this.config);
+
+    this.logStartup();
+
+    // Setup signal handlers for graceful shutdown
+    this.setupSignalHandlers();
+
+    // Initialize chokidar watcher
+    // Watch the backlog directory itself (not glob) to reliably detect new files
+    const backlogDir = path.join(this.sdlcRoot, 'backlog');
+
+    try {
+      this.watcher = chokidar.watch(backlogDir, {
+        persistent: true,
+        ignoreInitial: false, // Process existing files on startup
+        awaitWriteFinish: {
+          stabilityThreshold: this.config.daemon?.processDelay || 500,
+          pollInterval: 100,
+        },
+        followSymlinks: false, // Security: don't follow symlinks
+        depth: 0, // Only watch immediate files, not subdirectories
+      });
+
+      this.watcher.on('add', (filePath: string) => {
+        // Filter for .md files only
+        if (!filePath.endsWith('.md')) {
+          return;
+        }
+        this.onFileAdded(filePath);
+      });
+      this.watcher.on('change', (_filePath: string) => {
+        // Currently we don't process file changes, only new files
+      });
+      this.watcher.on('error', (error: unknown) => this.logError(error, 'File watcher error'));
+
+      console.log(c.info('👀 Watching for new stories...'));
+      console.log(c.dim(`   Press Ctrl+C to shutdown gracefully`));
+      console.log();
+
+    } catch (error) {
+      console.log(c.error('Failed to start file watcher:'));
+      console.log(c.error(error instanceof Error ? error.message : String(error)));
+      throw error;
+    }
+  }
+
+  /**
+   * Handler for when a new file is detected
+   */
+  private onFileAdded(filePath: string): void {
+    const c = getThemedChalk(this.config);
+
+    // Extract story ID from file path
+    const fileName = path.basename(filePath, '.md');
+    const storyId = fileName;
+
+    // Skip if already processed in this session
+    if (this.processedStoryIds.has(storyId)) {
+      return;
+    }
+
+    // Skip if shutdown in progress
+    if (this.isShuttingDown) {
+      console.log(c.warning(`\nSkipping ${fileName} - shutdown in progress`));
+      return;
+    }
+
+    this.logFileDetected(filePath);
+
+    // Add to queue
+    this.processingQueue.push(filePath);
+
+    // Start processing queue if not already processing
+    if (!this.isProcessingQueue) {
+      this.processQueue();
+    }
+  }
+
+  /**
+   * Process queued story files sequentially
+   */
+  private async processQueue(): Promise<void> {
+    if (this.isProcessingQueue || this.isShuttingDown) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+
+    while (this.processingQueue.length > 0 && !this.isShuttingDown) {
+      const filePath = this.processingQueue.shift()!;
+
+      try {
+        await this.processStory(filePath);
+      } catch (error) {
+        this.logError(error, `Error processing ${filePath}`);
+        // Continue processing other stories
+      }
+
+      // Mark as processed
+      const fileName = path.basename(filePath, '.md');
+      this.processedStoryIds.add(fileName);
+    }
+
+    this.isProcessingQueue = false;
+
+    // Log idle state if queue is empty
+    if (this.processingQueue.length === 0 && !this.isShuttingDown) {
+      const c = getThemedChalk(this.config);
+      console.log(c.dim('\n👀 Queue empty, waiting for new stories...'));
+    }
+  }
+
+  /**
+   * Process a single story file through the workflow
+   */
+  private async processStory(filePath: string): Promise<void> {
+    const c = getThemedChalk(this.config);
+    const fileName = path.basename(filePath, '.md');
+
+    this.logWorkflowStart(fileName);
+
+    // Create processing promise and store it for graceful shutdown
+    this.currentProcessing = (async () => {
+      try {
+        // Re-assess state to ensure we have latest actions
+        const assessment = assessState(this.sdlcRoot);
+
+        // Find actions for this specific story
+        const storyActions = assessment.recommendedActions.filter(
+          (action) => action.storyPath === filePath
+        );
+
+        if (storyActions.length === 0) {
+          console.log(c.dim(`   No actions needed for ${fileName}`));
+          return;
+        }
+
+        // Process only the actions for this backlog story
+        for (const action of storyActions) {
+          await this.executeAction(action);
+        }
+
+        this.logWorkflowComplete(fileName, true);
+
+      } catch (error) {
+        this.logWorkflowComplete(fileName, false);
+        this.logError(error, `Workflow failed for ${fileName}`);
+      }
+    })();
+
+    await this.currentProcessing;
+    this.currentProcessing = null;
+  }
+
+  /**
+   * Execute a single action for the daemon
+   */
+  private async executeAction(action: Action): Promise<void> {
+    const c = getThemedChalk(this.config);
+
+    try {
+      let result;
+
+      switch (action.type) {
+        case 'refine':
+          result = await runRefinementAgent(action.storyPath, this.sdlcRoot);
+          break;
+
+        case 'research':
+          result = await runResearchAgent(action.storyPath, this.sdlcRoot);
+          break;
+
+        case 'plan':
+          result = await runPlanningAgent(action.storyPath, this.sdlcRoot);
+          break;
+
+        case 'implement':
+          result = await runImplementationAgent(action.storyPath, this.sdlcRoot);
+          break;
+
+        case 'review':
+          result = await runReviewAgent(action.storyPath, this.sdlcRoot);
+          break;
+
+        case 'rework':
+          if (!action.context) {
+            throw new Error('Rework action requires context with review feedback');
+          }
+          result = await runReworkAgent(action.storyPath, this.sdlcRoot, action.context as any);
+          break;
+
+        default:
+          throw new Error(`Unknown action type: ${action.type}`);
+      }
+
+      if (result && !result.success) {
+        console.log(c.error(`   ✗ Failed: ${action.type} for ${action.storyId}`));
+        if (result.error) {
+          console.log(c.error(`     Error: ${result.error}`));
+        }
+        throw new Error(`Action ${action.type} failed`);
+      }
+
+      console.log(c.success(`   ✓ Completed: ${action.type} for ${action.storyId}`));
+
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Setup signal handlers for graceful shutdown
+   */
+  private setupSignalHandlers(): void {
+    const handleShutdown = () => {
+      const now = Date.now();
+
+      // Handle double Ctrl+C for force quit
+      if (this.ctrlCCount > 0 && now - this.lastCtrlCTime < 2000) {
+        console.log('\n\n⚠️  Force quitting...');
+        process.exit(1);
+      }
+
+      this.ctrlCCount++;
+      this.lastCtrlCTime = now;
+
+      // Call stop() and ensure process exits regardless of outcome
+      this.stop()
+        .catch(() => {
+          // Ignore errors during shutdown
+        })
+        .finally(() => {
+          process.exit(0);
+        });
+    };
+
+    // Register SIGINT/SIGTERM handlers (may not work when run via npm)
+    process.on('SIGINT', handleShutdown);
+    process.on('SIGTERM', handleShutdown);
+
+    // Also listen for raw stdin to catch Ctrl+C when signals are intercepted
+    // This handles the case when running through npm/tsx which may not forward signals
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.on('data', (data: Buffer) => {
+        // Ctrl+C sends byte 0x03 (ETX)
+        if (data[0] === 0x03) {
+          handleShutdown();
+        }
+        // Ctrl+D sends byte 0x04 (EOT) - also treat as shutdown
+        if (data[0] === 0x04) {
+          handleShutdown();
+        }
+      });
+    }
+  }
+
+  /**
+   * Stop the daemon gracefully
+   */
+  async stop(): Promise<void> {
+    if (this.isShuttingDown) {
+      return; // Already shutting down
+    }
+
+    this.isShuttingDown = true;
+
+    // Get themed chalk with fallback for test environments
+    const c = getThemedChalk(this.config);
+    const log = (fn: ((s: string) => string) | undefined, msg: string) =>
+      console.log(fn?.(msg) || msg);
+
+    log(c?.warning, '\n\n🛑 Shutting down gracefully...');
+
+    // Restore stdin to normal mode
+    if (process.stdin.isTTY && process.stdin.setRawMode) {
+      try {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+      } catch {
+        // Ignore errors if stdin is already closed
+      }
+    }
+
+    // Close file watcher (with timeout to prevent hanging)
+    if (this.watcher) {
+      try {
+        await Promise.race([
+          this.watcher.close(),
+          new Promise((resolve) => setTimeout(resolve, 5000)),
+        ]);
+        log(c?.dim, '   File watcher stopped');
+      } catch {
+        log(c?.warning, '   File watcher close timed out');
+      }
+    }
+
+    // Wait for current processing to complete (with timeout)
+    if (this.currentProcessing) {
+      log(c?.dim, '   Waiting for current story to complete...');
+
+      const shutdownTimeout = this.config.daemon?.shutdownTimeout || 30000;
+
+      try {
+        await Promise.race([
+          this.currentProcessing,
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Shutdown timeout')), shutdownTimeout)
+          ),
+        ]);
+        log(c?.success, '   Current story completed');
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Shutdown timeout') {
+          log(c?.warning, `   Shutdown timeout (${shutdownTimeout}ms) exceeded`);
+        } else {
+          log(c?.error, '   Story processing failed during shutdown');
+        }
+      }
+    }
+
+    this.logShutdown();
+  }
+
+  /**
+   * Log daemon startup
+   */
+  private logStartup(): void {
+    const c = getThemedChalk(this.config);
+    const watchPath = path.join(this.sdlcRoot, 'backlog');
+
+    console.log(c.bold('\n🤖 AI-SDLC Daemon Mode Started'));
+    console.log(c.dim('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(c.info(`   SDLC Root: ${this.sdlcRoot}`));
+    console.log(c.info(`   Watching: ${watchPath}/*.md`));
+    console.log(c.dim('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
+  }
+
+  /**
+   * Log file detection
+   */
+  private logFileDetected(filePath: string): void {
+    const c = getThemedChalk(this.config);
+    const fileName = path.basename(filePath);
+    console.log(c.success(`\n📄 New story detected: ${fileName}`));
+  }
+
+  /**
+   * Log workflow start
+   */
+  private logWorkflowStart(storyId: string): void {
+    const c = getThemedChalk(this.config);
+    console.log(c.info(`   ▶️  Starting workflow for: ${storyId}`));
+  }
+
+  /**
+   * Log workflow completion
+   */
+  private logWorkflowComplete(storyId: string, success: boolean): void {
+    const c = getThemedChalk(this.config);
+    if (success) {
+      console.log(c.success(`   ✅ Workflow completed: ${storyId}`));
+    } else {
+      console.log(c.error(`   ❌ Workflow failed: ${storyId}`));
+    }
+  }
+
+  /**
+   * Log errors without stopping daemon
+   */
+  private logError(error: unknown, context: string): void {
+    const c = getThemedChalk(this.config);
+    console.log(c.error(`\n⚠️  ${context}`));
+    if (error instanceof Error) {
+      console.log(c.error(`   ${error.message}`));
+      if (error.stack) {
+        console.log(c.dim(error.stack));
+      }
+    } else {
+      console.log(c.error(`   ${String(error)}`));
+    }
+    console.log(c.warning('   Daemon continues running...\n'));
+  }
+
+  /**
+   * Log shutdown completion
+   */
+  private logShutdown(): void {
+    const c = getThemedChalk(this.config);
+    const msg = '\n✨ Daemon shutdown complete\n';
+    console.log(c?.success?.(msg) || msg);
+  }
+}
+
+/**
+ * Create and start the daemon
+ */
+export async function startDaemon(): Promise<void> {
+  const daemon = new DaemonRunner();
+  await daemon.start();
+}

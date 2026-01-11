@@ -221,7 +221,7 @@ function generateFullSDLCActions(story: Story, c?: any): Action[] {
 /**
  * Run the workflow (process one action or all)
  */
-export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string; maxIterations?: string }): Promise<void> {
+export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string; maxIterations?: string; watch?: boolean }): Promise<void> {
   const config = loadConfig();
   // Parse maxIterations from CLI (undefined means use config default which is Infinity)
   const maxIterationsOverride = options.maxIterations !== undefined
@@ -229,6 +229,14 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     : undefined;
   const sdlcRoot = getSdlcRoot();
   const c = getThemedChalk(config);
+
+  // Handle daemon/watch mode
+  if (options.watch) {
+    console.log(c.info('🚀 Starting daemon mode...'));
+    const { startDaemon } = await import('./daemon.js');
+    await startDaemon();
+    return; // Daemon runs indefinitely
+  }
 
   // Valid step names for --step option
   const validSteps = ['refine', 'research', 'plan', 'implement', 'review'] as const;

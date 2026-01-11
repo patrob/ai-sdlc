@@ -16,6 +16,7 @@ export interface RunOptions {
   auto?: boolean;
   dryRun?: boolean;
   verbose?: boolean;
+  watch?: boolean;
 }
 
 /**

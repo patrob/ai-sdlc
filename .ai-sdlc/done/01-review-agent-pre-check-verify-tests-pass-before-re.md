@@ -2,7 +2,7 @@
 id: story-rev-precheck-001
 title: Review agent pre-check - verify tests pass before reviewing
 priority: 1
-status: in-progress
+status: done
 type: feature
 created: '2026-01-10'
 labels:

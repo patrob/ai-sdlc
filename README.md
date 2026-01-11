@@ -139,6 +139,7 @@ Run the workflow and process actions.
 - `--continue` - Resume workflow from last checkpoint
 - `--story <id-or-slug>` - Target a specific story by ID or slug
 - `--step <phase>` - Run a specific phase (refine, research, plan, implement, review) - cannot be combined with `--auto --story`
+- `--watch` - Run in daemon mode, continuously processing backlog (NEW!)
 
 **Examples:**
 
@@ -160,6 +161,9 @@ ai-sdlc run --auto --story my-feature
 
 # Run specific phase for a story
 ai-sdlc run --story my-feature --step research
+
+# Run in daemon/watch mode (NEW!)
+ai-sdlc run --watch
 ```
 
 ### `config [key] [value]`
@@ -410,6 +414,155 @@ ai-sdlc run --auto --story my-feature --step research
 - ❌ Processing multiple stories at different phases (use `--auto` instead)
 - ❌ Running just one specific phase (use `--story --step` instead)
 - ❌ Interactive workflows requiring manual review between phases
+
+## Daemon/Watch Mode (--watch)
+
+The `--watch` flag runs AI-SDLC in daemon mode, continuously monitoring the backlog folder for new stories and automatically processing them through the full workflow pipeline.
+
+### Quick Example
+
+```bash
+# Start daemon mode - runs indefinitely
+ai-sdlc run --watch
+```
+
+### How It Works
+
+When you run with `--watch`, the system:
+
+1. **Starts a file system watcher** monitoring `.ai-sdlc/backlog/*.md`
+2. **Detects new story files** in real-time using chokidar
+3. **Automatically processes each story** through the workflow (refine → research → plan → implement → review)
+4. **Queues multiple stories** for sequential processing (no parallel execution)
+5. **Continues running** even if individual stories fail
+6. **Logs all activity** to console for monitoring
+
+### Usage
+
+```bash
+# Start daemon mode
+ai-sdlc run --watch
+
+# Output:
+# 🤖 AI-SDLC Daemon Mode Started
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#    SDLC Root: /path/to/.ai-sdlc
+#    Watching: .ai-sdlc/backlog/*.md
+#    Polling Interval: 5000ms
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# 👀 Watching for new stories...
+#    Press Ctrl+C to shutdown gracefully
+#
+# 📄 New story detected: my-feature.md
+#    ▶️  Starting workflow for: my-feature
+#    ✅ Workflow completed: my-feature
+#
+# 👀 Queue empty, waiting for new stories...
+```
+
+### Graceful Shutdown
+
+The daemon supports graceful shutdown to ensure stories complete processing:
+
+```bash
+# Single Ctrl+C - graceful shutdown
+Press Ctrl+C
+
+# Output:
+# 🛑 Shutting down gracefully...
+#    Waiting for current story to complete...
+#    Current story completed
+#    File watcher stopped
+# ✨ Daemon shutdown complete
+
+# Double Ctrl+C (within 2 seconds) - force quit
+Press Ctrl+C (twice quickly)
+
+# Output:
+# ⚠️  Force quitting...
+```
+
+**Shutdown Behavior:**
+- **First Ctrl+C**: Initiates graceful shutdown, waits for current story to complete (max 30 seconds)
+- **Second Ctrl+C**: Forces immediate exit if pressed within 2 seconds
+- **SIGTERM**: Also triggers graceful shutdown (useful for systemd/docker)
+
+### Configuration
+
+Daemon behavior can be customized in `.ai-sdlc.json`:
+
+```json
+{
+  "daemon": {
+    "enabled": false,
+    "pollingInterval": 5000,
+    "watchPatterns": [".ai-sdlc/backlog/*.md"],
+    "processDelay": 500,
+    "shutdownTimeout": 30000,
+    "enableEscShutdown": false,
+    "escTimeout": 500
+  }
+}
+```
+
+**Configuration Options:**
+- `enabled` - Enable daemon mode by default (default: `false`)
+- `pollingInterval` - Fallback polling interval in milliseconds (default: `5000`)
+- `watchPatterns` - Glob patterns to watch for new stories (default: `[".ai-sdlc/backlog/*.md"]`)
+- `processDelay` - Debounce delay for file changes in milliseconds (default: `500`)
+- `shutdownTimeout` - Maximum time to wait for graceful shutdown in milliseconds (default: `30000`)
+- `enableEscShutdown` - Enable Esc+Esc shutdown (Phase 2 feature, default: `false`)
+- `escTimeout` - Maximum time between Esc presses in milliseconds (default: `500`)
+
+### Error Handling
+
+The daemon is designed to be resilient:
+
+- **Story processing failures** are logged but don't stop the daemon
+- **Malformed story files** are skipped with error logging
+- **API failures** are logged and the story is marked with an error
+- **File system errors** are logged but the watcher continues
+- **Duplicate processing** is prevented via story ID tracking
+
+```bash
+# Example error handling
+📄 New story detected: malformed-story.md
+   ▶️  Starting workflow for: malformed-story
+   ❌ Workflow failed: malformed-story
+
+⚠️  Error processing malformed-story.md
+   Invalid YAML frontmatter
+   Daemon continues running...
+
+👀 Queue empty, waiting for new stories...
+```
+
+### Use Cases
+
+**Ideal for:**
+- ✅ Continuous integration environments
+- ✅ Monitoring backlog folders for new work
+- ✅ Unattended story processing
+- ✅ Development workflows with frequent story additions
+- ✅ Demo and testing scenarios
+
+**Not ideal for:**
+- ❌ Interactive development requiring manual approvals
+- ❌ Stories requiring mid-workflow intervention
+- ❌ Environments where resource usage must be minimal
+
+### Limitations (MVP)
+
+The current MVP implementation has these limitations:
+
+- **No Esc+Esc shutdown** - Only Ctrl+C is supported for shutdown
+- **No web dashboard** - All monitoring is via console output
+- **No multi-daemon support** - Only one daemon instance per SDLC folder
+- **No auto-restart** - Daemon must be restarted manually if it crashes
+- **Sequential processing only** - Stories are processed one at a time
+
+These features are planned for future releases.
 
 ## Resuming Workflows
 

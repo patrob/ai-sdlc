@@ -19,7 +19,7 @@ dist/
 Thumbs.db
 
 # Workflow state files
-.agentic-sdlc/.workflow-state*.json
+.ai-sdlc/.workflow-state*.json
 
 # Logs
 *.log

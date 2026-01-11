@@ -24,7 +24,7 @@ describe('Status Command - Active Flag Integration', () => {
     fs.mkdirSync(TEST_FIXTURE_DIR, { recursive: true });
 
     // Set SDLC root for testing
-    process.env.AGENTIC_SDLC_ROOT = TEST_FIXTURE_DIR;
+    process.env.AI_SDLC_ROOT = TEST_FIXTURE_DIR;
 
     const sdlcRoot = getSdlcRoot();
 
@@ -45,7 +45,7 @@ describe('Status Command - Active Flag Integration', () => {
     }
 
     // Clear environment variable
-    delete process.env.AGENTIC_SDLC_ROOT;
+    delete process.env.AI_SDLC_ROOT;
   });
 
   describe('Default Behavior (No Flag)', () => {

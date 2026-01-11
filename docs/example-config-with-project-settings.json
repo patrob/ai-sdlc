@@ -1,5 +1,5 @@
 {
-  "sdlcFolder": ".agentic-sdlc",
+  "sdlcFolder": ".ai-sdlc",
   "stageGates": {
     "requireApprovalBeforeImplementation": false,
     "requireApprovalBeforePR": false,

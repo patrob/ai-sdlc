@@ -1,0 +1,26 @@
+# Source (compiled code is in dist/)
+src/
+
+# Tests
+tests/
+*.test.ts
+vitest.config.ts
+
+# Development
+.github/
+.ai-sdlc/
+.ai-sdlc.json
+tsconfig.json
+CLAUDE.md
+CONTRIBUTING.md
+REFINEMENT_LOOP.md
+SECURITY.md
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env*

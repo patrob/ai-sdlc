@@ -26,7 +26,7 @@ describe('--auto --story Full SDLC Workflow', () => {
     fs.mkdirSync(TEST_FIXTURE_DIR, { recursive: true });
 
     // Set SDLC root for testing
-    process.env.AGENTIC_SDLC_ROOT = TEST_FIXTURE_DIR;
+    process.env.AI_SDLC_ROOT = TEST_FIXTURE_DIR;
   });
 
   afterEach(() => {
@@ -34,7 +34,7 @@ describe('--auto --story Full SDLC Workflow', () => {
     if (fs.existsSync(TEST_FIXTURE_DIR)) {
       fs.rmSync(TEST_FIXTURE_DIR, { recursive: true, force: true });
     }
-    delete process.env.AGENTIC_SDLC_ROOT;
+    delete process.env.AI_SDLC_ROOT;
   });
 
   describe('Flag Validation', () => {

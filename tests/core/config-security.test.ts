@@ -12,7 +12,7 @@ describe('Configuration Security Tests', () => {
   beforeEach(() => {
     // Create temporary directory for testing
     // Use realpathSync to resolve symlinks (macOS /var -> /private/var)
-    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agentic-sdlc-security-test-')));
+    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-security-test-')));
     originalCwd = process.cwd();
     process.chdir(tempDir);
 
@@ -33,7 +33,7 @@ describe('Configuration Security Tests', () => {
 
   describe('JSON injection protection', () => {
     it('should reject config with __proto__ property', () => {
-      const configPath = path.join(tempDir, '.agentic-sdlc.json');
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
       // Write raw JSON string - object literals with __proto__ get special treatment in JS
       fs.writeFileSync(configPath, '{"__proto__": {"isAdmin": true}, "theme": "dark"}');
 
@@ -42,7 +42,7 @@ describe('Configuration Security Tests', () => {
     });
 
     it('should reject config with constructor property', () => {
-      const configPath = path.join(tempDir, '.agentic-sdlc.json');
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
       // Write raw JSON string to ensure constructor property is preserved
       fs.writeFileSync(configPath, '{"constructor": {"prototype": {"isAdmin": true}}, "theme": "dark"}');
 
@@ -51,7 +51,7 @@ describe('Configuration Security Tests', () => {
     });
 
     it('should reject config with prototype property', () => {
-      const configPath = path.join(tempDir, '.agentic-sdlc.json');
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
       // Write raw JSON string to ensure prototype property is preserved
       fs.writeFileSync(configPath, '{"prototype": {"isAdmin": true}, "theme": "dark"}');
 
@@ -60,7 +60,7 @@ describe('Configuration Security Tests', () => {
     });
 
     it('should accept valid config without malicious properties', () => {
-      const configPath = path.join(tempDir, '.agentic-sdlc.json');
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
       const validConfig = {
         theme: 'dark',
         settingSources: ['project'],
@@ -77,7 +77,7 @@ describe('Configuration Security Tests', () => {
 
   describe('settingSources validation', () => {
     it('should reject non-array settingSources', () => {
-      const configPath = path.join(tempDir, '.agentic-sdlc.json');
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
       const invalidConfig = {
         settingSources: 'project', // Should be array
       };
@@ -93,7 +93,7 @@ describe('Configuration Security Tests', () => {
     });
 
     it('should filter invalid settingSources values', () => {
-      const configPath = path.join(tempDir, '.agentic-sdlc.json');
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
       const invalidConfig = {
         settingSources: ['project', 'invalid', 'user'],
       };
@@ -111,7 +111,7 @@ describe('Configuration Security Tests', () => {
     });
 
     it('should accept valid settingSources values', () => {
-      const configPath = path.join(tempDir, '.agentic-sdlc.json');
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
       const validConfig = {
         settingSources: ['user', 'project', 'local'],
       };
@@ -127,7 +127,7 @@ describe('Configuration Security Tests', () => {
     });
 
     it('should handle mixed valid and invalid values', () => {
-      const configPath = path.join(tempDir, '.agentic-sdlc.json');
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
       const invalidConfig = {
         settingSources: ['invalid1', 'project', 'invalid2', 'user'],
       };
@@ -145,7 +145,7 @@ describe('Configuration Security Tests', () => {
     });
 
     it('should handle settingSources with non-string values', () => {
-      const configPath = path.join(tempDir, '.agentic-sdlc.json');
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
       const invalidConfig = {
         settingSources: ['project', 123, true, 'user'],
       };
@@ -160,67 +160,67 @@ describe('Configuration Security Tests', () => {
 
   describe('environment variable validation', () => {
     afterEach(() => {
-      delete process.env.AGENTIC_SDLC_MAX_RETRIES;
+      delete process.env.AI_SDLC_MAX_RETRIES;
     });
 
-    it('should validate AGENTIC_SDLC_MAX_RETRIES is a number', () => {
-      process.env.AGENTIC_SDLC_MAX_RETRIES = 'not-a-number';
+    it('should validate AI_SDLC_MAX_RETRIES is a number', () => {
+      process.env.AI_SDLC_MAX_RETRIES = 'not-a-number';
 
       const config = loadConfig(tempDir);
 
       // Should warn and ignore invalid value
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid AGENTIC_SDLC_MAX_RETRIES value')
+        expect.stringContaining('Invalid AI_SDLC_MAX_RETRIES value')
       );
       expect(config.reviewConfig.maxRetries).toBe(Infinity); // Default (infinite)
     });
 
-    it('should reject negative AGENTIC_SDLC_MAX_RETRIES', () => {
-      process.env.AGENTIC_SDLC_MAX_RETRIES = '-5';
+    it('should reject negative AI_SDLC_MAX_RETRIES', () => {
+      process.env.AI_SDLC_MAX_RETRIES = '-5';
 
       const config = loadConfig(tempDir);
 
       // Should warn and ignore invalid value
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid AGENTIC_SDLC_MAX_RETRIES value')
+        expect.stringContaining('Invalid AI_SDLC_MAX_RETRIES value')
       );
       expect(config.reviewConfig.maxRetries).toBe(Infinity); // Default (infinite)
     });
 
-    it('should reject AGENTIC_SDLC_MAX_RETRIES above 100', () => {
-      process.env.AGENTIC_SDLC_MAX_RETRIES = '150';
+    it('should reject AI_SDLC_MAX_RETRIES above 100', () => {
+      process.env.AI_SDLC_MAX_RETRIES = '150';
 
       const config = loadConfig(tempDir);
 
       // Should warn and ignore invalid value
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid AGENTIC_SDLC_MAX_RETRIES value')
+        expect.stringContaining('Invalid AI_SDLC_MAX_RETRIES value')
       );
       expect(config.reviewConfig.maxRetries).toBe(Infinity); // Default (infinite)
     });
 
-    it('should accept valid AGENTIC_SDLC_MAX_RETRIES', () => {
-      process.env.AGENTIC_SDLC_MAX_RETRIES = '5';
+    it('should accept valid AI_SDLC_MAX_RETRIES', () => {
+      process.env.AI_SDLC_MAX_RETRIES = '5';
 
       const config = loadConfig(tempDir);
 
       // Should not warn
       expect(consoleWarnSpy).not.toHaveBeenCalledWith(
-        expect.stringContaining('Invalid AGENTIC_SDLC_MAX_RETRIES')
+        expect.stringContaining('Invalid AI_SDLC_MAX_RETRIES')
       );
       expect(config.reviewConfig.maxRetries).toBe(5);
     });
 
-    it('should accept 0 as valid AGENTIC_SDLC_MAX_RETRIES', () => {
-      process.env.AGENTIC_SDLC_MAX_RETRIES = '0';
+    it('should accept 0 as valid AI_SDLC_MAX_RETRIES', () => {
+      process.env.AI_SDLC_MAX_RETRIES = '0';
 
       const config = loadConfig(tempDir);
 
       expect(config.reviewConfig.maxRetries).toBe(0);
     });
 
-    it('should accept 10 as max valid AGENTIC_SDLC_MAX_RETRIES', () => {
-      process.env.AGENTIC_SDLC_MAX_RETRIES = '10';
+    it('should accept 10 as max valid AI_SDLC_MAX_RETRIES', () => {
+      process.env.AI_SDLC_MAX_RETRIES = '10';
 
       const config = loadConfig(tempDir);
 

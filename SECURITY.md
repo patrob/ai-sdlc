@@ -193,12 +193,12 @@ This prevents:
 
 Environment variable overrides are strictly validated:
 
-#### `AGENTIC_SDLC_MAX_RETRIES`
+#### `AI_SDLC_MAX_RETRIES`
 - Must be an integer between 0 and 10
 - Invalid values are ignored with a warning
 - Overrides are logged for audit trail
 
-#### `AGENTIC_SDLC_AUTO_COMPLETE` / `AGENTIC_SDLC_AUTO_RESTART`
+#### `AI_SDLC_AUTO_COMPLETE` / `AI_SDLC_AUTO_RESTART`
 - Must be exactly `"true"` or `"false"` (strings)
 - Other values are rejected
 - Overrides are logged
@@ -219,7 +219,7 @@ Use only alphanumeric characters, hyphens, and slashes in branch names.
 
 ### 3. Review Configuration Files
 
-Treat `.agentic-sdlc.json` as security-sensitive:
+Treat `.ai-sdlc.json` as security-sensitive:
 
 1. Review changes in pull requests
 2. Don't copy configuration from untrusted sources

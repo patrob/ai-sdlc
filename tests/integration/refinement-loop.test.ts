@@ -22,8 +22,8 @@ describe('Refinement Loop Integration', () => {
 
   beforeEach(() => {
     // Create temporary test directory
-    testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentic-sdlc-test-'));
-    sdlcRoot = path.join(testDir, '.agentic-sdlc');
+    testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-'));
+    sdlcRoot = path.join(testDir, '.ai-sdlc');
 
     // Create SDLC folder structure
     fs.mkdirSync(sdlcRoot, { recursive: true });
@@ -34,7 +34,7 @@ describe('Refinement Loop Integration', () => {
 
     // Create default config
     const config = {
-      sdlcFolder: '.agentic-sdlc',
+      sdlcFolder: '.ai-sdlc',
       refinement: {
         maxIterations: 3,
         escalateOnMaxAttempts: 'manual',
@@ -55,7 +55,7 @@ describe('Refinement Loop Integration', () => {
       theme: 'auto',
     };
     fs.writeFileSync(
-      path.join(testDir, '.agentic-sdlc.json'),
+      path.join(testDir, '.ai-sdlc.json'),
       JSON.stringify(config, null, 2)
     );
   });
@@ -320,8 +320,8 @@ describe('Review Agent Pre-check Integration', () => {
 
   beforeEach(() => {
     // Create temporary test directory
-    testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentic-sdlc-precheck-test-'));
-    sdlcRoot = path.join(testDir, '.agentic-sdlc');
+    testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-precheck-test-'));
+    sdlcRoot = path.join(testDir, '.ai-sdlc');
 
     // Create SDLC folder structure
     fs.mkdirSync(sdlcRoot, { recursive: true });
@@ -332,7 +332,7 @@ describe('Review Agent Pre-check Integration', () => {
 
     // Create default config with test/build commands
     const config = {
-      sdlcFolder: '.agentic-sdlc',
+      sdlcFolder: '.ai-sdlc',
       testCommand: 'npm test',
       buildCommand: 'npm run build',
       refinement: {
@@ -360,7 +360,7 @@ describe('Review Agent Pre-check Integration', () => {
       },
     };
     fs.writeFileSync(
-      path.join(testDir, '.agentic-sdlc.json'),
+      path.join(testDir, '.ai-sdlc.json'),
       JSON.stringify(config, null, 2)
     );
 

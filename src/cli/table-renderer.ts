@@ -180,7 +180,7 @@ export function renderStories(stories: Story[], themedChalk: ThemeColors): strin
 
   if (shouldUseCompact(termWidth)) {
     // Optional: Add subtle hint about compact view (can be disabled with env var)
-    const showHint = process.env.AGENTIC_SDLC_NO_HINTS !== '1';
+    const showHint = process.env.AI_SDLC_NO_HINTS !== '1';
     const hint = showHint
       ? themedChalk.dim(`  (Compact view: terminal width ${termWidth} < 100 cols)\n\n`)
       : '';

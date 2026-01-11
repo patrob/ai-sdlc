@@ -1,11 +1,18 @@
 {
-  "name": "agentic-sdlc",
-  "version": "0.1.0",
+  "name": "ai-sdlc",
+  "version": "0.1.0-alpha.1",
   "description": "Agent-first SDLC workflow manager using Claude Agent SDK",
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
-    "agentic-sdlc": "./dist/index.js"
+    "ai-sdlc": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "scripts": {
     "build": "tsc",
@@ -13,7 +20,8 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run lint && npm run build && npm test"
   },
   "keywords": [
     "sdlc",
@@ -32,6 +40,12 @@
     "url": "https://github.com/patrob/agentic-workflow/issues"
   },
   "homepage": "https://github.com/patrob/agentic-workflow#readme",
+  "files": [
+    "dist",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.76",
     "chalk": "^5.3.0",

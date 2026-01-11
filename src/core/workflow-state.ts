@@ -53,7 +53,7 @@ export function calculateStoryHash(storyPath: string): string {
  * Uses write-file-atomic to ensure state file is never corrupted by crashes.
  *
  * @param state - The workflow execution state to save
- * @param sdlcRoot - Path to the .agentic-sdlc directory
+ * @param sdlcRoot - Path to the .ai-sdlc directory
  */
 export async function saveWorkflowState(
   state: WorkflowExecutionState,
@@ -78,7 +78,7 @@ export async function saveWorkflowState(
 /**
  * Load workflow state from disk
  *
- * @param sdlcRoot - Path to the .agentic-sdlc directory
+ * @param sdlcRoot - Path to the .ai-sdlc directory
  * @returns The workflow state, or null if no state file exists
  */
 export async function loadWorkflowState(
@@ -166,7 +166,7 @@ export function validateWorkflowState(state: any): WorkflowStateValidationResult
 /**
  * Clear workflow state (delete the state file)
  *
- * @param sdlcRoot - Path to the .agentic-sdlc directory
+ * @param sdlcRoot - Path to the .ai-sdlc directory
  */
 export async function clearWorkflowState(sdlcRoot: string): Promise<void> {
   const statePath = getStateFilePath(sdlcRoot);
@@ -184,7 +184,7 @@ export async function clearWorkflowState(sdlcRoot: string): Promise<void> {
 /**
  * Check if workflow state exists
  *
- * @param sdlcRoot - Path to the .agentic-sdlc directory
+ * @param sdlcRoot - Path to the .ai-sdlc directory
  * @returns True if state file exists
  */
 export function hasWorkflowState(sdlcRoot: string): boolean {

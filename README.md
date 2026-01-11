@@ -1,4 +1,7 @@
-# Agentic SDLC
+# AI SDLC
+
+> **Alpha Release**: This is an early alpha. Expect breaking changes.
+> Report issues at [GitHub Issues](https://github.com/patrob/agentic-workflow/issues)
 
 Agent-first SDLC workflow manager using Claude Agent SDK. A Kanban-style board with AI-powered workflow automation for software development stories.
 
@@ -23,36 +26,36 @@ npm run build
 ## Quick Start
 
 ```bash
-# Initialize the .agentic-sdlc folder
-agentic-sdlc init
+# Initialize the .ai-sdlc folder
+ai-sdlc init
 
 # Add a new story
-agentic-sdlc add "Implement user authentication"
+ai-sdlc add "Implement user authentication"
 
 # Run the workflow (process next action)
-agentic-sdlc run
+ai-sdlc run
 
 # Process all pending actions automatically
-agentic-sdlc run --auto
+ai-sdlc run --auto
 
 # Resume workflow after interruption
-agentic-sdlc run --continue
+ai-sdlc run --continue
 ```
 
 ## CLI Commands
 
 ### `init`
-Initialize the `.agentic-sdlc` folder structure with Kanban columns.
+Initialize the `.ai-sdlc` folder structure with Kanban columns.
 
 ```bash
-agentic-sdlc init
+ai-sdlc init
 ```
 
 ### `status`
 View all stories in a formatted table view with story IDs, truncated text, and uniform alignment.
 
 ```bash
-agentic-sdlc status
+ai-sdlc status
 ```
 
 **Table View** (terminal width ≥ 100 columns):
@@ -88,13 +91,13 @@ Labels: enhancement, ui, cli | Flags: [R]
 
 **Minimum Terminal Width**: 100 columns recommended for table view
 
-**Disable Hints**: Set `AGENTIC_SDLC_NO_HINTS=1` to hide the compact view notification
+**Disable Hints**: Set `AI_SDLC_NO_HINTS=1` to hide the compact view notification
 
 ### `add <title>`
 Add a new story to the backlog.
 
 ```bash
-agentic-sdlc add "Add dark mode toggle"
+ai-sdlc add "Add dark mode toggle"
 ```
 
 ### `details <id>` (alias: `d`)
@@ -104,13 +107,13 @@ Show detailed information about a specific story by ID or slug.
 
 ```bash
 # View by story ID
-agentic-sdlc details story-mk68fjh7-fvbt
+ai-sdlc details story-mk68fjh7-fvbt
 
 # View by slug
-agentic-sdlc details add-dark-mode-toggle
+ai-sdlc details add-dark-mode-toggle
 
 # Use short alias
-agentic-sdlc d story-mk68fjh7-fvbt
+ai-sdlc d story-mk68fjh7-fvbt
 ```
 
 **Displays:**
@@ -141,22 +144,22 @@ Run the workflow and process actions.
 
 ```bash
 # Process the next recommended action
-agentic-sdlc run
+ai-sdlc run
 
 # Process all pending actions
-agentic-sdlc run --auto
+ai-sdlc run --auto
 
 # Resume after interruption (Ctrl+C, error, etc.)
-agentic-sdlc run --continue
+ai-sdlc run --continue
 
 # Preview what would be executed
-agentic-sdlc run --dry-run
+ai-sdlc run --dry-run
 
 # Run full SDLC for a specific story (NEW!)
-agentic-sdlc run --auto --story my-feature
+ai-sdlc run --auto --story my-feature
 
 # Run specific phase for a story
-agentic-sdlc run --story my-feature --step research
+ai-sdlc run --story my-feature --step research
 ```
 
 ### `config [key] [value]`
@@ -164,13 +167,13 @@ Manage configuration settings.
 
 ```bash
 # View all configuration
-agentic-sdlc config
+ai-sdlc config
 
 # View theme setting
-agentic-sdlc config theme
+ai-sdlc config theme
 
 # Set theme
-agentic-sdlc config theme dark
+ai-sdlc config theme dark
 ```
 
 ## Full SDLC Automation (--auto --story)
@@ -181,7 +184,7 @@ The `--auto --story` combination provides complete end-to-end automation for ind
 
 ```bash
 # Take a story from idea to reviewed implementation in one command
-agentic-sdlc run --auto --story my-feature
+ai-sdlc run --auto --story my-feature
 ```
 
 ### How It Works
@@ -222,7 +225,7 @@ Already completed phases are automatically skipped:
 
 ```bash
 # Story has research and plan complete
-agentic-sdlc run --auto --story my-feature
+ai-sdlc run --auto --story my-feature
 
 # Output:
 # 🚀 Starting full SDLC for story: My Feature
@@ -289,7 +292,7 @@ Fix the error above and use --continue to resume.
 
 **Recovery:**
 1. Fix the underlying issue
-2. Resume with: `agentic-sdlc run --continue`
+2. Resume with: `ai-sdlc run --continue`
 3. Workflow continues from failed phase
 
 ### Resuming Full SDLC Workflows
@@ -298,12 +301,12 @@ Full SDLC mode integrates seamlessly with checkpoint/resume:
 
 ```bash
 # Start full SDLC workflow
-agentic-sdlc run --auto --story my-feature
+ai-sdlc run --auto --story my-feature
 
 # (Interrupted during implementation phase)
 
 # Resume automatically - full SDLC mode is restored
-agentic-sdlc run --continue
+ai-sdlc run --continue
 
 # Output:
 # ⟳ Resuming workflow from checkpoint
@@ -325,13 +328,13 @@ Full SDLC mode respects configured stage gates:
 
 ```bash
 # With requireApprovalBeforeImplementation enabled
-agentic-sdlc run --auto --story my-feature
+ai-sdlc run --auto --story my-feature
 
 # Output:
 # ✓ Research complete
 # ✓ Plan complete
 # ⚠️ Stage gate: Implementation requires approval
-# Run 'agentic-sdlc run --continue' to proceed after approval
+# Run 'ai-sdlc run --continue' to proceed after approval
 ```
 
 ### Review Retry Logic
@@ -356,10 +359,10 @@ The system tracks retry attempts and stops if max retries are exceeded.
 
 ```bash
 # Add a new story
-agentic-sdlc add "Add user authentication"
+ai-sdlc add "Add user authentication"
 
 # Run complete SDLC automation
-agentic-sdlc run --auto --story add-user-authentication
+ai-sdlc run --auto --story add-user-authentication
 
 # Story progresses through all phases automatically:
 # 1. Refine (backlog → ready)
@@ -383,12 +386,12 @@ agentic-sdlc run --auto --story add-user-authentication
 **Cannot combine with --step:**
 ```bash
 # This will error:
-agentic-sdlc run --auto --story my-feature --step research
+ai-sdlc run --auto --story my-feature --step research
 
 # Error: Cannot combine --auto --story with --step flag.
 # Use either:
-#   - agentic-sdlc run --auto --story my-feature (full SDLC)
-#   - agentic-sdlc run --story my-feature --step research (single phase)
+#   - ai-sdlc run --auto --story my-feature (full SDLC)
+#   - ai-sdlc run --story my-feature --step research (single phase)
 ```
 
 **All phases are executed in sequence:**
@@ -419,7 +422,7 @@ The `--continue` flag enables resuming workflows after interruption. This is use
 
 ### How It Works
 
-1. **Automatic Checkpointing**: After each successful action, the workflow state is saved to `.agentic-sdlc/.workflow-state.json`
+1. **Automatic Checkpointing**: After each successful action, the workflow state is saved to `.ai-sdlc/.workflow-state.json`
 2. **Smart Resume**: When you use `--continue`, the system:
    - Loads the saved checkpoint
    - Shows which actions were already completed
@@ -433,12 +436,12 @@ The `--continue` flag enables resuming workflows after interruption. This is use
 
 ```bash
 # Start workflow
-agentic-sdlc run --auto
+ai-sdlc run --auto
 
 # (Interrupted by Ctrl+C after research completes)
 
 # Resume from checkpoint
-agentic-sdlc run --continue
+ai-sdlc run --continue
 # Output:
 # ⟳ Resuming workflow from checkpoint
 #   Workflow ID: workflow-1234567890-abc123
@@ -456,14 +459,14 @@ agentic-sdlc run --continue
 
 ```bash
 # Resume and complete all remaining actions
-agentic-sdlc run --auto --continue
+ai-sdlc run --auto --continue
 ```
 
 **Check for existing checkpoint:**
 
 ```bash
 # Start a new workflow when checkpoint exists
-agentic-sdlc run
+ai-sdlc run
 # Output:
 # Note: Found previous checkpoint. Use --continue to resume.
 ```
@@ -502,7 +505,7 @@ Checkpoint cleared.
 
 Checkpoint files are stored at:
 ```
-.agentic-sdlc/.workflow-state.json
+.ai-sdlc/.workflow-state.json
 ```
 
 **State file format:**
@@ -516,12 +519,12 @@ Checkpoint files are stored at:
     {
       "type": "research",
       "storyId": "story-123",
-      "storyPath": ".agentic-sdlc/in-progress/add-dark-mode.md",
+      "storyPath": ".ai-sdlc/in-progress/add-dark-mode.md",
       "completedAt": "2024-01-08T15:45:12.000Z"
     }
   ],
   "context": {
-    "sdlcRoot": ".agentic-sdlc",
+    "sdlcRoot": ".ai-sdlc",
     "options": {
       "auto": true
     },
@@ -546,7 +549,7 @@ Each story progresses through these stages:
 
 ## Story Status Flags
 
-When viewing stories with `agentic-sdlc status`, you'll see progress flags:
+When viewing stories with `ai-sdlc status`, you'll see progress flags:
 
 - `R` - Research complete
 - `P` - Plan complete
@@ -562,12 +565,12 @@ IN-PROGRESS (1)
 
 ## Configuration
 
-Configuration is stored in `.agentic-sdlc.json` at the project root.
+Configuration is stored in `.ai-sdlc.json` at the project root.
 
 **Default configuration:**
 ```json
 {
-  "sdlcFolder": ".agentic-sdlc",
+  "sdlcFolder": ".ai-sdlc",
   "stageGates": {
     "requireApprovalBeforeImplementation": false,
     "requireApprovalBeforePR": false,
@@ -585,7 +588,7 @@ The Agent SDK can automatically load custom instructions from a `CLAUDE.md` file
 
 #### How to Enable
 
-Add `"project"` to the `settingSources` array in your `.agentic-sdlc.json`:
+Add `"project"` to the `settingSources` array in your `.ai-sdlc.json`:
 
 ```json
 {
@@ -610,7 +613,7 @@ your-project/
 │   ├── CLAUDE.md          # Custom instructions (you create this)
 │   ├── settings.json      # Project settings (SDK managed)
 │   └── settings.local.json # Local overrides (SDK managed, gitignored)
-├── .agentic-sdlc.json
+├── .ai-sdlc.json
 └── ...
 ```
 
@@ -750,7 +753,7 @@ Available themes:
 
 ```bash
 # Set theme
-agentic-sdlc config theme dark
+ai-sdlc config theme dark
 ```
 
 ## Authentication
@@ -770,7 +773,7 @@ export ANTHROPIC_API_KEY=your-key-here
 ## Folder Structure
 
 ```
-.agentic-sdlc/
+.ai-sdlc/
 ├── backlog/           # New stories
 ├── ready/             # Stories ready to start
 ├── in-progress/       # Active stories
@@ -819,14 +822,14 @@ npm test -- --watch
 If you encounter a corrupted checkpoint error:
 
 ```bash
-Error: Corrupted workflow state file at .agentic-sdlc/.workflow-state.json.
-Delete the file to start fresh: rm ".agentic-sdlc/.workflow-state.json"
+Error: Corrupted workflow state file at .ai-sdlc/.workflow-state.json.
+Delete the file to start fresh: rm ".ai-sdlc/.workflow-state.json"
 ```
 
 Solution:
 ```bash
-rm .agentic-sdlc/.workflow-state.json
-agentic-sdlc run  # Start fresh
+rm .ai-sdlc/.workflow-state.json
+ai-sdlc run  # Start fresh
 ```
 
 ### Multiple Workflows
@@ -835,8 +838,8 @@ Currently, only one workflow can run at a time. If you try to start a new workfl
 
 To start fresh (ignoring the checkpoint):
 ```bash
-rm .agentic-sdlc/.workflow-state.json
-agentic-sdlc run
+rm .ai-sdlc/.workflow-state.json
+ai-sdlc run
 ```
 
 ## License

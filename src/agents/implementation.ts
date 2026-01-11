@@ -39,7 +39,7 @@ export async function runImplementationAgent(
 
   try {
     // Create a feature branch for this story
-    const branchName = `agentic-sdlc/${story.slug}`;
+    const branchName = `ai-sdlc/${story.slug}`;
 
     try {
       // Check if we're in a git repo

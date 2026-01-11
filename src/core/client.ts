@@ -9,7 +9,7 @@ import path from 'path';
 export class AgentTimeoutError extends Error {
   constructor(timeoutMs: number) {
     const timeoutSec = Math.round(timeoutMs / 1000);
-    super(`Agent query timed out after ${timeoutSec} seconds. Consider increasing 'timeouts.agentTimeout' in .agentic-sdlc.json`);
+    super(`Agent query timed out after ${timeoutSec} seconds. Consider increasing 'timeouts.agentTimeout' in .ai-sdlc.json`);
     this.name = 'AgentTimeoutError';
   }
 }

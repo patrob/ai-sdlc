@@ -1,7 +1,7 @@
-# Plan: Publish agentic-sdlc Alpha to NPM
+# Plan: Publish ai-sdlc Alpha to NPM
 
 ## Goal
-Publish `agentic-sdlc@0.1.0-alpha.1` to npm so it can be installed globally and used on other projects.
+Publish `ai-sdlc@0.1.0-alpha.1` to npm so it can be installed globally and used on other projects.
 
 ## Current State
 - **Code**: Solid - 295 tests passing, clean TypeScript build
@@ -54,7 +54,7 @@ Run these commands to verify:
 ```bash
 npm pack --dry-run
 # Should show ~10-15 files, <100KB compressed
-# Should NOT include: .agentic-sdlc/, src/, tests/, .github/
+# Should NOT include: .ai-sdlc/, src/, tests/, .github/
 ```
 
 ### Step 3: Test Local Installation
@@ -65,14 +65,14 @@ npm pack --dry-run
 npm pack
 
 # Test install in temp location
-mkdir -p /tmp/test-agentic-sdlc
-cd /tmp/test-agentic-sdlc
+mkdir -p /tmp/test-ai-sdlc
+cd /tmp/test-ai-sdlc
 npm init -y
-npm install /path/to/agentic-sdlc-0.1.0-alpha.1.tgz
+npm install /path/to/ai-sdlc-0.1.0-alpha.1.tgz
 
 # Test CLI works
-npx agentic-sdlc --help
-npx agentic-sdlc --version
+npx ai-sdlc --help
+npx ai-sdlc --version
 ```
 
 ### Step 4: Update README for Alpha Release
@@ -101,8 +101,8 @@ vitest.config.ts
 
 # Development
 .github/
-.agentic-sdlc/
-.agentic-sdlc.json
+.ai-sdlc/
+.ai-sdlc.json
 tsconfig.json
 CLAUDE.md
 CONTRIBUTING.md
@@ -141,7 +141,7 @@ npm whoami || npm login
 npm publish --tag alpha --access public
 
 # Verify
-npm info agentic-sdlc
+npm info ai-sdlc
 ```
 
 ### Step 8: Test Global Install
@@ -149,18 +149,18 @@ npm info agentic-sdlc
 
 ```bash
 # Install globally from npm
-npm install -g agentic-sdlc@alpha
+npm install -g ai-sdlc@alpha
 
 # Test it works
-agentic-sdlc --version
-agentic-sdlc --help
+ai-sdlc --version
+ai-sdlc --help
 
 # Test in a fresh project
 cd /tmp
 mkdir test-project && cd test-project
 git init
-agentic-sdlc init
-agentic-sdlc status
+ai-sdlc init
+ai-sdlc status
 ```
 
 ---
@@ -170,10 +170,10 @@ agentic-sdlc status
 After all steps complete:
 - [ ] `npm pack --dry-run` shows <20 files, <200KB
 - [ ] Package installs globally without errors
-- [ ] `agentic-sdlc --version` shows `0.1.0-alpha.1`
-- [ ] `agentic-sdlc init` creates `.agentic-sdlc/` folder
-- [ ] `agentic-sdlc status` works in initialized project
-- [ ] Package visible on npmjs.com/package/agentic-sdlc
+- [ ] `ai-sdlc --version` shows `0.1.0-alpha.1`
+- [ ] `ai-sdlc init` creates `.ai-sdlc/` folder
+- [ ] `ai-sdlc status` works in initialized project
+- [ ] Package visible on npmjs.com/package/ai-sdlc
 
 ---
 
@@ -191,7 +191,7 @@ After all steps complete:
 
 If publish has issues:
 ```bash
-npm unpublish agentic-sdlc@0.1.0-alpha.1
+npm unpublish ai-sdlc@0.1.0-alpha.1
 ```
 
 Note: npm allows unpublish within 72 hours of publish.

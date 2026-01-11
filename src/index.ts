@@ -29,13 +29,13 @@ function checkApiKey(): boolean {
 const program = new Command();
 
 program
-  .name('agentic-sdlc')
+  .name('ai-sdlc')
   .description('Agent-first SDLC workflow manager')
   .version('0.1.0');
 
 program
   .command('init')
-  .description('Initialize .agentic-sdlc folder structure')
+  .description('Initialize .ai-sdlc folder structure')
   .action(init);
 
 program

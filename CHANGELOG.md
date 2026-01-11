@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Compact view** for narrow terminals (<100 cols) with multi-line story format
 - **Smart text truncation** at word boundaries for better readability
 - **Label list truncation** with "+N more" indicator when many labels exist
-- **Optional hint message** when compact view is used (disable with `AGENTIC_SDLC_NO_HINTS=1`)
+- **Optional hint message** when compact view is used (disable with `AI_SDLC_NO_HINTS=1`)
 - **Comprehensive input sanitization** and security hardening:
   - ReDoS protection with bounded regex patterns
   - Terminal escape sequence filtering (CSI, OSC, C0/C1 control codes)

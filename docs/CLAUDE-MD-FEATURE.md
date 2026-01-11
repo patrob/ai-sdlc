@@ -91,7 +91,7 @@ Comprehensive test suite covering:
 
 ### 1. Enable Project Settings
 
-Add to `.agentic-sdlc.json`:
+Add to `.ai-sdlc.json`:
 
 ```json
 {
@@ -114,7 +114,7 @@ You are working on [project description].
 
 ### 3. Verify
 
-Run any agentic-sdlc command and look for:
+Run any ai-sdlc command and look for:
 
 ```
 Debug: Found CLAUDE.md in project settings (.claude/CLAUDE.md)

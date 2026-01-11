@@ -41,7 +41,7 @@ export class WorkflowRunner {
     const c = getThemedChalk(config);
 
     if (!kanbanExists(this.sdlcRoot)) {
-      console.log(c.warning('agentic-sdlc not initialized. Run `agentic-sdlc init` first.'));
+      console.log(c.warning('ai-sdlc not initialized. Run `ai-sdlc init` first.'));
       return;
     }
 

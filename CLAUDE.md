@@ -1,4 +1,4 @@
-# Claude Code Instructions for agentic-sdlc
+# Claude Code Instructions for ai-sdlc
 
 ## Code Conventions
 

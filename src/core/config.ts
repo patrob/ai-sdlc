@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Config, StageGateConfig, RefinementConfig, ReviewConfig, TimeoutConfig } from '../types/index.js';
 
-const CONFIG_FILENAME = '.agentic-sdlc.json';
+const CONFIG_FILENAME = '.ai-sdlc.json';
 
 /**
  * Default timeout configuration
@@ -14,7 +14,7 @@ export const DEFAULT_TIMEOUTS: TimeoutConfig = {
 };
 
 export const DEFAULT_CONFIG: Config = {
-  sdlcFolder: '.agentic-sdlc',
+  sdlcFolder: '.ai-sdlc',
   stageGates: {
     requireApprovalBeforeImplementation: false,
     requireApprovalBeforePR: false,
@@ -44,12 +44,12 @@ export const DEFAULT_CONFIG: Config = {
 
 /**
  * Get the SDLC root folder path
- * Respects AGENTIC_SDLC_ROOT env var if set (useful for testing)
+ * Respects AI_SDLC_ROOT env var if set (useful for testing)
  */
 export function getSdlcRoot(workingDir: string = process.cwd()): string {
   // Check for test override first
-  if (process.env.AGENTIC_SDLC_ROOT) {
-    return process.env.AGENTIC_SDLC_ROOT;
+  if (process.env.AI_SDLC_ROOT) {
+    return process.env.AI_SDLC_ROOT;
   }
   const config = loadConfig(workingDir);
   return path.join(workingDir, config.sdlcFolder);
@@ -221,8 +221,8 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
   }
 
   // Security: Apply environment variable overrides with strict validation
-  if (process.env.AGENTIC_SDLC_MAX_RETRIES) {
-    const maxRetries = parseInt(process.env.AGENTIC_SDLC_MAX_RETRIES, 10);
+  if (process.env.AI_SDLC_MAX_RETRIES) {
+    const maxRetries = parseInt(process.env.AI_SDLC_MAX_RETRIES, 10);
     // Security: Limit to 0-10 range (not 0-100) to prevent resource exhaustion
     if (!isNaN(maxRetries) && maxRetries >= 0 && maxRetries <= 10) {
       console.log(`Environment override: maxRetries set to ${maxRetries}`);
@@ -233,27 +233,27 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
         maxRetries
       );
     } else {
-      console.warn(`Invalid AGENTIC_SDLC_MAX_RETRIES value "${process.env.AGENTIC_SDLC_MAX_RETRIES}" (must be 0-10), ignoring`);
+      console.warn(`Invalid AI_SDLC_MAX_RETRIES value "${process.env.AI_SDLC_MAX_RETRIES}" (must be 0-10), ignoring`);
     }
   }
 
-  if (process.env.AGENTIC_SDLC_AUTO_COMPLETE) {
-    const value = process.env.AGENTIC_SDLC_AUTO_COMPLETE;
+  if (process.env.AI_SDLC_AUTO_COMPLETE) {
+    const value = process.env.AI_SDLC_AUTO_COMPLETE;
     if (value === 'true' || value === 'false') {
       console.log(`Environment override: autoCompleteOnApproval set to ${value}`);
       config.reviewConfig.autoCompleteOnApproval = value === 'true';
     } else {
-      console.warn(`Invalid AGENTIC_SDLC_AUTO_COMPLETE value "${value}" (must be "true" or "false"), ignoring`);
+      console.warn(`Invalid AI_SDLC_AUTO_COMPLETE value "${value}" (must be "true" or "false"), ignoring`);
     }
   }
 
-  if (process.env.AGENTIC_SDLC_AUTO_RESTART) {
-    const value = process.env.AGENTIC_SDLC_AUTO_RESTART;
+  if (process.env.AI_SDLC_AUTO_RESTART) {
+    const value = process.env.AI_SDLC_AUTO_RESTART;
     if (value === 'true' || value === 'false') {
       console.log(`Environment override: autoRestartOnRejection set to ${value}`);
       config.reviewConfig.autoRestartOnRejection = value === 'true';
     } else {
-      console.warn(`Invalid AGENTIC_SDLC_AUTO_RESTART value "${value}" (must be "true" or "false"), ignoring`);
+      console.warn(`Invalid AI_SDLC_AUTO_RESTART value "${value}" (must be "true" or "false"), ignoring`);
     }
   }
 

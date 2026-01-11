@@ -12,8 +12,8 @@ describe('Kanban Rework Detection', () => {
 
   beforeEach(() => {
     // Create temporary test directory
-    testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentic-sdlc-test-'));
-    sdlcRoot = path.join(testDir, '.agentic-sdlc');
+    testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-'));
+    sdlcRoot = path.join(testDir, '.ai-sdlc');
 
     // Create SDLC folder structure
     fs.mkdirSync(sdlcRoot, { recursive: true });
@@ -24,7 +24,7 @@ describe('Kanban Rework Detection', () => {
 
     // Create default config
     const config = {
-      sdlcFolder: '.agentic-sdlc',
+      sdlcFolder: '.ai-sdlc',
       refinement: {
         maxIterations: 3,
         escalateOnMaxAttempts: 'manual',
@@ -45,7 +45,7 @@ describe('Kanban Rework Detection', () => {
       theme: 'auto',
     };
     fs.writeFileSync(
-      path.join(testDir, '.agentic-sdlc.json'),
+      path.join(testDir, '.ai-sdlc.json'),
       JSON.stringify(config, null, 2)
     );
   });

@@ -409,7 +409,7 @@ describe('table-renderer', () => {
 
   describe('Compact View Hints', () => {
     beforeEach(() => {
-      delete process.env.AGENTIC_SDLC_NO_HINTS;
+      delete process.env.AI_SDLC_NO_HINTS;
     });
 
     it('should show compact view hint by default when terminal is narrow', () => {
@@ -422,8 +422,8 @@ describe('table-renderer', () => {
       expect(result).toContain('terminal width 80 < 100 cols');
     });
 
-    it('should hide hint when AGENTIC_SDLC_NO_HINTS is set', () => {
-      process.env.AGENTIC_SDLC_NO_HINTS = '1';
+    it('should hide hint when AI_SDLC_NO_HINTS is set', () => {
+      process.env.AI_SDLC_NO_HINTS = '1';
       process.stdout.columns = 80;
       const story = createMockStory();
 

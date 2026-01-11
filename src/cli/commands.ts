@@ -18,10 +18,10 @@ import { renderStories } from './table-renderer.js';
 import { getStoryFlags as getStoryFlagsUtil, formatStatus as formatStatusUtil } from './story-utils.js';
 
 /**
- * Initialize the .agentic-sdlc folder structure
+ * Initialize the .ai-sdlc folder structure
  */
 export async function init(): Promise<void> {
-  const spinner = ora('Initializing agentic-sdlc...').start();
+  const spinner = ora('Initializing ai-sdlc...').start();
 
   try {
     const config = initConfig();
@@ -29,20 +29,20 @@ export async function init(): Promise<void> {
     const c = getThemedChalk(config);
 
     if (kanbanExists(sdlcRoot)) {
-      spinner.info('agentic-sdlc already initialized');
+      spinner.info('ai-sdlc already initialized');
       return;
     }
 
     initializeKanban(sdlcRoot);
 
-    spinner.succeed(c.success('Initialized .agentic-sdlc/'));
+    spinner.succeed(c.success('Initialized .ai-sdlc/'));
     console.log(c.dim('  ├── backlog/'));
     console.log(c.dim('  ├── ready/'));
     console.log(c.dim('  ├── in-progress/'));
     console.log(c.dim('  └── done/'));
     console.log();
     console.log(c.info('Get started:'));
-    console.log(c.dim(`  agentic-sdlc add "Your first story"`));
+    console.log(c.dim(`  ai-sdlc add "Your first story"`));
   } catch (error) {
     spinner.fail('Failed to initialize');
     console.error(error);
@@ -59,7 +59,7 @@ export async function status(options?: { active?: boolean }): Promise<void> {
   const c = getThemedChalk(config);
 
   if (!kanbanExists(sdlcRoot)) {
-    console.log(c.warning('agentic-sdlc not initialized. Run `agentic-sdlc init` first.'));
+    console.log(c.warning('ai-sdlc not initialized. Run `ai-sdlc init` first.'));
     return;
   }
 
@@ -67,7 +67,7 @@ export async function status(options?: { active?: boolean }): Promise<void> {
   const stats = getBoardStats(sdlcRoot);
 
   console.log();
-  console.log(c.bold('═══ Agentic SDLC Board ═══'));
+  console.log(c.bold('═══ AI SDLC Board ═══'));
   console.log();
 
   // Show each column with new table format
@@ -128,7 +128,7 @@ export async function add(title: string): Promise<void> {
     const c = getThemedChalk(config);
 
     if (!kanbanExists(sdlcRoot)) {
-      spinner.fail('agentic-sdlc not initialized. Run `agentic-sdlc init` first.');
+      spinner.fail('ai-sdlc not initialized. Run `ai-sdlc init` first.');
       return;
     }
 
@@ -138,7 +138,7 @@ export async function add(title: string): Promise<void> {
     console.log(c.dim(`  ID: ${story.frontmatter.id}`));
     console.log(c.dim(`  Slug: ${story.slug}`));
     console.log();
-    console.log(c.info('Next step:'), `agentic-sdlc run`);
+    console.log(c.info('Next step:'), `ai-sdlc run`);
   } catch (error) {
     spinner.fail('Failed to create story');
     console.error(error);
@@ -155,8 +155,8 @@ function validateAutoStoryOptions(options: { auto?: boolean; story?: string; ste
     throw new Error(
       'Cannot combine --auto --story with --step flag.\n' +
       'Use either:\n' +
-      '  - agentic-sdlc run --auto --story <id> (full SDLC)\n' +
-      '  - agentic-sdlc run --story <id> --step <phase> (single phase)'
+      '  - ai-sdlc run --auto --story <id> (full SDLC)\n' +
+      '  - ai-sdlc run --story <id> --step <phase> (single phase)'
     );
   }
 }
@@ -244,7 +244,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
   }
 
   if (!kanbanExists(sdlcRoot)) {
-    console.log(c.warning('agentic-sdlc not initialized. Run `agentic-sdlc init` first.'));
+    console.log(c.warning('ai-sdlc not initialized. Run `ai-sdlc init` first.'));
     return;
   }
 
@@ -352,7 +352,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       console.log(c.dim(`  ID: ${normalizedInput}`));
       console.log(c.dim(`  Slug: ${normalizedInput}`));
       console.log();
-      console.log(c.info('Tip: Use `agentic-sdlc status` to see all available stories.'));
+      console.log(c.info('Tip: Use `ai-sdlc status` to see all available stories.'));
       return;
     }
 
@@ -1167,14 +1167,14 @@ export async function details(idOrSlug: string): Promise<void> {
 
   // Check if SDLC is initialized
   if (!kanbanExists(sdlcRoot)) {
-    console.log(c.warning('agentic-sdlc not initialized. Run `agentic-sdlc init` first.'));
+    console.log(c.warning('ai-sdlc not initialized. Run `ai-sdlc init` first.'));
     return;
   }
 
   // Validate input
   if (!idOrSlug || idOrSlug.trim() === '') {
     console.log(c.error('Error: Please provide a story ID or slug.'));
-    console.log(c.dim('Usage: agentic-sdlc details <id|slug>'));
+    console.log(c.dim('Usage: ai-sdlc details <id|slug>'));
     return;
   }
 
@@ -1196,7 +1196,7 @@ export async function details(idOrSlug: string): Promise<void> {
     console.log(c.dim(`  ID: ${normalizedInput}`));
     console.log(c.dim(`  Slug: ${normalizedInput}`));
     console.log();
-    console.log(c.info('Tip: Use `agentic-sdlc status` to see all available stories.'));
+    console.log(c.info('Tip: Use `ai-sdlc status` to see all available stories.'));
     return;
   }
 

@@ -9,9 +9,9 @@ describe('review config validation', () => {
   beforeEach(() => {
     originalEnv = { ...process.env };
     // Clean up env vars
-    delete process.env.AGENTIC_SDLC_MAX_RETRIES;
-    delete process.env.AGENTIC_SDLC_AUTO_COMPLETE;
-    delete process.env.AGENTIC_SDLC_AUTO_RESTART;
+    delete process.env.AI_SDLC_MAX_RETRIES;
+    delete process.env.AI_SDLC_AUTO_COMPLETE;
+    delete process.env.AI_SDLC_AUTO_RESTART;
   });
 
   afterEach(() => {
@@ -76,34 +76,34 @@ describe('review config validation', () => {
   });
 
   describe('loadConfig with environment variables', () => {
-    it('should override maxRetries with AGENTIC_SDLC_MAX_RETRIES', () => {
-      process.env.AGENTIC_SDLC_MAX_RETRIES = '7';
+    it('should override maxRetries with AI_SDLC_MAX_RETRIES', () => {
+      process.env.AI_SDLC_MAX_RETRIES = '7';
       const config = loadConfig();
       expect(config.reviewConfig.maxRetries).toBe(7);
     });
 
-    it('should override autoCompleteOnApproval with AGENTIC_SDLC_AUTO_COMPLETE', () => {
-      process.env.AGENTIC_SDLC_AUTO_COMPLETE = 'false';
+    it('should override autoCompleteOnApproval with AI_SDLC_AUTO_COMPLETE', () => {
+      process.env.AI_SDLC_AUTO_COMPLETE = 'false';
       const config = loadConfig();
       expect(config.reviewConfig.autoCompleteOnApproval).toBe(false);
     });
 
-    it('should override autoRestartOnRejection with AGENTIC_SDLC_AUTO_RESTART', () => {
-      process.env.AGENTIC_SDLC_AUTO_RESTART = 'false';
+    it('should override autoRestartOnRejection with AI_SDLC_AUTO_RESTART', () => {
+      process.env.AI_SDLC_AUTO_RESTART = 'false';
       const config = loadConfig();
       expect(config.reviewConfig.autoRestartOnRejection).toBe(false);
     });
 
-    it('should ignore invalid AGENTIC_SDLC_MAX_RETRIES values', () => {
-      process.env.AGENTIC_SDLC_MAX_RETRIES = 'invalid';
+    it('should ignore invalid AI_SDLC_MAX_RETRIES values', () => {
+      process.env.AI_SDLC_MAX_RETRIES = 'invalid';
       const config = loadConfig();
       expect(config.reviewConfig.maxRetries).toBe(Infinity); // default (infinite)
     });
 
     it('should apply all environment variable overrides together', () => {
-      process.env.AGENTIC_SDLC_MAX_RETRIES = '5';
-      process.env.AGENTIC_SDLC_AUTO_COMPLETE = 'false';
-      process.env.AGENTIC_SDLC_AUTO_RESTART = 'false';
+      process.env.AI_SDLC_MAX_RETRIES = '5';
+      process.env.AI_SDLC_AUTO_COMPLETE = 'false';
+      process.env.AI_SDLC_AUTO_RESTART = 'false';
       const config = loadConfig();
       expect(config.reviewConfig.maxRetries).toBe(5);
       expect(config.reviewConfig.autoCompleteOnApproval).toBe(false);
@@ -111,13 +111,13 @@ describe('review config validation', () => {
     });
 
     it('should ignore invalid negative environment variable values', () => {
-      process.env.AGENTIC_SDLC_MAX_RETRIES = '-5';
+      process.env.AI_SDLC_MAX_RETRIES = '-5';
       const config = loadConfig();
       expect(config.reviewConfig.maxRetries).toBe(Infinity); // invalid, uses default (infinite)
     });
 
     it('should allow environment variable maxRetries up to 10', () => {
-      process.env.AGENTIC_SDLC_MAX_RETRIES = '10';
+      process.env.AI_SDLC_MAX_RETRIES = '10';
       const config = loadConfig();
       expect(config.reviewConfig.maxRetries).toBe(10); // env var raises upper bound (max 10)
     });

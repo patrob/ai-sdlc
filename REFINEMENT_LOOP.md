@@ -56,7 +56,7 @@ Extended to handle rework actions:
 
 ## Configuration
 
-Add to `.agentic-sdlc.json`:
+Add to `.ai-sdlc.json`:
 
 ```json
 {
@@ -194,7 +194,7 @@ npm test
 
 ```bash
 # Run in auto mode - refinement loops execute automatically
-agentic-sdlc run --auto
+ai-sdlc run --auto
 ```
 
 The system will:
@@ -212,7 +212,7 @@ The system will:
 
 ```bash
 # Run single action at a time
-agentic-sdlc run
+ai-sdlc run
 ```
 
 Each rework action requires explicit execution.
@@ -258,7 +258,7 @@ Atomic file writes ensure story state remains consistent even if process crashes
 Check the refinement count:
 
 ```bash
-agentic-sdlc details <story-slug>
+ai-sdlc details <story-slug>
 ```
 
 If at max iterations, manually review and fix, then reset:
@@ -317,4 +317,4 @@ Check review notes in story content. If feedback is vague, this indicates the re
 - [Review Agent](./src/agents/review.ts)
 - [Story State Management](./src/core/story.ts)
 - [Workflow Runner](./src/cli/runner.ts)
-- [Configuration Guide](./.agentic-sdlc.json)
+- [Configuration Guide](./.ai-sdlc.json)

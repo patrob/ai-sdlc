@@ -787,7 +787,7 @@ export async function createPullRequest(
   }
 
   try {
-    const branchName = story.frontmatter.branch || `agentic-sdlc/${story.slug}`;
+    const branchName = story.frontmatter.branch || `ai-sdlc/${story.slug}`;
 
     // Security: Validate branch name to prevent command injection
     if (!validateGitBranchName(branchName)) {
@@ -857,7 +857,7 @@ ${story.content.substring(0, 1000)}...
 - [x] Product owner approved
 
 ---
-*Created by agentic-sdlc*`;
+*Created by ai-sdlc*`;
 
       const prOutput = execSync(
         `gh pr create --title ${escapeShellArg(prTitle)} --body ${escapeShellArg(prBody)}`,

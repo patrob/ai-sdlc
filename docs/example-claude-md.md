@@ -50,7 +50,7 @@ You are working on a TypeScript Node.js project that follows these conventions:
 
 ## Configuration
 
-To enable automatic loading of this file, add to your `.agentic-sdlc.json`:
+To enable automatic loading of this file, add to your `.ai-sdlc.json`:
 
 ```json
 {

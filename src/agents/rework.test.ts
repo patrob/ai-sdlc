@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { runReworkAgent, determineTargetPhase, packageReworkContext } from '../../src/agents/rework.js';
-import { createStory, parseStory, writeStory } from '../../src/core/story.js';
-import { ReviewResult, ReviewDecision, ReviewSeverity } from '../../src/types/index.js';
+import { runReworkAgent, determineTargetPhase, packageReworkContext } from './rework.js';
+import { createStory, parseStory, writeStory } from '../core/story.js';
+import { ReviewResult, ReviewDecision, ReviewSeverity } from '../types/index.js';
 
 describe('Rework Agent', () => {
   let testDir: string;

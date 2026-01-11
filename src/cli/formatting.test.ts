@@ -8,7 +8,7 @@ import {
   stripAnsiCodes,
   sanitizeInput,
   ColumnWidths,
-} from '../../src/cli/formatting.js';
+} from './formatting.js';
 
 describe('formatting utilities', () => {
   // Store original process.stdout.columns

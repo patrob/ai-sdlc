@@ -10,6 +10,7 @@ import { run } from '../../src/cli/commands.js';
 import { getSdlcRoot } from '../../src/core/config.js';
 import { createStory, parseStory, updateStory } from '../../src/core/story.js';
 import { clearWorkflowState } from '../../src/core/workflow-state.js';
+import { initializeKanban } from '../../src/core/kanban.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,6 +28,10 @@ describe('--auto --story Full SDLC Workflow', () => {
 
     // Set SDLC root for testing
     process.env.AI_SDLC_ROOT = TEST_FIXTURE_DIR;
+
+    // Initialize kanban structure (creates backlog, ready, in-progress, done folders)
+    const sdlcRoot = getSdlcRoot();
+    initializeKanban(sdlcRoot);
   });
 
   afterEach(() => {
@@ -40,9 +45,6 @@ describe('--auto --story Full SDLC Workflow', () => {
   describe('Flag Validation', () => {
     it('should reject conflicting --auto --story --step flags', async () => {
       const sdlcRoot = getSdlcRoot();
-
-      // Create minimal SDLC structure
-      fs.mkdirSync(path.join(sdlcRoot, 'backlog'), { recursive: true });
 
       // Create test story
       const story = createStory('Test Story', sdlcRoot);
@@ -67,9 +69,6 @@ describe('--auto --story Full SDLC Workflow', () => {
     it('should accept --auto --story without --step', async () => {
       const sdlcRoot = getSdlcRoot();
 
-      // Create minimal SDLC structure
-      fs.mkdirSync(path.join(sdlcRoot, 'backlog'), { recursive: true });
-
       // Create test story
       const story = createStory('Test Story', sdlcRoot);
 
@@ -87,9 +86,6 @@ describe('--auto --story Full SDLC Workflow', () => {
   describe('Phase Determination', () => {
     it('should skip refine for stories already in ready/', async () => {
       const sdlcRoot = getSdlcRoot();
-
-      // Create SDLC structure
-      fs.mkdirSync(path.join(sdlcRoot, 'ready'), { recursive: true });
 
       // Create story directly in ready
       const storyPath = path.join(sdlcRoot, 'ready', 'test-story.md');
@@ -128,9 +124,6 @@ describe('--auto --story Full SDLC Workflow', () => {
     it('should skip completed phases', async () => {
       const sdlcRoot = getSdlcRoot();
 
-      // Create SDLC structure
-      fs.mkdirSync(path.join(sdlcRoot, 'ready'), { recursive: true });
-
       // Create story with some phases complete
       const storyPath = path.join(sdlcRoot, 'ready', 'test-story.md');
       const frontmatter = {
@@ -168,11 +161,6 @@ describe('--auto --story Full SDLC Workflow', () => {
 
   describe('Story Not Found', () => {
     it('should handle non-existent story gracefully', async () => {
-      const sdlcRoot = getSdlcRoot();
-
-      // Create minimal SDLC structure
-      fs.mkdirSync(path.join(sdlcRoot, 'backlog'), { recursive: true });
-
       // Try to run with non-existent story
       await run({
         auto: true,
@@ -189,9 +177,6 @@ describe('--auto --story Full SDLC Workflow', () => {
     it('should save fullSDLC flag in checkpoint', async () => {
       const sdlcRoot = getSdlcRoot();
 
-      // Create SDLC structure
-      fs.mkdirSync(path.join(sdlcRoot, 'backlog'), { recursive: true });
-
       // Create test story
       const story = createStory('Test Story', sdlcRoot);
 
@@ -205,9 +190,6 @@ describe('--auto --story Full SDLC Workflow', () => {
 
     it('should restore full SDLC mode on --continue', async () => {
       const sdlcRoot = getSdlcRoot();
-
-      // Create SDLC structure with checkpoint
-      fs.mkdirSync(path.join(sdlcRoot, 'backlog'), { recursive: true });
 
       // Create story
       const story = createStory('Test Story', sdlcRoot);
@@ -252,9 +234,6 @@ describe('--auto --story Full SDLC Workflow', () => {
   describe('All Phases Complete', () => {
     it('should detect when all SDLC phases are complete', async () => {
       const sdlcRoot = getSdlcRoot();
-
-      // Create SDLC structure
-      fs.mkdirSync(path.join(sdlcRoot, 'done'), { recursive: true });
 
       // Create fully complete story
       const storyPath = path.join(sdlcRoot, 'done', 'test-story.md');

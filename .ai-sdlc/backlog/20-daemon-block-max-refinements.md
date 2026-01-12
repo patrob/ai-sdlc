@@ -2,7 +2,7 @@
 id: daemon-block-max-refinements
 title: Block stories on max refinements
 type: feature
-status: ready
+status: backlog
 priority: 1
 created: 2025-01-12
 labels: [daemon, blocking, PRD-daemon-workflow-engine]

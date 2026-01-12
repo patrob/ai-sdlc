@@ -192,7 +192,13 @@ export class DaemonRunner {
     const c = getThemedChalk(this.config);
 
     // Parse story to get the frontmatter.id (used by assessState for action matching)
-    const story = parseStory(filePath);
+    let story;
+    try {
+      story = parseStory(filePath);
+    } catch (err) {
+      console.log(c.error(`   Failed to parse story at ${filePath}: ${err}`));
+      return false;
+    }
     const storyId = story.frontmatter.id;
 
     this.logWorkflowStart(storyId);

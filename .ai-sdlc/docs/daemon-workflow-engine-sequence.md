@@ -20,6 +20,7 @@ it's the correct story to work on at this time.
 | 6 | daemon-single-story-startup | Pick one story on daemon startup | backlog | None (parallel-safe) |
 | 7 | daemon-nearest-completion-priority | Nearest completion priority | backlog | Story 6 |
 | 8 | daemon-config-defaults | Set sensible config defaults | backlog | None (parallel-safe) |
+| 9 | story-ui-daemon-tui | Redesign daemon terminal UI | backlog | Stories 1-8 |
 
 ---
 
@@ -28,6 +29,7 @@ it's the correct story to work on at this time.
 1. **Stories 1-4** form a chain: blocking foundation first, then integration, then unblock
 2. **Stories 5, 6, 8** are independent and can be worked in parallel with the blocking chain
 3. **Story 7** depends on Story 6 (needs single-story selection to add priority refinement)
+4. **Story 9** (Terminal UI) should be done last - UI should reflect final daemon behavior
 
 ## How to Use
 
@@ -47,3 +49,4 @@ Mark stories complete here as they're finished:
 - [ ] Story 6: daemon-single-story-startup
 - [ ] Story 7: daemon-nearest-completion-priority
 - [ ] Story 8: daemon-config-defaults
+- [ ] Story 9: story-ui-daemon-tui

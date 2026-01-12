@@ -87,10 +87,14 @@ describe('Daemon Integration Tests', () => {
       // Give it a moment to initialize
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Verify chokidar was initialized with the backlog directory path
+      // Verify chokidar was initialized with the watch directories
       expect(mockChokidar.default.watch).toHaveBeenCalled();
       expect(mockChokidar.default.watch).toHaveBeenCalledWith(
-        expect.stringContaining('backlog'),
+        expect.arrayContaining([
+          expect.stringContaining('backlog'),
+          expect.stringContaining('ready'),
+          expect.stringContaining('in-progress'),
+        ]),
         expect.objectContaining({
           persistent: true,
           ignoreInitial: false,
@@ -291,15 +295,15 @@ describe('Daemon Integration Tests', () => {
       const daemonAny = daemon as any;
       const testId = 'test-story';
 
-      // Mark as processed
-      daemonAny.processedStoryIds.add(testId);
+      // Mark as completed
+      daemonAny.completedStoryIds.add(testId);
 
       // Verify it's tracked
-      expect(daemonAny.processedStoryIds.has(testId)).toBe(true);
+      expect(daemonAny.completedStoryIds.has(testId)).toBe(true);
 
       // Attempt to add again should not increase size
-      daemonAny.processedStoryIds.add(testId);
-      expect(daemonAny.processedStoryIds.size).toBe(1);
+      daemonAny.completedStoryIds.add(testId);
+      expect(daemonAny.completedStoryIds.size).toBe(1);
     });
 
     it('should skip files during shutdown', async () => {

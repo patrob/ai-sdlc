@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { parseStory, writeStory, moveStory, appendToSection, updateStoryField, isAtMaxRetries, appendReviewHistory, snapshotMaxRetries, getEffectiveMaxRetries } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from '../core/config.js';
-import { Story, AgentResult, ReviewResult, ReviewIssue, ReviewIssueSeverity, ReviewDecision, ReviewSeverity, ReviewAttempt, Config } from '../types/index.js';
+import { Story, AgentResult, ReviewResult, ReviewIssue, ReviewIssueSeverity, ReviewDecision, ReviewSeverity, ReviewAttempt, Config, TDDTestCycle } from '../types/index.js';
 
 /**
  * Security: Validate Git branch name to prevent command injection
@@ -115,6 +115,61 @@ const ReviewResponseSchema = z.object({
   passed: z.boolean(),
   issues: z.array(ReviewIssueSchema),
 });
+
+/**
+ * Validate TDD cycles for completeness
+ *
+ * Checks that each TDD cycle has completed all three phases:
+ * RED (failing test) → GREEN (passing test) → REFACTOR (improved code)
+ *
+ * @param cycles - Array of TDD test cycles to validate
+ * @returns Array of violation messages (empty if all cycles are valid)
+ */
+export function validateTDDCycles(cycles: TDDTestCycle[]): string[] {
+  const violations: string[] = [];
+
+  for (const cycle of cycles) {
+    // Check RED phase (must always have red_timestamp since that's when cycle starts)
+    if (!cycle.red_timestamp) {
+      violations.push(`TDD cycle ${cycle.cycle_number}: Missing RED phase timestamp`);
+    }
+
+    // Check GREEN phase
+    if (!cycle.green_timestamp) {
+      violations.push(`TDD cycle ${cycle.cycle_number}: Missing GREEN phase timestamp - implementation not completed`);
+    }
+
+    // Check REFACTOR phase
+    if (!cycle.refactor_timestamp) {
+      violations.push(`TDD cycle ${cycle.cycle_number}: Missing REFACTOR phase timestamp - refactoring step skipped`);
+    }
+
+    // Check for regression (all tests should be green after cycle completes)
+    if (!cycle.all_tests_green) {
+      violations.push(`TDD cycle ${cycle.cycle_number}: Tests not all green - regression detected`);
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * Generate review issues from TDD violations
+ *
+ * Converts TDD validation violations into structured ReviewIssue objects
+ * that can be included in the review results.
+ *
+ * @param violations - Array of violation messages from validateTDDCycles
+ * @returns Array of ReviewIssue objects for the violations
+ */
+export function generateTDDIssues(violations: string[]): ReviewIssue[] {
+  return violations.map((violation) => ({
+    severity: 'critical' as ReviewIssueSeverity,
+    category: 'tdd_violation',
+    description: violation,
+    suggestedFix: 'Complete the TDD cycle by ensuring all phases (RED → GREEN → REFACTOR) are executed and all tests pass.',
+  }));
+}
 
 /**
  * Result of running build/test commands
@@ -639,6 +694,20 @@ export async function runReviewAgent(
     const codeResult = parseReviewResponse(codeReview, 'Code Review');
     const securityResult = parseReviewResponse(securityReview, 'Security Review');
     const poResult = parseReviewResponse(poReview, 'Product Owner Review');
+
+    // TDD Validation: Check TDD cycle completeness if TDD was enabled for this story
+    const tddEnabled = story.frontmatter.tdd_enabled ?? config.tdd?.enabled ?? false;
+    if (tddEnabled && story.frontmatter.tdd_test_history?.length) {
+      const tddViolations = validateTDDCycles(story.frontmatter.tdd_test_history);
+      if (tddViolations.length > 0) {
+        const tddIssues = generateTDDIssues(tddViolations);
+        codeResult.issues.push(...tddIssues);
+        codeResult.passed = false;
+        changesMade.push(`TDD validation: ${tddViolations.length} violation(s) detected`);
+      } else {
+        changesMade.push('TDD validation: All cycles completed correctly');
+      }
+    }
 
     // Add verification issues to code result (they're code-quality related)
     codeResult.issues.unshift(...verificationIssues);

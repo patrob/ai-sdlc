@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
 import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder, ReviewDecision } from '../types/index.js';
-import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt } from './story.js';
+import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt, moveToBlocked } from './story.js';
 import { loadConfig } from './config.js';
 import { determineTargetPhase } from '../agents/rework.js';
 
@@ -124,17 +124,31 @@ export function assessState(sdlcRoot: string): StateAssessment {
             },
           });
         } else {
-          // Circuit breaker: max refinement attempts reached
+          // Circuit breaker: max refinement attempts reached - move to blocked
           const refinementCount = story.frontmatter.refinement_count || 0;
           const maxAttempts = story.frontmatter.max_refinement_attempts || config.refinement.maxIterations;
-          recommendedActions.push({
-            type: 'review', // Keep as review to flag it
-            storyId: story.frontmatter.id,
-            storyPath: story.path,
-            reason: `🛑 Story "${story.frontmatter.title}" reached max refinement attempts (${refinementCount}/${maxAttempts}) - manual intervention required`,
-            priority: story.frontmatter.priority + 10000, // Very low priority to not auto-execute
-            context: { blockedByMaxRefinements: true },
-          });
+          const reason = `Max refinement attempts (${refinementCount}/${maxAttempts}) reached`;
+
+          try {
+            // Move story to blocked folder
+            moveToBlocked(story.path, reason);
+
+            // Log blocking action
+            console.log(`Story ${story.frontmatter.id} blocked: ${reason}`);
+          } catch (error) {
+            // Log error but don't crash daemon
+            console.error(`Failed to move story ${story.frontmatter.id} to blocked:`, error);
+
+            // Fall back to high-priority action as before
+            recommendedActions.push({
+              type: 'review',
+              storyId: story.frontmatter.id,
+              storyPath: story.path,
+              reason: `🛑 Story "${story.frontmatter.title}" reached max refinement attempts (${refinementCount}/${maxAttempts}) - manual intervention required`,
+              priority: story.frontmatter.priority + 10000,
+              context: { blockedByMaxRefinements: true },
+            });
+          }
         }
         continue; // Skip other checks for this story
       }

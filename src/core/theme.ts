@@ -66,6 +66,7 @@ export function getThemeColors(preference: ThemePreference): ThemeColors {
       ready: (str: string) => str,
       inProgress: (str: string) => str,
       done: (str: string) => str,
+      blocked: (str: string) => str,
       // RPIV phase colors (no color)
       phaseRefine: (str: string) => str,
       phaseResearch: (str: string) => str,
@@ -98,6 +99,7 @@ export function getThemeColors(preference: ThemePreference): ThemeColors {
       ready: chalk.blue.bold,
       inProgress: chalk.hex('#CC6600'), // Darker orange instead of yellow
       done: chalk.green.bold,
+      blocked: chalk.red.bold,
       // RPIV phase colors (darker for light backgrounds)
       phaseRefine: chalk.hex('#9932CC').bold,    // Dark purple/magenta
       phaseResearch: chalk.blue.bold,            // Blue
@@ -121,6 +123,7 @@ export function getThemeColors(preference: ThemePreference): ThemeColors {
     ready: chalk.blue,
     inProgress: chalk.yellow,
     done: chalk.green,
+    blocked: chalk.red,
     // RPIV phase colors (bright for dark backgrounds)
     phaseRefine: chalk.magenta,     // Magenta/purple
     phaseResearch: chalk.blue,      // Blue

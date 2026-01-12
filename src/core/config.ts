@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, TimeoutConfig, DaemonConfig } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, TimeoutConfig, DaemonConfig, TDDConfig } from '../types/index.js';
 
 const CONFIG_FILENAME = '.ai-sdlc.json';
 
@@ -24,6 +24,16 @@ export const DEFAULT_DAEMON_CONFIG: DaemonConfig = {
   shutdownTimeout: 30000,             // 30 seconds
   enableEscShutdown: false,           // MVP: Ctrl+C only
   escTimeout: 500,                    // 500ms for Esc+Esc
+};
+
+/**
+ * Default TDD configuration
+ */
+export const DEFAULT_TDD_CONFIG: TDDConfig = {
+  enabled: false,     // Opt-in: TDD is disabled by default to preserve existing workflows
+  strictMode: true,   // Enforce strict red-green-refactor cycle
+  maxCycles: 50,      // Maximum test-implement-refactor cycles per story
+  requireApprovalPerCycle: false,  // Don't require approval between each cycle
 };
 
 export const DEFAULT_CONFIG: Config = {
@@ -55,6 +65,8 @@ export const DEFAULT_CONFIG: Config = {
   timeouts: { ...DEFAULT_TIMEOUTS },
   // Daemon configuration
   daemon: { ...DEFAULT_DAEMON_CONFIG },
+  // TDD configuration
+  tdd: { ...DEFAULT_TDD_CONFIG },
 };
 
 /**
@@ -186,6 +198,46 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
     }
   }
 
+  // Validate TDD configuration if present
+  if (userConfig.tdd !== undefined) {
+    if (typeof userConfig.tdd !== 'object' || userConfig.tdd === null) {
+      console.warn('Invalid tdd in config (must be object), ignoring');
+      delete userConfig.tdd;
+    } else {
+      // Validate tdd.enabled (must be boolean)
+      if (userConfig.tdd.enabled !== undefined) {
+        if (typeof userConfig.tdd.enabled !== 'boolean') {
+          console.warn('Invalid tdd.enabled in config (must be boolean), using default');
+          delete userConfig.tdd.enabled;
+        }
+      }
+
+      // Validate tdd.strictMode (must be boolean)
+      if (userConfig.tdd.strictMode !== undefined) {
+        if (typeof userConfig.tdd.strictMode !== 'boolean') {
+          console.warn('Invalid tdd.strictMode in config (must be boolean), using default');
+          delete userConfig.tdd.strictMode;
+        }
+      }
+
+      // Validate tdd.maxCycles (must be positive number)
+      if (userConfig.tdd.maxCycles !== undefined) {
+        if (typeof userConfig.tdd.maxCycles !== 'number' || !Number.isFinite(userConfig.tdd.maxCycles) || userConfig.tdd.maxCycles <= 0) {
+          console.warn('Invalid tdd.maxCycles in config (must be positive number), using default');
+          delete userConfig.tdd.maxCycles;
+        }
+      }
+
+      // Validate tdd.requireApprovalPerCycle (must be boolean)
+      if (userConfig.tdd.requireApprovalPerCycle !== undefined) {
+        if (typeof userConfig.tdd.requireApprovalPerCycle !== 'boolean') {
+          console.warn('Invalid tdd.requireApprovalPerCycle in config (must be boolean), using default');
+          delete userConfig.tdd.requireApprovalPerCycle;
+        }
+      }
+    }
+  }
+
   return userConfig;
 }
 
@@ -227,6 +279,10 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
         daemon: {
           ...DEFAULT_DAEMON_CONFIG,
           ...userConfig.daemon,
+        },
+        tdd: {
+          ...DEFAULT_TDD_CONFIG,
+          ...userConfig.tdd,
         },
       };
     } catch (error) {

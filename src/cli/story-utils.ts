@@ -37,6 +37,8 @@ export function formatStatus(status: string, c: ThemeColors): string {
       return c.inProgress(status);
     case 'done':
       return c.done(status);
+    case 'blocked':
+      return c.blocked(status);
     default:
       return status;
   }

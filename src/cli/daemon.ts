@@ -2,6 +2,7 @@ import chokidar, { FSWatcher } from 'chokidar';
 import path from 'path';
 import { getSdlcRoot, loadConfig } from '../core/config.js';
 import { assessState } from '../core/kanban.js';
+import { parseStory } from '../core/story.js';
 import { getThemedChalk } from '../core/theme.js';
 import { runRefinementAgent } from '../agents/refinement.js';
 import { runResearchAgent } from '../agents/research.js';
@@ -189,7 +190,10 @@ export class DaemonRunner {
    */
   private async processStory(filePath: string): Promise<boolean> {
     const c = getThemedChalk(this.config);
-    const storyId = path.basename(filePath, '.md');
+
+    // Parse story to get the frontmatter.id (used by assessState for action matching)
+    const story = parseStory(filePath);
+    const storyId = story.frontmatter.id;
 
     this.logWorkflowStart(storyId);
 

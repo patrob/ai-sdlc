@@ -12,7 +12,7 @@ it's the correct story to work on at this time.
 
 | Order | Story ID | Title | Status | Dependencies |
 |-------|----------|-------|--------|--------------|
-| 1 | daemon-block-max-refinements | Block stories on max refinements | ready | None |
+| 1 | daemon-block-max-refinements | Block stories on max refinements | backlog | None |
 | 2 | daemon-block-max-retries | Block stories on max review retries | backlog | Story 1 |
 | 3 | daemon-exclude-blocked-folder | Exclude blocked/ from daemon watch | backlog | Story 1 |
 | 4 | daemon-unblock-command | Add unblock CLI command | backlog | Story 1 |

@@ -20,6 +20,14 @@ export interface DaemonOptions {
 }
 
 /**
+ * Story item in the processing queue
+ */
+interface QueuedStory {
+  path: string;
+  id: string;
+}
+
+/**
  * DaemonRunner - Continuous workflow monitoring and processing
  *
  * Watches backlog, ready, and in-progress folders for story files
@@ -34,7 +42,7 @@ export class DaemonRunner {
   private currentProcessing: Promise<void> | null = null;
   private completedStoryIds: Set<string> = new Set();  // Stories that reached done
   private activeStoryIds: Set<string> = new Set();     // Stories currently being processed
-  private processingQueue: string[] = [];
+  private processingQueue: QueuedStory[] = [];
   private watcher: FSWatcher | null = null;
   private isProcessingQueue: boolean = false;
   private ctrlCCount: number = 0;
@@ -106,9 +114,16 @@ export class DaemonRunner {
   private onFileAdded(filePath: string): void {
     const c = getThemedChalk(this.config);
 
-    // Extract story ID from file path
-    const fileName = path.basename(filePath, '.md');
-    const storyId = fileName;
+    // Parse story early to get frontmatter.id for consistent tracking
+    let story;
+    try {
+      story = parseStory(filePath);
+    } catch (err) {
+      console.log(c.warning(`  Cannot parse story at ${filePath}: ${err}`));
+      return;
+    }
+
+    const storyId = story.frontmatter.id;
 
     // Skip if already completed (reached done in this session)
     if (this.completedStoryIds.has(storyId)) {
@@ -121,20 +136,20 @@ export class DaemonRunner {
     }
 
     // Skip if already in queue
-    if (this.processingQueue.some(p => path.basename(p, '.md') === storyId)) {
+    if (this.processingQueue.some(q => q.id === storyId)) {
       return;
     }
 
     // Skip if shutdown in progress
     if (this.isShuttingDown) {
-      console.log(c.warning(`\nSkipping ${fileName} - shutdown in progress`));
+      console.log(c.warning(`\nSkipping ${story.frontmatter.title} - shutdown in progress`));
       return;
     }
 
     this.logFileDetected(filePath);
 
-    // Add to queue
-    this.processingQueue.push(filePath);
+    // Add to queue with both path and id
+    this.processingQueue.push({ path: filePath, id: storyId });
 
     // Start processing queue if not already processing
     if (!this.isProcessingQueue) {
@@ -153,14 +168,13 @@ export class DaemonRunner {
     this.isProcessingQueue = true;
 
     while (this.processingQueue.length > 0 && !this.isShuttingDown) {
-      const filePath = this.processingQueue.shift()!;
-      const storyId = path.basename(filePath, '.md');
+      const { path: filePath, id: storyId } = this.processingQueue.shift()!;
 
       // Mark as actively processing
       this.activeStoryIds.add(storyId);
 
       try {
-        const completed = await this.processStory(filePath);
+        const completed = await this.processStory(filePath, storyId);
 
         // Mark as completed if it reached done
         if (completed) {
@@ -188,18 +202,16 @@ export class DaemonRunner {
    * Process a single story through the complete workflow until done or no more actions
    * Returns true if story reached completion (done folder or no more actions)
    */
-  private async processStory(filePath: string): Promise<boolean> {
+  private async processStory(filePath: string, storyId: string): Promise<boolean> {
     const c = getThemedChalk(this.config);
 
-    // Parse story to get the frontmatter.id (used by assessState for action matching)
-    let story;
+    // Validate story can still be parsed (file might have moved/changed)
     try {
-      story = parseStory(filePath);
+      parseStory(filePath);
     } catch (err) {
       console.log(c.error(`   Failed to parse story at ${filePath}: ${err}`));
       return false;
     }
-    const storyId = story.frontmatter.id;
 
     this.logWorkflowStart(storyId);
 

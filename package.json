@@ -1,6 +1,6 @@
 {
   "name": "ai-sdlc",
-  "version": "0.1.0-alpha.8",
+  "version": "0.1.0-alpha.9",
   "description": "Agent-first SDLC workflow manager using Claude Agent SDK",
   "type": "module",
   "main": "dist/index.js",

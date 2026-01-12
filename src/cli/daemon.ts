@@ -12,26 +12,37 @@ import { runReworkAgent } from '../agents/rework.js';
 import { Action } from '../types/index.js';
 
 /**
- * DaemonRunner - Continuous backlog monitoring and processing
+ * Options for the DaemonRunner
+ */
+export interface DaemonOptions {
+  maxIterations?: number;
+}
+
+/**
+ * DaemonRunner - Continuous workflow monitoring and processing
  *
- * Watches the backlog folder for new story files and automatically
- * processes them through the workflow pipeline.
+ * Watches backlog, ready, and in-progress folders for story files
+ * and automatically processes them through the complete workflow pipeline
+ * until they reach done.
  */
 export class DaemonRunner {
   private sdlcRoot: string;
   private config: ReturnType<typeof loadConfig>;
+  private options: DaemonOptions;
   private isShuttingDown: boolean = false;
   private currentProcessing: Promise<void> | null = null;
-  private processedStoryIds: Set<string> = new Set();
+  private completedStoryIds: Set<string> = new Set();  // Stories that reached done
+  private activeStoryIds: Set<string> = new Set();     // Stories currently being processed
   private processingQueue: string[] = [];
   private watcher: FSWatcher | null = null;
   private isProcessingQueue: boolean = false;
   private ctrlCCount: number = 0;
   private lastCtrlCTime: number = 0;
 
-  constructor() {
+  constructor(options: DaemonOptions = {}) {
     this.sdlcRoot = getSdlcRoot();
     this.config = loadConfig();
+    this.options = options;
   }
 
   /**
@@ -46,11 +57,15 @@ export class DaemonRunner {
     this.setupSignalHandlers();
 
     // Initialize chokidar watcher
-    // Watch the backlog directory itself (not glob) to reliably detect new files
-    const backlogDir = path.join(this.sdlcRoot, 'backlog');
+    // Watch all active workflow directories (not done)
+    const watchDirs = [
+      path.join(this.sdlcRoot, 'backlog'),
+      path.join(this.sdlcRoot, 'ready'),
+      path.join(this.sdlcRoot, 'in-progress'),
+    ];
 
     try {
-      this.watcher = chokidar.watch(backlogDir, {
+      this.watcher = chokidar.watch(watchDirs, {
         persistent: true,
         ignoreInitial: false, // Process existing files on startup
         awaitWriteFinish: {
@@ -62,7 +77,7 @@ export class DaemonRunner {
       });
 
       this.watcher.on('add', (filePath: string) => {
-        // Filter for .md files only
+        // Filter for .md files only (skip .gitkeep and other files)
         if (!filePath.endsWith('.md')) {
           return;
         }
@@ -73,7 +88,7 @@ export class DaemonRunner {
       });
       this.watcher.on('error', (error: unknown) => this.logError(error, 'File watcher error'));
 
-      console.log(c.info('👀 Watching for new stories...'));
+      console.log(c.info('👀 Watching for stories...'));
       console.log(c.dim(`   Press Ctrl+C to shutdown gracefully`));
       console.log();
 
@@ -94,8 +109,18 @@ export class DaemonRunner {
     const fileName = path.basename(filePath, '.md');
     const storyId = fileName;
 
-    // Skip if already processed in this session
-    if (this.processedStoryIds.has(storyId)) {
+    // Skip if already completed (reached done in this session)
+    if (this.completedStoryIds.has(storyId)) {
+      return;
+    }
+
+    // Skip if currently being processed (prevents duplicate processing when story moves folders)
+    if (this.activeStoryIds.has(storyId)) {
+      return;
+    }
+
+    // Skip if already in queue
+    if (this.processingQueue.some(p => path.basename(p, '.md') === storyId)) {
       return;
     }
 
@@ -128,17 +153,25 @@ export class DaemonRunner {
 
     while (this.processingQueue.length > 0 && !this.isShuttingDown) {
       const filePath = this.processingQueue.shift()!;
+      const storyId = path.basename(filePath, '.md');
+
+      // Mark as actively processing
+      this.activeStoryIds.add(storyId);
 
       try {
-        await this.processStory(filePath);
+        const completed = await this.processStory(filePath);
+
+        // Mark as completed if it reached done
+        if (completed) {
+          this.completedStoryIds.add(storyId);
+        }
       } catch (error) {
         this.logError(error, `Error processing ${filePath}`);
         // Continue processing other stories
+      } finally {
+        // Remove from active set
+        this.activeStoryIds.delete(storyId);
       }
-
-      // Mark as processed
-      const fileName = path.basename(filePath, '.md');
-      this.processedStoryIds.add(fileName);
     }
 
     this.isProcessingQueue = false;
@@ -151,45 +184,61 @@ export class DaemonRunner {
   }
 
   /**
-   * Process a single story file through the workflow
+   * Process a single story through the complete workflow until done or no more actions
+   * Returns true if story reached completion (done folder or no more actions)
    */
-  private async processStory(filePath: string): Promise<void> {
+  private async processStory(filePath: string): Promise<boolean> {
     const c = getThemedChalk(this.config);
-    const fileName = path.basename(filePath, '.md');
+    const storyId = path.basename(filePath, '.md');
 
-    this.logWorkflowStart(fileName);
+    this.logWorkflowStart(storyId);
+
+    let completed = false;
 
     // Create processing promise and store it for graceful shutdown
     this.currentProcessing = (async () => {
       try {
-        // Re-assess state to ensure we have latest actions
-        const assessment = assessState(this.sdlcRoot);
+        let iterationCount = 0;
+        const maxIterations = this.options.maxIterations ?? 100; // Safety limit
 
-        // Find actions for this specific story
-        const storyActions = assessment.recommendedActions.filter(
-          (action) => action.storyPath === filePath
-        );
+        while (iterationCount < maxIterations && !this.isShuttingDown) {
+          // Re-assess state to get current actions
+          const assessment = assessState(this.sdlcRoot);
 
-        if (storyActions.length === 0) {
-          console.log(c.dim(`   No actions needed for ${fileName}`));
-          return;
+          // Find action for this story by ID (path changes as story moves folders)
+          const storyAction = assessment.recommendedActions.find(
+            (action) => action.storyId === storyId
+          );
+
+          if (!storyAction) {
+            // No more actions - story is either done or needs manual intervention
+            completed = true;
+            break;
+          }
+
+          // Execute the action
+          await this.executeAction(storyAction);
+          iterationCount++;
+
+          console.log(c.dim(`   (${iterationCount}/${maxIterations} iterations)`));
         }
 
-        // Process only the actions for this backlog story
-        for (const action of storyActions) {
-          await this.executeAction(action);
+        if (iterationCount >= maxIterations) {
+          console.log(c.warning(`   ⚠️  Max iterations (${maxIterations}) reached for ${storyId}`));
         }
 
-        this.logWorkflowComplete(fileName, true);
+        this.logWorkflowComplete(storyId, completed);
 
       } catch (error) {
-        this.logWorkflowComplete(fileName, false);
-        this.logError(error, `Workflow failed for ${fileName}`);
+        this.logWorkflowComplete(storyId, false);
+        this.logError(error, `Workflow failed for ${storyId}`);
       }
     })();
 
     await this.currentProcessing;
     this.currentProcessing = null;
+
+    return completed;
   }
 
   /**
@@ -367,12 +416,14 @@ export class DaemonRunner {
    */
   private logStartup(): void {
     const c = getThemedChalk(this.config);
-    const watchPath = path.join(this.sdlcRoot, 'backlog');
 
     console.log(c.bold('\n🤖 AI-SDLC Daemon Mode Started'));
     console.log(c.dim('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
     console.log(c.info(`   SDLC Root: ${this.sdlcRoot}`));
-    console.log(c.info(`   Watching: ${watchPath}/*.md`));
+    console.log(c.info(`   Watching: backlog/, ready/, in-progress/`));
+    if (this.options.maxIterations) {
+      console.log(c.info(`   Max iterations: ${this.options.maxIterations}`));
+    }
     console.log(c.dim('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
   }
 
@@ -435,7 +486,7 @@ export class DaemonRunner {
 /**
  * Create and start the daemon
  */
-export async function startDaemon(): Promise<void> {
-  const daemon = new DaemonRunner();
+export async function startDaemon(options: DaemonOptions = {}): Promise<void> {
+  const daemon = new DaemonRunner(options);
   await daemon.start();
 }

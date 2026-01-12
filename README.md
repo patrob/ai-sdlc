@@ -7,14 +7,15 @@ Agent-first SDLC workflow manager using Claude Agent SDK. A Kanban-style board w
 
 ## Features
 
-- 📋 Kanban-style story management (Backlog → Ready → In Progress → Done)
-- 🤖 AI-powered agents for each workflow stage
-- 🚀 **Full SDLC automation** for individual stories with `--auto --story` (refine → research → plan → implement → review)
-- 🔄 **Resume workflows after interruption** with `--continue` flag
-- 🎨 Customizable themes (auto, light, dark, none)
-- 📊 Visual progress tracking with status flags
-- ⚡ Automatic state assessment and action recommendations
-- ♻️ Smart phase skipping (automatically skips completed phases)
+- 📋 **Kanban-style story management** (Backlog → Ready → In Progress → Done)
+- 🤖 **AI-powered agents** for each workflow stage (refine, research, plan, implement, review)
+- 🚀 **Full SDLC automation** with `--auto --story` - takes a story from idea to reviewed code
+- 🔴🟢🔵 **TDD Mode** - Optional Test-Driven Development enforcement with Red-Green-Refactor cycles
+- 🔄 **Resume workflows** after interruption with `--continue` flag
+- 👀 **Daemon mode** - Continuously watch for and process new stories with `--watch`
+- 🎨 **Customizable themes** (auto, light, dark, none)
+- 📊 **Visual progress tracking** with status flags [R][P][I][V]
+- ♻️ **Smart phase skipping** - automatically skips completed phases
 
 ## Installation
 
@@ -26,21 +27,32 @@ npm run build
 ## Quick Start
 
 ```bash
-# Initialize the .ai-sdlc folder
+# 1. Initialize the project
 ai-sdlc init
 
-# Add a new story
+# 2. Add a story to the backlog
 ai-sdlc add "Implement user authentication"
 
-# Run the workflow (process next action)
-ai-sdlc run
+# 3. View your board
+ai-sdlc status
 
-# Process all pending actions automatically
-ai-sdlc run --auto
-
-# Resume workflow after interruption
-ai-sdlc run --continue
+# 4. Run the full SDLC for a story (refine → research → plan → implement → review)
+ai-sdlc run --auto --story implement-user-authentication
 ```
+
+### Common Commands
+
+| Command | Description |
+|---------|-------------|
+| `ai-sdlc status` | View all stories in Kanban board |
+| `ai-sdlc add "title"` | Add a new story to backlog |
+| `ai-sdlc run` | Process next recommended action |
+| `ai-sdlc run --auto` | Process all pending actions |
+| `ai-sdlc run --auto --story <id>` | Full SDLC for one story |
+| `ai-sdlc run --continue` | Resume after interruption |
+| `ai-sdlc run --watch` | Daemon mode - watch for new stories |
+| `ai-sdlc details <id>` | Show story details |
+| `ai-sdlc config` | View/set configuration |
 
 ## CLI Commands
 
@@ -415,6 +427,118 @@ ai-sdlc run --auto --story my-feature --step research
 - ❌ Running just one specific phase (use `--story --step` instead)
 - ❌ Interactive workflows requiring manual review between phases
 
+## TDD Mode (Test-Driven Development)
+
+TDD mode enforces strict Test-Driven Development practices during implementation, ensuring code is developed using the Red-Green-Refactor cycle. This helps eliminate review failures caused by missing or improperly sequenced tests.
+
+### Enabling TDD Mode
+
+**Per-story** (recommended for gradual adoption):
+
+Add `tdd_enabled: true` to your story's frontmatter:
+
+```yaml
+---
+id: story-abc123
+title: Add user authentication
+status: ready
+tdd_enabled: true
+---
+```
+
+**Globally** (for all stories):
+
+Add to your `.ai-sdlc.json` config:
+
+```json
+{
+  "tdd": {
+    "enabled": true
+  }
+}
+```
+
+### How TDD Mode Works
+
+When TDD is enabled, the implementation agent follows a strict Red-Green-Refactor cycle for each acceptance criterion:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TDD Cycle (per AC)                           │
+├─────────────────────────────────────────────────────────────────┤
+│  🔴 RED      → Write failing test    → Verify test FAILS        │
+│  🟢 GREEN    → Write minimum code    → Verify test PASSES       │
+│              →                       → Verify NO regressions    │
+│  🔵 REFACTOR → Improve code quality  → Verify ALL tests pass    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Cycle enforcement:**
+1. **RED**: Agent writes a test for the next acceptance criterion, verifies it fails
+2. **GREEN**: Agent writes minimum code to pass, verifies test passes and no regressions
+3. **REFACTOR**: Agent improves code quality, verifies all tests still pass
+4. **Record**: Cycle is recorded to story frontmatter and persisted
+5. **Repeat**: Process continues until all acceptance criteria are covered
+
+### TDD Validation in Review
+
+When TDD is enabled, the review agent validates that:
+- All TDD cycles have complete RED → GREEN → REFACTOR phases
+- All tests remained green after each phase
+- No cycles were skipped or incomplete
+
+Violations generate critical review issues that must be addressed.
+
+### TDD Configuration Options
+
+```json
+{
+  "tdd": {
+    "enabled": false,
+    "strictMode": true,
+    "maxCycles": 50,
+    "requireApprovalPerCycle": false
+  }
+}
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `false` | Enable TDD mode globally (can be overridden per-story) |
+| `strictMode` | `true` | Reserved for future strict enforcement rules |
+| `maxCycles` | `50` | Maximum TDD cycles before stopping (prevents infinite loops) |
+| `requireApprovalPerCycle` | `false` | Reserved for future approval workflow |
+
+### TDD Cycle History
+
+TDD cycles are recorded in the story frontmatter for audit and debugging:
+
+```yaml
+tdd_test_history:
+  - test_name: "should authenticate valid user"
+    test_file: "src/auth/login.test.ts"
+    red_timestamp: "2024-01-15T10:00:00.000Z"
+    green_timestamp: "2024-01-15T10:05:00.000Z"
+    refactor_timestamp: "2024-01-15T10:08:00.000Z"
+    all_tests_green: true
+    cycle_number: 1
+```
+
+History is trimmed to the last 100 cycles to prevent unbounded growth.
+
+### When to Use TDD Mode
+
+**Ideal for:**
+- ✅ New feature development where test coverage is critical
+- ✅ Teams adopting TDD practices
+- ✅ Stories with clear, testable acceptance criteria
+- ✅ Reducing review failures from missing tests
+
+**Consider standard mode for:**
+- ❌ Quick fixes or hotfixes where speed is critical
+- ❌ Refactoring tasks without new functionality
+- ❌ Stories without clear testable criteria
+
 ## Daemon/Watch Mode (--watch)
 
 The `--watch` flag runs AI-SDLC in daemon mode, continuously monitoring the backlog folder for new stories and automatically processing them through the full workflow pipeline.
@@ -729,11 +853,31 @@ Configuration is stored in `.ai-sdlc.json` at the project root.
     "requireApprovalBeforePR": false,
     "autoMergeOnApproval": false
   },
+  "tdd": {
+    "enabled": false,
+    "strictMode": true,
+    "maxCycles": 50,
+    "requireApprovalPerCycle": false
+  },
   "defaultLabels": [],
   "theme": "auto",
   "settingSources": []
 }
 ```
+
+**Configuration options:**
+
+| Section | Option | Default | Description |
+|---------|--------|---------|-------------|
+| `sdlcFolder` | - | `.ai-sdlc` | Folder for story files |
+| `stageGates` | `requireApprovalBeforeImplementation` | `false` | Pause before implementation |
+| `stageGates` | `requireApprovalBeforePR` | `false` | Pause before PR creation |
+| `stageGates` | `autoMergeOnApproval` | `false` | Auto-merge approved PRs |
+| `tdd` | `enabled` | `false` | Enable TDD mode globally |
+| `tdd` | `strictMode` | `true` | Reserved for future use |
+| `tdd` | `maxCycles` | `50` | Max TDD cycles per story |
+| `tdd` | `requireApprovalPerCycle` | `false` | Reserved for future use |
+| `theme` | - | `auto` | Color theme (auto/light/dark/none) |
 
 ### Project Settings with CLAUDE.md
 

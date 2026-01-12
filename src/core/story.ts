@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
-import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config } from '../types/index.js';
+import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config, BLOCKED_DIR } from '../types/index.js';
 
 /**
  * Parse a story markdown file into a Story object
@@ -65,6 +65,66 @@ export function moveStory(story: Story, toFolder: string, sdlcRoot: string): Sto
   }
 
   return story;
+}
+
+/**
+ * Move a story to the blocked folder with reason and timestamp
+ *
+ * @param storyPath - Absolute path to the story file
+ * @param reason - Reason for blocking (e.g., "Max refinement attempts (2/2) reached")
+ */
+export function moveToBlocked(storyPath: string, reason: string): void {
+  // Security: Validate path BEFORE any file I/O operations
+  const resolvedPath = path.resolve(storyPath);
+  const storyDir = path.dirname(resolvedPath);
+  const sdlcRoot = path.dirname(storyDir);
+  const resolvedRoot = path.resolve(sdlcRoot);
+
+  // Validate that the path is within an SDLC root
+  if (!resolvedPath.startsWith(resolvedRoot)) {
+    throw new Error('Invalid story path: outside SDLC root');
+  }
+  if (!sdlcRoot.endsWith('.ai-sdlc')) {
+    throw new Error('Invalid story path: not within .ai-sdlc folder');
+  }
+
+  // Parse the story (after security validation passes)
+  const story = parseStory(storyPath);
+
+  // Calculate blocked folder path
+  const blockedFolder = path.join(sdlcRoot, BLOCKED_DIR);
+
+  // Create blocked directory if it doesn't exist
+  if (!fs.existsSync(blockedFolder)) {
+    fs.mkdirSync(blockedFolder, { recursive: true });
+  }
+
+  // Handle filename conflicts by appending timestamp
+  let filename = `${story.slug}.md`;
+  let newPath = path.join(blockedFolder, filename);
+
+  // If story already exists in blocked folder with same slug, append timestamp
+  if (fs.existsSync(newPath) && newPath !== storyPath) {
+    const timestamp = Date.now();
+    filename = `${story.slug}-${timestamp}.md`;
+    newPath = path.join(blockedFolder, filename);
+  }
+
+  // Update frontmatter
+  story.frontmatter.status = 'blocked';
+  story.frontmatter.blocked_reason = reason;
+  story.frontmatter.blocked_at = new Date().toISOString();
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+
+  // Write to new location
+  const oldPath = story.path;
+  story.path = newPath;
+  writeStory(story);
+
+  // Remove old file (only if it's different from new path)
+  if (fs.existsSync(oldPath) && oldPath !== newPath) {
+    fs.unlinkSync(oldPath);
+  }
 }
 
 /**

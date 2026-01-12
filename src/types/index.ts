@@ -1,5 +1,5 @@
 // Story types
-export type StoryStatus = 'backlog' | 'ready' | 'in-progress' | 'done';
+export type StoryStatus = 'backlog' | 'ready' | 'in-progress' | 'done' | 'blocked';
 export type StoryType = 'feature' | 'bug' | 'chore' | 'spike';
 export type EffortEstimate = 'small' | 'medium' | 'large';
 
@@ -102,6 +102,13 @@ export interface StoryFrontmatter {
   last_restart_reason?: string;
   last_restart_timestamp?: string;
   review_history?: ReviewAttempt[];
+  // Blocked tracking
+  blocked_reason?: string;
+  blocked_at?: string;
+  // TDD tracking
+  tdd_enabled?: boolean;
+  tdd_current_test?: TDDTestCycle;
+  tdd_test_history?: TDDTestCycle[];
 }
 
 export interface Story {
@@ -153,6 +160,7 @@ export interface ThemeColors {
   ready: any;
   inProgress: any;
   done: any;
+  blocked: any;
   // RPIV phase colors
   phaseRefine: any;
   phaseResearch: any;
@@ -170,6 +178,31 @@ export interface StageGateConfig {
   requireApprovalBeforeImplementation: boolean;
   requireApprovalBeforePR: boolean;
   autoMergeOnApproval: boolean;
+}
+
+/**
+ * Single test cycle in TDD process
+ */
+export interface TDDTestCycle {
+  test_name: string;
+  test_file: string;
+  red_timestamp: string;
+  green_timestamp?: string;
+  refactor_timestamp?: string;
+  test_output_red: string;
+  test_output_green?: string;
+  all_tests_green: boolean;
+  cycle_number: number;
+}
+
+/**
+ * TDD configuration for story execution
+ */
+export interface TDDConfig {
+  enabled: boolean;
+  strictMode: boolean;
+  maxCycles: number;
+  requireApprovalPerCycle: boolean;
 }
 
 /**
@@ -256,6 +289,11 @@ export interface Config {
    * Controls continuous backlog monitoring.
    */
   daemon?: DaemonConfig;
+  /**
+   * TDD (Test-Driven Development) configuration.
+   * Controls test-first implementation workflow.
+   */
+  tdd?: TDDConfig;
 }
 
 // Agent types
@@ -291,8 +329,11 @@ export interface ReworkContext {
 export const KANBAN_FOLDERS = ['backlog', 'ready', 'in-progress', 'done'] as const;
 export type KanbanFolder = typeof KANBAN_FOLDERS[number];
 
-// Map status to folder
-export const STATUS_TO_FOLDER: Record<StoryStatus, KanbanFolder> = {
+// Blocked folder (separate from kanban workflow)
+export const BLOCKED_DIR = 'blocked';
+
+// Map status to folder (only for kanban statuses, not 'blocked')
+export const STATUS_TO_FOLDER: Record<Exclude<StoryStatus, 'blocked'>, KanbanFolder> = {
   'backlog': 'backlog',
   'ready': 'ready',
   'in-progress': 'in-progress',

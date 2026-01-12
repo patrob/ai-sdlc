@@ -82,35 +82,53 @@ describe('DaemonRunner', () => {
       const daemonAny = daemon as any;
       expect(daemonAny.isShuttingDown).toBe(false);
       expect(daemonAny.currentProcessing).toBe(null);
-      expect(daemonAny.processedStoryIds).toBeInstanceOf(Set);
-      expect(daemonAny.processedStoryIds.size).toBe(0);
+      expect(daemonAny.completedStoryIds).toBeInstanceOf(Set);
+      expect(daemonAny.completedStoryIds.size).toBe(0);
+      expect(daemonAny.activeStoryIds).toBeInstanceOf(Set);
+      expect(daemonAny.activeStoryIds.size).toBe(0);
       expect(daemonAny.processingQueue).toBeInstanceOf(Array);
       expect(daemonAny.processingQueue.length).toBe(0);
     });
   });
 
   describe('story tracking', () => {
-    it('should track processed story IDs', () => {
+    it('should track completed story IDs', () => {
       const daemonAny = daemon as any;
       const testId = 'test-story-123';
 
-      expect(daemonAny.processedStoryIds.has(testId)).toBe(false);
+      expect(daemonAny.completedStoryIds.has(testId)).toBe(false);
 
-      daemonAny.processedStoryIds.add(testId);
+      daemonAny.completedStoryIds.add(testId);
 
-      expect(daemonAny.processedStoryIds.has(testId)).toBe(true);
-      expect(daemonAny.processedStoryIds.size).toBe(1);
+      expect(daemonAny.completedStoryIds.has(testId)).toBe(true);
+      expect(daemonAny.completedStoryIds.size).toBe(1);
+    });
+
+    it('should track active story IDs', () => {
+      const daemonAny = daemon as any;
+      const testId = 'test-story-123';
+
+      expect(daemonAny.activeStoryIds.has(testId)).toBe(false);
+
+      daemonAny.activeStoryIds.add(testId);
+
+      expect(daemonAny.activeStoryIds.has(testId)).toBe(true);
+      expect(daemonAny.activeStoryIds.size).toBe(1);
+
+      // Simulate story being removed from active set when processing completes
+      daemonAny.activeStoryIds.delete(testId);
+      expect(daemonAny.activeStoryIds.has(testId)).toBe(false);
     });
 
     it('should prevent duplicate story IDs', () => {
       const daemonAny = daemon as any;
       const testId = 'test-story-123';
 
-      daemonAny.processedStoryIds.add(testId);
-      daemonAny.processedStoryIds.add(testId);
-      daemonAny.processedStoryIds.add(testId);
+      daemonAny.completedStoryIds.add(testId);
+      daemonAny.completedStoryIds.add(testId);
+      daemonAny.completedStoryIds.add(testId);
 
-      expect(daemonAny.processedStoryIds.size).toBe(1);
+      expect(daemonAny.completedStoryIds.size).toBe(1);
     });
   });
 

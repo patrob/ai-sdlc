@@ -234,7 +234,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
   if (options.watch) {
     console.log(c.info('🚀 Starting daemon mode...'));
     const { startDaemon } = await import('./daemon.js');
-    await startDaemon();
+    await startDaemon({ maxIterations: maxIterationsOverride });
     return; // Daemon runs indefinitely
   }
 

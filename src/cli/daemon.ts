@@ -45,6 +45,7 @@ export class DaemonRunner {
   private processingQueue: QueuedStory[] = [];
   private watcher: FSWatcher | null = null;
   private isProcessingQueue: boolean = false;
+  private hasLoggedIdle: boolean = false;  // Prevent repeated "Queue empty" messages
   private ctrlCCount: number = 0;
   private lastCtrlCTime: number = 0;
 
@@ -148,6 +149,9 @@ export class DaemonRunner {
 
     this.logFileDetected(filePath);
 
+    // Reset idle flag when new work arrives
+    this.hasLoggedIdle = false;
+
     // Add to queue with both path and id
     this.processingQueue.push({ path: filePath, id: storyId });
 
@@ -191,10 +195,11 @@ export class DaemonRunner {
 
     this.isProcessingQueue = false;
 
-    // Log idle state if queue is empty
-    if (this.processingQueue.length === 0 && !this.isShuttingDown) {
+    // Log idle state only once when transitioning to idle
+    if (this.processingQueue.length === 0 && !this.isShuttingDown && !this.hasLoggedIdle) {
       const c = getThemedChalk(this.config);
       console.log(c.dim('\n👀 Queue empty, waiting for new stories...'));
+      this.hasLoggedIdle = true;
     }
   }
 

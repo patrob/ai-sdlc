@@ -71,6 +71,7 @@ NEVER mark implementation as complete until:
 ## Testing (Critical Rules)
 - **Export testable functions**: Never recreate production logic in tests. Export functions from production code and import them in tests
 - **Integration tests must test integration**: Tests in `tests/integration/` must mock dependencies and verify actual execution flows (e.g., mock `ora`, call `executeAction()`, verify spinner methods called). Tests that only check types/return values are unit tests - name them accordingly
+- **Mock dates in tests**: When testing code that uses `Date` or timestamps, always use mocked dates (e.g., `vi.useFakeTimers()`, `vi.setSystemTime()`). Each test should have its own isolated mocked date to prevent timing-related flakiness and ensure deterministic results
 
 ## Security Patterns
 - Apply validation/sanitization at ALL display/output points, not just one function

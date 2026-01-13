@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { createStory, updateStoryStatus, parseStory, writeStory, unblockStory, appendReviewHistory } from '../../src/core/story.js';
-import { assessState, findStoryById } from '../../src/core/kanban.js';
+import { createStory, updateStoryStatus, parseStory, writeStory, unblockStory, appendReviewHistory, findStoryById } from '../../src/core/story.js';
+import { assessState } from '../../src/core/kanban.js';
 import { BLOCKED_DIR, STORIES_FOLDER, ReviewDecision, ReviewSeverity } from '../../src/types/index.js';
 
 describe('Blocked Stories Integration', () => {

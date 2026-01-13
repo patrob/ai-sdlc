@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { getSdlcRoot, loadConfig, isStageGateEnabled } from '../core/config.js';
 import { assessState, kanbanExists } from '../core/kanban.js';
-import { parseStory, resetRPIVCycle, markStoryComplete, updateStoryStatus, isAtMaxRetries } from '../core/story.js';
+import { parseStory, resetRPIVCycle, markStoryComplete, updateStoryStatus, isAtMaxRetries, getStory } from '../core/story.js';
 import { Action, StateAssessment, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
 import { runRefinementAgent } from '../agents/refinement.js';
 import { runResearchAgent } from '../agents/research.js';
@@ -163,24 +163,40 @@ export class WorkflowRunner {
   private async executeAction(action: Action) {
     const config = loadConfig();
 
+    // Resolve story by ID to get current path (handles moves between folders)
+    let currentStoryPath: string;
+    try {
+      const story = getStory(this.sdlcRoot, action.storyId);
+      currentStoryPath = story.path;
+    } catch (error) {
+      const c = getThemedChalk(config);
+      console.log(c.error(`Error: Cannot execute action "${action.type}"`));
+      console.log(c.dim(`  Story ID: ${action.storyId}`));
+      console.log(c.dim(`  Original path: ${action.storyPath}`));
+      if (error instanceof Error) {
+        console.log(c.dim(`  ${error.message}`));
+      }
+      return { success: false, error: error instanceof Error ? error.message : 'Story not found', changesMade: [] };
+    }
+
     switch (action.type) {
       case 'refine':
-        return runRefinementAgent(action.storyPath, this.sdlcRoot);
+        return runRefinementAgent(currentStoryPath, this.sdlcRoot);
 
       case 'research':
-        return runResearchAgent(action.storyPath, this.sdlcRoot);
+        return runResearchAgent(currentStoryPath, this.sdlcRoot);
 
       case 'plan':
-        return runPlanningAgent(action.storyPath, this.sdlcRoot);
+        return runPlanningAgent(currentStoryPath, this.sdlcRoot);
 
       case 'implement':
-        return runImplementationAgent(action.storyPath, this.sdlcRoot);
+        return runImplementationAgent(currentStoryPath, this.sdlcRoot);
 
       case 'review': {
-        const reviewResult = await runReviewAgent(action.storyPath, this.sdlcRoot);
+        const reviewResult = await runReviewAgent(currentStoryPath, this.sdlcRoot);
         // Handle review decision (auto-complete or restart RPIV)
         if (reviewResult.success) {
-          await this.handleReviewDecision(action.storyPath, reviewResult);
+          await this.handleReviewDecision(currentStoryPath, reviewResult);
         }
         return reviewResult;
       }
@@ -193,7 +209,7 @@ export class WorkflowRunner {
         }
 
         // Run rework agent to prepare the story for refinement
-        const reworkResult = await runReworkAgent(action.storyPath, this.sdlcRoot, reworkContext);
+        const reworkResult = await runReworkAgent(currentStoryPath, this.sdlcRoot, reworkContext);
 
         // If rework setup succeeded, automatically trigger the target phase agent
         if (reworkResult.success) {
@@ -201,17 +217,17 @@ export class WorkflowRunner {
           console.log(c.info(`\n  ↳ Triggering ${reworkContext.targetPhase} agent for refinement...`));
 
           // Package the review feedback as context for the agent
-          const story = parseStory(action.storyPath);
+          const story = parseStory(currentStoryPath);
           const agentReworkContext = packageReworkContext(story, reworkContext.reviewFeedback);
 
           // Execute the appropriate agent based on target phase, passing the rework context
           switch (reworkContext.targetPhase) {
             case 'research':
-              return runResearchAgent(action.storyPath, this.sdlcRoot, { reworkContext: agentReworkContext });
+              return runResearchAgent(currentStoryPath, this.sdlcRoot, { reworkContext: agentReworkContext });
             case 'plan':
-              return runPlanningAgent(action.storyPath, this.sdlcRoot, { reworkContext: agentReworkContext });
+              return runPlanningAgent(currentStoryPath, this.sdlcRoot, { reworkContext: agentReworkContext });
             case 'implement':
-              return runImplementationAgent(action.storyPath, this.sdlcRoot, { reworkContext: agentReworkContext });
+              return runImplementationAgent(currentStoryPath, this.sdlcRoot, { reworkContext: agentReworkContext });
             default:
               throw new Error(`Unknown target phase: ${reworkContext.targetPhase}`);
           }
@@ -221,7 +237,7 @@ export class WorkflowRunner {
       }
 
       case 'create_pr':
-        return createPullRequest(action.storyPath, this.sdlcRoot);
+        return createPullRequest(currentStoryPath, this.sdlcRoot);
 
       default:
         throw new Error(`Unknown action type: ${action.type}`);

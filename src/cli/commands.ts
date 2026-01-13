@@ -3,8 +3,8 @@ import ora from 'ora';
 import fs from 'fs';
 import path from 'path';
 import { getSdlcRoot, loadConfig, initConfig } from '../core/config.js';
-import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoryById } from '../core/kanban.js';
-import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory } from '../core/story.js';
+import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug } from '../core/kanban.js';
+import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById } from '../core/story.js';
 import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
 import {
@@ -674,27 +674,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
   }
 }
 
-/**
- * Validate and resolve the story path for an action.
- * If the path doesn't exist, attempts to find the story by ID.
- *
- * @returns The resolved story path, or null if story cannot be found
- */
-function resolveStoryPath(action: Action, sdlcRoot: string): string | null {
-  // Check if the current path exists
-  if (fs.existsSync(action.storyPath)) {
-    return action.storyPath;
-  }
-
-  // Path is stale - try to find by story ID
-  const story = findStoryById(sdlcRoot, action.storyId);
-  if (story) {
-    return story.path;
-  }
-
-  // Story not found by ID either
-  return null;
-}
+// resolveStoryPath() has been removed - use getStory() instead (centralized lookup)
 
 /**
  * Result from executing an action
@@ -713,13 +693,18 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
   const config = loadConfig();
   const c = getThemedChalk(config);
 
-  // Validate and resolve the story path before executing
-  const resolvedPath = resolveStoryPath(action, sdlcRoot);
-  if (!resolvedPath) {
+  // Resolve story by ID to get current path (handles moves between folders)
+  let resolvedPath: string;
+  try {
+    const story = getStory(sdlcRoot, action.storyId);
+    resolvedPath = story.path;
+  } catch (error) {
     console.log(c.error(`Error: Story not found for action "${action.type}"`));
     console.log(c.dim(`  Story ID: ${action.storyId}`));
     console.log(c.dim(`  Original path: ${action.storyPath}`));
-    console.log(c.dim('  The story file may have been moved or deleted.'));
+    if (error instanceof Error) {
+      console.log(c.dim(`  ${error.message}`));
+    }
     return { success: false };
   }
 

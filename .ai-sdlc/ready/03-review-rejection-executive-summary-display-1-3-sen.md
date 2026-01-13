@@ -3,7 +3,7 @@ id: story-mk8ro046-pr6z
 title: >-
   Review rejection executive summary - Display 1-3 sentence summary of why
   review was rejected in terminal UI
-priority: 12
+priority: 3
 status: ready
 type: feature
 created: '2026-01-10'

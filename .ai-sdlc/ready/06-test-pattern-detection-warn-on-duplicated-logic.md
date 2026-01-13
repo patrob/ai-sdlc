@@ -1,7 +1,7 @@
 ---
 id: story-test-pattern-001
 title: Test pattern detection - warn when tests duplicate production logic
-priority: 10
+priority: 6
 status: ready
 type: feature
 created: '2026-01-10'

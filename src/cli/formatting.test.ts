@@ -170,7 +170,7 @@ describe('formatting utilities', () => {
   describe('getColumnWidths', () => {
     it('should return column widths for standard terminal (120 cols)', () => {
       const widths = getColumnWidths(120);
-      expect(widths.id).toBe(22);
+      expect(widths.id).toBe(10); // S-0001 format (6 chars) + padding
       expect(widths.status).toBe(14);
       expect(widths.labels).toBe(30);
       expect(widths.flags).toBe(8);

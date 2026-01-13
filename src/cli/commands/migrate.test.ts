@@ -250,7 +250,7 @@ reviews_complete: false
       expect(result.warnings.length).toBeGreaterThan(0);
       expect(result.warnings.some(w => w.includes('has no ID'))).toBe(true);
       expect(result.migrations).toHaveLength(1);
-      expect(result.migrations[0].storyId).toMatch(/^story-[a-z0-9-]+$/);
+      expect(result.migrations[0].storyId).toMatch(/^S-\d{4}$/); // New sequential ID format
     });
 
     it('should preserve non-.md files and warn', async () => {

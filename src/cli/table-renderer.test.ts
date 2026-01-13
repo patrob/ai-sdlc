@@ -24,13 +24,16 @@ const mockThemedChalk = {
   done: (str: string) => str,
 };
 
-// Helper to create mock stories
+// Helper to create mock stories with sequential IDs
+let mockStoryCounter = 0;
 function createMockStory(overrides: Partial<Story['frontmatter']> = {}): Story {
+  mockStoryCounter++;
+  const defaultId = `S-${String(mockStoryCounter).padStart(4, '0')}`;
   return {
     path: '/path/to/story.md',
     slug: 'test-story',
     frontmatter: {
-      id: 'story-test-123',
+      id: overrides.id ?? defaultId,
       title: 'Test Story',
       priority: 1,
       status: 'backlog',
@@ -53,6 +56,7 @@ describe('table-renderer', () => {
   beforeEach(() => {
     originalColumns = process.stdout.columns;
     process.stdout.columns = 120; // Default test width
+    mockStoryCounter = 0; // Reset counter between tests
   });
 
   afterEach(() => {
@@ -84,17 +88,17 @@ describe('table-renderer', () => {
 
     it('should render table with multiple stories', () => {
       const stories = [
-        createMockStory({ id: 'story-1', title: 'Story One' }),
-        createMockStory({ id: 'story-2', title: 'Story Two' }),
-        createMockStory({ id: 'story-3', title: 'Story Three' }),
+        createMockStory({ id: 'S-0001', title: 'Story One' }),
+        createMockStory({ id: 'S-0002', title: 'Story Two' }),
+        createMockStory({ id: 'S-0003', title: 'Story Three' }),
       ];
 
       const result = renderStoryTable(stories, mockThemedChalk);
 
       // All stories should be present
-      expect(result).toContain('story-1');
-      expect(result).toContain('story-2');
-      expect(result).toContain('story-3');
+      expect(result).toContain('S-0001');
+      expect(result).toContain('S-0002');
+      expect(result).toContain('S-0003');
       expect(result).toContain('Story One');
       expect(result).toContain('Story Two');
       expect(result).toContain('Story Three');
@@ -209,8 +213,8 @@ describe('table-renderer', () => {
 
     it('should separate stories with dividers', () => {
       const stories = [
-        createMockStory({ id: 'story-1' }),
-        createMockStory({ id: 'story-2' }),
+        createMockStory({ id: 'S-0001' }),
+        createMockStory({ id: 'S-0002' }),
       ];
 
       const result = renderCompactView(stories, mockThemedChalk);
@@ -305,14 +309,14 @@ describe('table-renderer', () => {
     it('should render realistic story board', () => {
       const stories = [
         createMockStory({
-          id: 'story-mk68fjh7-fvbt',
+          id: 'S-0100',
           title: 'Improve status output: add story ID column, truncate long text, and format as uniform table view',
           status: 'backlog',
           labels: ['enhancement', 'ui', 'cli', 'status-command'],
           research_complete: true,
         }),
         createMockStory({
-          id: 'story-mk6a2jk9-xyzf',
+          id: 'S-0101',
           title: 'Add user authentication',
           status: 'in-progress',
           labels: ['feature', 'security'],
@@ -321,7 +325,7 @@ describe('table-renderer', () => {
           implementation_complete: true,
         }),
         createMockStory({
-          id: 'story-mk6b3lm1-abcd',
+          id: 'S-0102',
           title: 'Fix bug in payment processing',
           status: 'ready',
           labels: ['bug', 'critical'],
@@ -334,9 +338,9 @@ describe('table-renderer', () => {
       const result = renderStoryTable(stories, mockThemedChalk);
 
       // Verify all stories are present
-      expect(result).toContain('story-mk68fjh7-fvbt');
-      expect(result).toContain('story-mk6a2jk9-xyzf');
-      expect(result).toContain('story-mk6b3lm1-abcd');
+      expect(result).toContain('S-0100');
+      expect(result).toContain('S-0101');
+      expect(result).toContain('S-0102');
 
       // Verify table structure
       expect(result).toContain('Story ID');
@@ -352,7 +356,7 @@ describe('table-renderer', () => {
     it('should handle 100+ stories without errors', () => {
       const stories = Array.from({ length: 100 }, (_, i) =>
         createMockStory({
-          id: `story-${i}`,
+          id: `S-${String(i).padStart(4, '0')}`,
           title: `Story number ${i}`,
         })
       );
@@ -361,14 +365,14 @@ describe('table-renderer', () => {
 
       // Should render without errors
       expect(result).toBeDefined();
-      expect(result).toContain('story-0');
-      expect(result).toContain('story-99');
+      expect(result).toContain('S-0000');
+      expect(result).toContain('S-0099');
     });
 
     it('should render 100+ stories in under 1 second', () => {
       const stories = Array.from({ length: 100 }, (_, i) =>
         createMockStory({
-          id: `story-perf-test-${i}`,
+          id: `S-${String(i).padStart(4, '0')}`,
           title: `Performance test story number ${i} with some descriptive text that could be truncated`,
           labels: ['performance', 'test', 'large-dataset'],
           status: i % 4 === 0 ? 'backlog' : i % 4 === 1 ? 'ready' : i % 4 === 2 ? 'in-progress' : 'done',
@@ -381,8 +385,8 @@ describe('table-renderer', () => {
 
       expect(duration).toBeLessThan(1000); // Must complete in < 1 second
       expect(result).toContain('Story ID');
-      expect(result).toContain('story-perf-test-0');
-      expect(result).toContain('story-perf-test-99');
+      expect(result).toContain('S-0000');
+      expect(result).toContain('S-0099');
       expect(result.split('\n').length).toBeGreaterThan(100); // At least 100 data rows
     });
 
@@ -483,19 +487,19 @@ describe('table-renderer', () => {
     describe('formatKanbanStoryEntry', () => {
       it('should format story with ID and title', () => {
         const story = createMockStory({
-          id: 'story-123',
+          id: 'S-0123',
           title: 'Test Story',
         });
 
         const result = formatKanbanStoryEntry(story, 30, mockThemedChalk);
 
-        expect(result).toContain('story-123');
+        expect(result).toContain('S-0123');
         expect(result).toContain('Test Story');
       });
 
       it('should include flags when present', () => {
         const story = createMockStory({
-          id: 'story-456',
+          id: 'S-0456',
           title: 'Story with flags',
           research_complete: true,
           plan_complete: true,
@@ -508,7 +512,7 @@ describe('table-renderer', () => {
 
       it('should truncate long titles within column width', () => {
         const story = createMockStory({
-          id: 'story-789',
+          id: 'S-0789',
           title: 'This is a very long story title that should be truncated to fit within the column width',
         });
 
@@ -526,7 +530,7 @@ describe('table-renderer', () => {
 
       it('should handle story with all flags', () => {
         const story = createMockStory({
-          id: 'story-abc',
+          id: 'S-1000',
           title: 'Complete story',
           research_complete: true,
           plan_complete: true,
@@ -541,7 +545,7 @@ describe('table-renderer', () => {
 
       it('should handle very narrow column width', () => {
         const story = createMockStory({
-          id: 'story-narrow',
+          id: 'S-0010',
           title: 'Test',
         });
 
@@ -557,22 +561,22 @@ describe('table-renderer', () => {
           {
             name: 'BACKLOG',
             color: mockThemedChalk.backlog,
-            stories: [createMockStory({ id: 'story-1', title: 'Story 1' })],
+            stories: [createMockStory({ id: 'S-0001', title: 'Story 1' })],
           },
           {
             name: 'READY',
             color: mockThemedChalk.ready,
-            stories: [createMockStory({ id: 'story-2', title: 'Story 2' })],
+            stories: [createMockStory({ id: 'S-0002', title: 'Story 2' })],
           },
           {
             name: 'IN-PROGRESS',
             color: mockThemedChalk.inProgress,
-            stories: [createMockStory({ id: 'story-3', title: 'Story 3' })],
+            stories: [createMockStory({ id: 'S-0003', title: 'Story 3' })],
           },
           {
             name: 'DONE',
             color: mockThemedChalk.done,
-            stories: [createMockStory({ id: 'story-4', title: 'Story 4' })],
+            stories: [createMockStory({ id: 'S-0004', title: 'Story 4' })],
           },
         ];
 
@@ -586,10 +590,10 @@ describe('table-renderer', () => {
         expect(result).toContain('DONE');
 
         // Should contain stories
-        expect(result).toContain('story-1');
-        expect(result).toContain('story-2');
-        expect(result).toContain('story-3');
-        expect(result).toContain('story-4');
+        expect(result).toContain('S-0001');
+        expect(result).toContain('S-0002');
+        expect(result).toContain('S-0003');
+        expect(result).toContain('S-0004');
 
         // Should contain column separators
         expect(result).toContain('│');
@@ -632,15 +636,15 @@ describe('table-renderer', () => {
             name: 'BACKLOG',
             color: mockThemedChalk.backlog,
             stories: [
-              createMockStory({ id: 'story-1' }),
-              createMockStory({ id: 'story-2' }),
-              createMockStory({ id: 'story-3' }),
+              createMockStory({ id: 'S-0001' }),
+              createMockStory({ id: 'S-0002' }),
+              createMockStory({ id: 'S-0003' }),
             ],
           },
           {
             name: 'READY',
             color: mockThemedChalk.ready,
-            stories: [createMockStory({ id: 'story-4' })],
+            stories: [createMockStory({ id: 'S-0004' })],
           },
           {
             name: 'IN-PROGRESS',
@@ -651,8 +655,8 @@ describe('table-renderer', () => {
             name: 'DONE',
             color: mockThemedChalk.done,
             stories: [
-              createMockStory({ id: 'story-5' }),
-              createMockStory({ id: 'story-6' }),
+              createMockStory({ id: 'S-0005' }),
+              createMockStory({ id: 'S-0006' }),
             ],
           },
         ];
@@ -663,10 +667,10 @@ describe('table-renderer', () => {
         // Should render without errors
         expect(result).toBeDefined();
         // All stories should be present
-        expect(result).toContain('story-1');
-        expect(result).toContain('story-4');
-        expect(result).toContain('story-5');
-        expect(result).toContain('story-6');
+        expect(result).toContain('S-0001');
+        expect(result).toContain('S-0004');
+        expect(result).toContain('S-0005');
+        expect(result).toContain('S-0006');
       });
 
       it('should display story counts in headers', () => {

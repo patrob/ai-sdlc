@@ -338,6 +338,71 @@ describe('Review Agent - Pre-check Optimization', () => {
     });
   });
 
+  describe('LLM response parsing', () => {
+    it('should handle null line values in LLM response gracefully', async () => {
+      // This test reproduces the ZodError: "Invalid input: expected number, received null"
+      // at path ["issues", 3, "line"] when the LLM returns null for optional fields
+      const mockSpawn = vi.mocked(spawn);
+      mockSpawn.mockImplementation((() => {
+        const mockProcess: any = {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn((event, callback) => {
+            if (event === 'close') {
+              setTimeout(() => callback(0), 10); // Success
+            }
+          }),
+        };
+        return mockProcess;
+      }) as any);
+
+      // Mock LLM to return JSON with null line values (as observed in real usage)
+      const llmResponseWithNullLine = JSON.stringify({
+        passed: false,
+        issues: [
+          {
+            severity: 'major',
+            category: 'code_quality',
+            description: 'Missing error handling',
+            file: 'src/index.ts',
+            line: 42,
+            suggestedFix: 'Add try-catch',
+          },
+          {
+            severity: 'minor',
+            category: 'architecture',
+            description: 'Consider extracting this logic',
+            file: null, // null instead of undefined
+            line: null, // null instead of undefined - this caused the ZodError
+            suggestedFix: null,
+          },
+          {
+            severity: 'major',
+            category: 'security',
+            description: 'Potential XSS vulnerability',
+            file: 'src/utils.ts',
+            line: null, // Another null line
+            suggestedFix: 'Sanitize user input',
+          },
+        ],
+      });
+
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue(llmResponseWithNullLine);
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Should NOT throw ZodError - should handle gracefully
+      expect(result.success).toBe(true);
+      // Should have parsed the issues correctly
+      expect(result.issues.length).toBeGreaterThan(0);
+      // Null values should be converted to undefined (or handled gracefully)
+      const issueWithNullLine = result.issues.find(i => i.category === 'architecture');
+      // The issue should exist and line should be undefined (not null)
+      expect(issueWithNullLine).toBeDefined();
+      expect(issueWithNullLine?.line).toBeUndefined();
+    });
+  });
+
   describe('edge cases', () => {
     it('should skip verification if no testCommand configured', async () => {
       const configWithoutTests = { ...mockConfig, testCommand: undefined };

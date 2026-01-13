@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
 import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder, ReviewDecision } from '../types/index.js';
-import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt, moveToBlocked } from './story.js';
+import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt, moveToBlocked, getEffectiveMaxRetries } from './story.js';
 import { loadConfig } from './config.js';
 import { determineTargetPhase } from '../agents/rework.js';
 
@@ -158,16 +158,33 @@ export function assessState(sdlcRoot: string): StateAssessment {
     const atMaxRetries = isAtMaxRetries(story, config);
 
     if (atMaxRetries) {
-      // Story blocked by max retries - flag for manual intervention
+      // Circuit breaker: max review retries reached - move to blocked
       const retryCount = story.frontmatter.retry_count || 0;
-      recommendedActions.push({
-        type: 'review', // Keep as review but with special reason
-        storyId: story.frontmatter.id,
-        storyPath: story.path,
-        reason: `⚠️  Story "${story.frontmatter.title}" requires manual intervention (max retries: ${retryCount})`,
-        priority: story.frontmatter.priority + 10000, // Very low priority to not auto-execute
-        context: { blockedByMaxRetries: true },
-      });
+      const maxRetries = getEffectiveMaxRetries(story, config);
+      const latestReview = getLatestReviewAttempt(story);
+      const lastFailureSummary = latestReview?.feedback.substring(0, 100) || 'unknown';
+      const reason = `Max review retries (${retryCount}/${maxRetries}) reached - last failure: ${lastFailureSummary}`;
+
+      try {
+        // Move story to blocked folder
+        moveToBlocked(story.path, reason);
+
+        // Log blocking action
+        console.log(`Story ${story.frontmatter.id} blocked: ${reason}`);
+      } catch (error) {
+        // Log error but don't crash daemon
+        console.error(`Failed to move story ${story.frontmatter.id} to blocked:`, error);
+
+        // Fall back to high-priority action as before
+        recommendedActions.push({
+          type: 'review',
+          storyId: story.frontmatter.id,
+          storyPath: story.path,
+          reason: `⚠️  Story "${story.frontmatter.title}" requires manual intervention (max retries: ${retryCount})`,
+          priority: story.frontmatter.priority + 10000,
+          context: { blockedByMaxRetries: true },
+        });
+      }
     } else if (!story.frontmatter.implementation_complete) {
       recommendedActions.push({
         type: 'implement',

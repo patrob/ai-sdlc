@@ -106,9 +106,11 @@ const ReviewIssueSchema = z.object({
   severity: z.enum(['blocker', 'critical', 'major', 'minor']),
   category: z.string().max(100),
   description: z.string().max(5000),
-  file: z.string().optional(),
-  line: z.number().int().positive().optional(),
-  suggestedFix: z.string().max(2000).optional(),
+  // Use .nullish() to accept both null and undefined, then transform to undefined for consistency
+  // This handles LLM responses that return {"line": null} instead of omitting the field
+  file: z.string().nullish().transform(v => v ?? undefined),
+  line: z.number().int().positive().nullish().transform(v => v ?? undefined),
+  suggestedFix: z.string().max(2000).nullish().transform(v => v ?? undefined),
 });
 
 const ReviewResponseSchema = z.object({

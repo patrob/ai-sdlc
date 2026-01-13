@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 import { assessState } from '../../src/core/kanban.js';
 import { parseStory } from '../../src/core/story.js';
-import { BLOCKED_DIR } from '../../src/types/index.js';
+import { BLOCKED_DIR, STORIES_FOLDER } from '../../src/types/index.js';
 
 describe('Kanban - Block on Max Review Retries Integration', () => {
   let testDir: string;
@@ -17,10 +17,7 @@ describe('Kanban - Block on Max Review Retries Integration', () => {
 
     // Create SDLC folder structure
     fs.mkdirSync(sdlcRoot, { recursive: true });
-    fs.mkdirSync(path.join(sdlcRoot, 'backlog'));
-    fs.mkdirSync(path.join(sdlcRoot, 'ready'));
-    fs.mkdirSync(path.join(sdlcRoot, 'in-progress'));
-    fs.mkdirSync(path.join(sdlcRoot, 'done'));
+    fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER), { recursive: true });
 
     // Use fake timers for deterministic timestamps
     vi.useFakeTimers();
@@ -71,9 +68,10 @@ describe('Kanban - Block on Max Review Retries Integration', () => {
     maxRetries: number,
     reviewFeedback: string = 'Security vulnerabilities detected in authentication flow'
   ): string {
-    const inProgressPath = path.join(sdlcRoot, 'in-progress');
-    const filename = `01-${slug}.md`;
-    const filePath = path.join(inProgressPath, filename);
+    const storyId = slug;
+    const storyFolder = path.join(sdlcRoot, STORIES_FOLDER, storyId);
+    fs.mkdirSync(storyFolder, { recursive: true });
+    const filePath = path.join(storyFolder, 'story.md');
 
     // Create review history with multiple rejections
     const reviewHistory = [];
@@ -96,7 +94,8 @@ describe('Kanban - Block on Max Review Retries Integration', () => {
     const content = `---
 id: ${slug}
 title: Test Story - ${slug}
-priority: 1
+slug: ${slug}
+priority: 10
 status: in-progress
 type: feature
 created: '2024-01-01T00:00:00Z'
@@ -152,22 +151,18 @@ Some implementation details here.
     assessState(sdlcRoot);
 
     // Assert
-    // Story should be moved from in-progress
-    expect(fs.existsSync(originalPath)).toBe(false);
+    // Story file should still exist (not moved in new architecture)
+    expect(fs.existsSync(originalPath)).toBe(true);
 
-    // Story should exist in blocked folder
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-    expect(fs.existsSync(blockedPath)).toBe(true);
-
-    const blockedFiles = fs.readdirSync(blockedPath);
-    expect(blockedFiles.length).toBe(1);
-    expect(blockedFiles[0]).toContain('max-retries-story');
+    // Verify story status was updated to 'blocked'
+    const story = parseStory(originalPath);
+    expect(story.frontmatter.status).toBe('blocked');
   });
 
   it('should preserve retry_count in frontmatter after blocking', () => {
     // Arrange
     createConfigWithMaxRetries(5);
-    createStoryWithReviewRetries(
+    const storyPath = createStoryWithReviewRetries(
       'preserve-count-story',
       5,
       5,
@@ -178,20 +173,17 @@ Some implementation details here.
     assessState(sdlcRoot);
 
     // Assert
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-    const blockedFiles = fs.readdirSync(blockedPath);
-    const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
-
-    const blockedStory = parseStory(blockedStoryPath);
+    const blockedStory = parseStory(storyPath);
 
     // Verify retry_count is preserved
     expect(blockedStory.frontmatter.retry_count).toBe(5);
+    expect(blockedStory.frontmatter.status).toBe('blocked');
   });
 
   it('should set correct frontmatter fields after blocking', () => {
     // Arrange
     createConfigWithMaxRetries(2);
-    createStoryWithReviewRetries(
+    const storyPath = createStoryWithReviewRetries(
       'frontmatter-check',
       2,
       2,
@@ -202,11 +194,7 @@ Some implementation details here.
     assessState(sdlcRoot);
 
     // Assert
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-    const blockedFiles = fs.readdirSync(blockedPath);
-    const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
-
-    const blockedStory = parseStory(blockedStoryPath);
+    const blockedStory = parseStory(storyPath);
 
     // Verify status is 'blocked'
     expect(blockedStory.frontmatter.status).toBe('blocked');
@@ -234,7 +222,7 @@ Some implementation details here.
       'improper input validation, missing authentication checks, and insufficient error handling. ' +
       'All of these issues must be addressed before the code can be approved.';
 
-    createStoryWithReviewRetries(
+    const storyPath = createStoryWithReviewRetries(
       'long-feedback-story',
       3,
       3,
@@ -245,11 +233,7 @@ Some implementation details here.
     assessState(sdlcRoot);
 
     // Assert
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-    const blockedFiles = fs.readdirSync(blockedPath);
-    const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
-
-    const blockedStory = parseStory(blockedStoryPath);
+    const blockedStory = parseStory(storyPath);
 
     // Verify feedback is truncated to 100 chars
     expect(blockedStory.frontmatter.blocked_reason).toContain('last failure:');
@@ -271,14 +255,16 @@ Some implementation details here.
     createConfigWithMaxRetries(1);
 
     // Create story without review_history
-    const inProgressPath = path.join(sdlcRoot, 'in-progress');
-    const filename = '01-no-history.md';
-    const filePath = path.join(inProgressPath, filename);
+    const storyId = 'no-history';
+    const storyFolder = path.join(sdlcRoot, STORIES_FOLDER, storyId);
+    fs.mkdirSync(storyFolder, { recursive: true });
+    const filePath = path.join(storyFolder, 'story.md');
 
     const content = `---
 id: no-history
 title: Story Without Review History
-priority: 1
+slug: no-history
+priority: 10
 status: in-progress
 type: feature
 created: '2024-01-01T00:00:00Z'
@@ -303,11 +289,7 @@ Implementation content.
     assessState(sdlcRoot);
 
     // Assert
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-    const blockedFiles = fs.readdirSync(blockedPath);
-    const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
-
-    const blockedStory = parseStory(blockedStoryPath);
+    const blockedStory = parseStory(filePath);
 
     // Should use "unknown" as fallback
     expect(blockedStory.frontmatter.blocked_reason).toContain('last failure: unknown');
@@ -316,7 +298,7 @@ Implementation content.
   it('should respect story-specific max_retries over config default', () => {
     // Arrange: Config says 5, but story overrides to 2
     createConfigWithMaxRetries(5);
-    createStoryWithReviewRetries(
+    const storyPath = createStoryWithReviewRetries(
       'override-story',
       2,
       2, // Story-specific override
@@ -327,12 +309,7 @@ Implementation content.
     assessState(sdlcRoot);
 
     // Assert
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-    const blockedFiles = fs.readdirSync(blockedPath);
-    expect(blockedFiles.length).toBe(1);
-
-    const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
-    const blockedStory = parseStory(blockedStoryPath);
+    const blockedStory = parseStory(storyPath);
 
     // Should show (2/2) not (2/5)
     expect(blockedStory.frontmatter.blocked_reason).toContain('(2/2)');
@@ -352,15 +329,12 @@ Implementation content.
     const result = assessState(sdlcRoot);
 
     // Assert
-    // Story should still be in in-progress
+    // Story should still exist
     expect(fs.existsSync(originalPath)).toBe(true);
 
-    // Should not be in blocked
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-    if (fs.existsSync(blockedPath)) {
-      const blockedFiles = fs.readdirSync(blockedPath);
-      expect(blockedFiles.length).toBe(0);
-    }
+    // Status should still be in-progress (not blocked)
+    const story = parseStory(originalPath);
+    expect(story.frontmatter.status).toBe('in-progress');
 
     // Should have a review action recommended
     expect(result.recommendedActions.some(a => a.type === 'review')).toBe(true);
@@ -391,27 +365,27 @@ Implementation content.
   it('should block multiple stories that reach max retries', () => {
     // Arrange
     createConfigWithMaxRetries(3);
-    createStoryWithReviewRetries('story-one', 3, 3, 'First story failure');
-    createStoryWithReviewRetries('story-two', 3, 3, 'Second story failure');
-    createStoryWithReviewRetries('story-three', 3, 3, 'Third story failure');
+    const path1 = createStoryWithReviewRetries('story-one', 3, 3, 'First story failure');
+    const path2 = createStoryWithReviewRetries('story-two', 3, 3, 'Second story failure');
+    const path3 = createStoryWithReviewRetries('story-three', 3, 3, 'Third story failure');
 
     // Act
     assessState(sdlcRoot);
 
     // Assert
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-    const blockedFiles = fs.readdirSync(blockedPath);
+    const story1 = parseStory(path1);
+    const story2 = parseStory(path2);
+    const story3 = parseStory(path3);
 
-    expect(blockedFiles.length).toBe(3);
-    expect(blockedFiles.some(f => f.includes('story-one'))).toBe(true);
-    expect(blockedFiles.some(f => f.includes('story-two'))).toBe(true);
-    expect(blockedFiles.some(f => f.includes('story-three'))).toBe(true);
+    expect(story1.frontmatter.status).toBe('blocked');
+    expect(story2.frontmatter.status).toBe('blocked');
+    expect(story3.frontmatter.status).toBe('blocked');
   });
 
   it('should preserve all original frontmatter fields after blocking', () => {
     // Arrange
     createConfigWithMaxRetries(2);
-    createStoryWithReviewRetries(
+    const storyPath = createStoryWithReviewRetries(
       'preserve-all-fields',
       2,
       2,
@@ -422,16 +396,13 @@ Implementation content.
     assessState(sdlcRoot);
 
     // Assert
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-    const blockedFiles = fs.readdirSync(blockedPath);
-    const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
-
-    const blockedStory = parseStory(blockedStoryPath);
+    const blockedStory = parseStory(storyPath);
 
     // Verify all important fields are preserved
     expect(blockedStory.frontmatter.id).toBe('preserve-all-fields');
     expect(blockedStory.frontmatter.title).toBe('Test Story - preserve-all-fields');
-    expect(blockedStory.frontmatter.priority).toBe(1);
+    expect(blockedStory.frontmatter.slug).toBe('preserve-all-fields');
+    expect(blockedStory.frontmatter.priority).toBe(10);
     expect(blockedStory.frontmatter.type).toBe('feature');
     expect(blockedStory.frontmatter.research_complete).toBe(true);
     expect(blockedStory.frontmatter.plan_complete).toBe(true);
@@ -450,15 +421,17 @@ Implementation content.
       // Arrange - create story with ANSI codes in feedback
       createConfigWithMaxRetries(2);
 
-      const inProgressPath = path.join(sdlcRoot, 'in-progress');
-      const filename = '01-ansi-test.md';
-      const filePath = path.join(inProgressPath, filename);
+      const storyId = 'ansi-test';
+      const storyFolder = path.join(sdlcRoot, STORIES_FOLDER, storyId);
+      fs.mkdirSync(storyFolder, { recursive: true });
+      const filePath = path.join(storyFolder, 'story.md');
 
       // Create story with ANSI escape codes in review feedback
       const content = `---
 id: ansi-test
 title: ANSI Escape Test Story
-priority: 1
+slug: ansi-test
+priority: 10
 status: in-progress
 type: feature
 created: '2024-01-01T00:00:00Z'
@@ -493,11 +466,7 @@ Content.
       assessState(sdlcRoot);
 
       // Assert
-      const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-      const blockedFiles = fs.readdirSync(blockedPath);
-      const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
-
-      const blockedStory = parseStory(blockedStoryPath);
+      const blockedStory = parseStory(filePath);
       const blockedReason = blockedStory.frontmatter.blocked_reason || '';
 
       // ANSI codes should be removed
@@ -515,15 +484,17 @@ Content.
       // Arrange - create story with newlines in feedback
       createConfigWithMaxRetries(2);
 
-      const inProgressPath = path.join(sdlcRoot, 'in-progress');
-      const filename = '01-newline-test.md';
-      const filePath = path.join(inProgressPath, filename);
+      const storyId = 'newline-test';
+      const storyFolder = path.join(sdlcRoot, STORIES_FOLDER, storyId);
+      fs.mkdirSync(storyFolder, { recursive: true });
+      const filePath = path.join(storyFolder, 'story.md');
 
       // Create story with newlines in review feedback (YAML escaped)
       const content = `---
 id: newline-test
 title: Newline Test Story
-priority: 1
+slug: newline-test
+priority: 10
 status: in-progress
 type: feature
 created: '2024-01-01T00:00:00Z'
@@ -558,11 +529,7 @@ Content.
       assessState(sdlcRoot);
 
       // Assert
-      const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-      const blockedFiles = fs.readdirSync(blockedPath);
-      const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
-
-      const blockedStory = parseStory(blockedStoryPath);
+      const blockedStory = parseStory(filePath);
       const blockedReason = blockedStory.frontmatter.blocked_reason || '';
 
       // Newlines should be replaced with spaces
@@ -579,15 +546,17 @@ Content.
       // Arrange
       createConfigWithMaxRetries(2);
 
-      const inProgressPath = path.join(sdlcRoot, 'in-progress');
-      const filename = '01-markdown-test.md';
-      const filePath = path.join(inProgressPath, filename);
+      const storyId = 'markdown-test';
+      const storyFolder = path.join(sdlcRoot, STORIES_FOLDER, storyId);
+      fs.mkdirSync(storyFolder, { recursive: true });
+      const filePath = path.join(storyFolder, 'story.md');
 
       // Create story with markdown injection attempts in feedback
       const content = `---
 id: markdown-test
 title: Markdown Injection Test Story
-priority: 1
+slug: markdown-test
+priority: 10
 status: in-progress
 type: feature
 created: '2024-01-01T00:00:00Z'
@@ -622,11 +591,7 @@ Content.
       assessState(sdlcRoot);
 
       // Assert
-      const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-      const blockedFiles = fs.readdirSync(blockedPath);
-      const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
-
-      const blockedStory = parseStory(blockedStoryPath);
+      const blockedStory = parseStory(filePath);
       const blockedReason = blockedStory.frontmatter.blocked_reason || '';
 
       // Markdown special characters should be removed
@@ -645,15 +610,17 @@ Content.
       // Arrange
       createConfigWithMaxRetries(2);
 
-      const inProgressPath = path.join(sdlcRoot, 'in-progress');
-      const filename = '01-control-chars.md';
-      const filePath = path.join(inProgressPath, filename);
+      const storyId = 'control-chars';
+      const storyFolder = path.join(sdlcRoot, STORIES_FOLDER, storyId);
+      fs.mkdirSync(storyFolder, { recursive: true });
+      const filePath = path.join(storyFolder, 'story.md');
 
       // Create story with control characters in feedback
       const content = `---
 id: control-chars
 title: Control Characters Test Story
-priority: 1
+slug: control-chars
+priority: 10
 status: in-progress
 type: feature
 created: '2024-01-01T00:00:00Z'
@@ -688,11 +655,7 @@ Content.
       assessState(sdlcRoot);
 
       // Assert
-      const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-      const blockedFiles = fs.readdirSync(blockedPath);
-      const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
-
-      const blockedStory = parseStory(blockedStoryPath);
+      const blockedStory = parseStory(filePath);
       const blockedReason = blockedStory.frontmatter.blocked_reason || '';
 
       // Should not contain any control characters (0x00-0x1F, 0x7F-0x9F)

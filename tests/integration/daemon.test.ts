@@ -30,7 +30,7 @@ describe('Daemon Integration Tests', () => {
       daemon: {
         enabled: true,
         pollingInterval: 5000,
-        watchPatterns: ['/test/.ai-sdlc/backlog/*.md'],
+        watchPatterns: ['stories/*/story.md'],
         processDelay: 500,
         shutdownTimeout: 30000,
         enableEscShutdown: false,

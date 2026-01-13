@@ -1,6 +1,7 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { configureAgentSdkAuth, getApiKey, getCredentialType, CredentialType } from './auth.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from './config.js';
+import { platform, homedir } from 'os';
 import path from 'path';
 
 /**
@@ -75,7 +76,18 @@ export async function runAgentQuery(options: AgentQueryOptions): Promise<string>
   // Configure authentication
   const authResult = configureAgentSdkAuth();
   if (!authResult.configured) {
-    throw new Error('No API key or OAuth token found. Set ANTHROPIC_API_KEY or sign in to Claude Code.');
+    const credentialPath = path.join(homedir(), '.claude', '.credentials.json');
+    const isDarwin = platform() === 'darwin';
+
+    let errorMessage = 'No API key or OAuth token found. ';
+    errorMessage += 'Set ANTHROPIC_API_KEY environment variable, ';
+    errorMessage += `or run "claude login" to create credentials at ${credentialPath}`;
+    if (isDarwin) {
+      errorMessage += ', or sign in to Claude Code (stored in macOS Keychain)';
+    }
+    errorMessage += '.';
+
+    throw new Error(errorMessage);
   }
 
   // Validate and normalize working directory

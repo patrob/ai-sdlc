@@ -1,5 +1,7 @@
 import { execSync } from 'child_process';
-import { platform } from 'os';
+import { platform, homedir } from 'os';
+import { readFileSync, statSync } from 'fs';
+import path from 'path';
 
 interface KeychainCredentials {
   claudeAiOauth?: {
@@ -11,13 +13,108 @@ interface KeychainCredentials {
   accessToken?: string;
 }
 
+/**
+ * Credential file format used by Claude Code CLI
+ * Located at ~/.claude/.credentials.json
+ */
+interface CredentialFile {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: string;
+}
+
 export type CredentialType = 'api_key' | 'oauth_token' | 'none';
+
+/**
+ * Read credentials from ~/.claude/.credentials.json file
+ * Returns null if file doesn't exist, is malformed, or missing accessToken
+ */
+function getCredentialsFromFile(): CredentialFile | null {
+  try {
+    const credentialPath = path.join(homedir(), '.claude', '.credentials.json');
+    const content = readFileSync(credentialPath, 'utf-8');
+
+    // Handle empty file
+    if (!content || content.trim() === '') {
+      return null;
+    }
+
+    const parsed = JSON.parse(content) as Partial<CredentialFile>;
+
+    // Validate required accessToken field
+    if (!parsed.accessToken) {
+      return null;
+    }
+
+    return parsed as CredentialFile;
+  } catch (error: any) {
+    // File not found - expected case
+    if (error.code === 'ENOENT') {
+      return null;
+    }
+
+    // Permission denied - log warning
+    if (error.code === 'EACCES') {
+      console.warn('Warning: Cannot read credential file - permission denied');
+      return null;
+    }
+
+    // JSON parse error - malformed file
+    if (error instanceof SyntaxError) {
+      return null;
+    }
+
+    // Unknown error - log and return null
+    console.warn('Warning: Unexpected error reading credentials:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Check if a token is expired based on ISO8601 expiresAt date
+ * Returns false if date is invalid or missing (assume token is valid)
+ */
+function isTokenExpired(expiresAt: string | undefined): boolean {
+  if (!expiresAt) {
+    return false; // No expiration date, assume valid
+  }
+
+  try {
+    const expiry = new Date(expiresAt);
+    // Check if date is valid (not NaN)
+    if (isNaN(expiry.getTime())) {
+      return false; // Invalid date, skip expiration check
+    }
+
+    return Date.now() >= expiry.getTime();
+  } catch {
+    return false; // Parse error, skip expiration check
+  }
+}
+
+/**
+ * Check credential file permissions and warn if insecure
+ */
+function checkFilePermissions(filePath: string): void {
+  try {
+    const stats = statSync(filePath);
+    const mode = stats.mode & parseInt('777', 8);
+
+    // Warn if file is world-readable or group-readable (permissions more permissive than 600)
+    if (mode & parseInt('044', 8)) {
+      console.warn(`Warning: Credential file ${filePath} has insecure permissions (${mode.toString(8)}). Recommend: chmod 600`);
+    }
+  } catch {
+    // If we can't stat the file, ignore (file might not exist)
+  }
+}
 
 /**
  * Get API key/token from various sources in order of preference:
  * 1. ANTHROPIC_API_KEY environment variable (direct API key)
  * 2. CLAUDE_CODE_OAUTH_TOKEN environment variable (OAuth token)
- * 3. macOS Keychain (Claude Code credentials)
+ * 3. Credential file at ~/.claude/.credentials.json (all platforms)
+ * 4. macOS Keychain (Claude Code credentials, darwin only)
  */
 export function getApiKey(): string | null {
   // First check environment variables
@@ -27,6 +124,23 @@ export function getApiKey(): string | null {
 
   if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
     return process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  }
+
+  // Try credential file (all platforms)
+  const credentials = getCredentialsFromFile();
+  if (credentials) {
+    const credentialPath = path.join(homedir(), '.claude', '.credentials.json');
+
+    // Check file permissions
+    checkFilePermissions(credentialPath);
+
+    // Check if token is expired and warn
+    if (isTokenExpired(credentials.expiresAt)) {
+      console.warn('Warning: Credential file token is expired. Run "claude login" to refresh.');
+    }
+
+    console.debug('Using credentials from: credentials_file');
+    return credentials.accessToken;
   }
 
   // Try macOS Keychain
@@ -141,9 +255,14 @@ export function hasApiKey(): boolean {
 /**
  * Get the source of the API key (for display purposes)
  */
-export function getApiKeySource(): 'env' | 'keychain' | 'none' {
-  if (process.env.ANTHROPIC_API_KEY) {
+export function getApiKeySource(): 'env' | 'credentials_file' | 'keychain' | 'none' {
+  if (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_CODE_OAUTH_TOKEN) {
     return 'env';
+  }
+
+  const credentials = getCredentialsFromFile();
+  if (credentials) {
+    return 'credentials_file';
   }
 
   if (platform() === 'darwin') {

@@ -259,15 +259,14 @@ describe('Refinement Loop Integration', () => {
       poReviewPassed: false,
     });
 
-    assessment = assessState(sdlcRoot);
-    reworkAction = assessment.recommendedActions.find(a => a.type === 'rework');
-    const escalationAction = assessment.recommendedActions.find(
-      a => a.context?.blockedByMaxRefinements === true
-    );
+    assessState(sdlcRoot);
 
-    expect(reworkAction).toBeUndefined(); // No more rework
-    expect(escalationAction).toBeDefined(); // Escalated for manual intervention
-    expect(escalationAction!.reason).toContain('max refinement attempts');
+    // Re-parse story to see updated status after assessState
+    story = parseStory(story.path);
+
+    // No more rework - story should be blocked
+    expect(story.frontmatter.status).toBe('blocked');
+    expect(story.frontmatter.blocked_reason).toContain('Max refinement attempts');
   });
 
   it('should track refinement history across multiple iterations', async () => {

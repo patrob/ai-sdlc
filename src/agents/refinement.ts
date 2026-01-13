@@ -1,4 +1,4 @@
-import { parseStory, writeStory, moveStory } from '../core/story.js';
+import { parseStory, writeStory, updateStoryStatus } from '../core/story.js';
 import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
 import { Story, AgentResult } from '../types/index.js';
 import path from 'path';
@@ -82,9 +82,9 @@ Format your response as markdown that will replace the story content.`;
     // Write the story
     writeStory(story);
 
-    // Move to ready folder
-    const movedStory = moveStory(story, 'ready', sdlcRoot);
-    changesMade.push('Moved story to ready/');
+    // Update status to ready
+    const movedStory = updateStoryStatus(story, 'ready');
+    changesMade.push('Updated status to ready');
 
     return {
       success: true,

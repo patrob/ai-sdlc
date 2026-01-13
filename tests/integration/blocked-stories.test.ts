@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { createStory, updateStoryStatus, parseStory, writeStory, unblockStory } from '../../src/core/story.js';
+import { createStory, updateStoryStatus, parseStory, writeStory, unblockStory, appendReviewHistory } from '../../src/core/story.js';
 import { assessState, findStoryById } from '../../src/core/kanban.js';
-import { BLOCKED_DIR, STORIES_FOLDER } from '../../src/types/index.js';
+import { BLOCKED_DIR, STORIES_FOLDER, ReviewDecision, ReviewSeverity } from '../../src/types/index.js';
 
 describe('Blocked Stories Integration', () => {
   let testDir: string;
@@ -67,7 +67,18 @@ describe('Blocked Stories Integration', () => {
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2; // Reached max
     story.frontmatter.current_iteration = 2;
-    writeStory(story);
+
+    // Add a rejected review (required to trigger circuit breaker)
+    appendReviewHistory(story, {
+      timestamp: new Date().toISOString(),
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      feedback: 'Still failing after max attempts',
+      blockers: ['Issue persists'],
+      codeReviewPassed: false,
+      securityReviewPassed: false,
+      poReviewPassed: false,
+    });
 
     // Step 3: Call assessState - should update story status to blocked
     const assessment = assessState(sdlcRoot);
@@ -101,7 +112,18 @@ describe('Blocked Stories Integration', () => {
       story.frontmatter.implementation_complete = true;
       story.frontmatter.refinement_count = 2;
       story.frontmatter.current_iteration = 2;
-      writeStory(story);
+
+      // Add a rejected review (required to trigger circuit breaker)
+      appendReviewHistory(story, {
+        timestamp: new Date().toISOString(),
+        decision: ReviewDecision.REJECTED,
+        severity: ReviewSeverity.HIGH,
+        feedback: `Story ${i} still failing`,
+        blockers: ['Issue persists'],
+        codeReviewPassed: false,
+        securityReviewPassed: false,
+        poReviewPassed: false,
+      });
       stories.push(story);
     }
 
@@ -134,7 +156,18 @@ describe('Blocked Stories Integration', () => {
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2;
     story.frontmatter.current_iteration = 2;
-    writeStory(story);
+
+    // Add a rejected review (required to trigger circuit breaker)
+    appendReviewHistory(story, {
+      timestamp: new Date().toISOString(),
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      feedback: 'Still failing',
+      blockers: ['Issue persists'],
+      codeReviewPassed: false,
+      securityReviewPassed: false,
+      poReviewPassed: false,
+    });
 
     // Call assessState
     assessState(sdlcRoot);
@@ -161,7 +194,18 @@ describe('Blocked Stories Integration', () => {
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2; // Reached config default
     story.frontmatter.current_iteration = 2;
-    writeStory(story);
+
+    // Add a rejected review (required to trigger circuit breaker)
+    appendReviewHistory(story, {
+      timestamp: new Date().toISOString(),
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      feedback: 'Still failing',
+      blockers: ['Issue persists'],
+      codeReviewPassed: false,
+      securityReviewPassed: false,
+      poReviewPassed: false,
+    });
 
     // Call assessState
     assessState(sdlcRoot);
@@ -183,15 +227,30 @@ describe('Blocked Stories Integration', () => {
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 1; // Below max
     story.frontmatter.current_iteration = 1;
-    writeStory(story);
+
+    // Add a rejected review (story still has retries remaining)
+    appendReviewHistory(story, {
+      timestamp: new Date().toISOString(),
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      feedback: 'Needs work',
+      blockers: ['Issue'],
+      codeReviewPassed: false,
+      securityReviewPassed: false,
+      poReviewPassed: false,
+    });
 
     // Call assessState
-    assessState(sdlcRoot);
+    const assessment = assessState(sdlcRoot);
 
-    // Verify story status is still in-progress (not blocked)
+    // Verify story status is still in-progress (not blocked - has retries left)
     const updatedStory = parseStory(story.path);
     expect(updatedStory.frontmatter.status).toBe('in-progress');
     expect(updatedStory.frontmatter.blocked_reason).toBeUndefined();
+
+    // Should recommend rework action instead of blocking
+    const reworkAction = assessment.recommendedActions.find(a => a.type === 'rework');
+    expect(reworkAction).toBeDefined();
   });
 
   it('should preserve all story content and metadata when blocking', () => {
@@ -213,7 +272,18 @@ describe('Blocked Stories Integration', () => {
 
     // Add custom content
     story.content = '# Test Feature\n\nDetailed description\n\n## Acceptance Criteria\n\n- [ ] Criterion 1';
-    writeStory(story);
+
+    // Add a rejected review (required to trigger circuit breaker)
+    appendReviewHistory(story, {
+      timestamp: new Date().toISOString(),
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      feedback: 'Still failing',
+      blockers: ['Issue persists'],
+      codeReviewPassed: false,
+      securityReviewPassed: false,
+      poReviewPassed: false,
+    });
 
     const originalStory = parseStory(story.path);
 
@@ -251,7 +321,18 @@ describe('Blocked Stories Integration', () => {
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2;
     story.frontmatter.current_iteration = 2;
-    writeStory(story);
+
+    // Add a rejected review (required to trigger circuit breaker)
+    appendReviewHistory(story, {
+      timestamp: new Date().toISOString(),
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      feedback: 'Still failing',
+      blockers: ['Issue persists'],
+      codeReviewPassed: false,
+      securityReviewPassed: false,
+      poReviewPassed: false,
+    });
 
     // Make the story file read-only to trigger write error
     fs.chmodSync(story.path, 0o444);
@@ -353,7 +434,18 @@ describe('Blocked Stories Integration', () => {
     story.frontmatter.plan_complete = true;
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2;
-    writeStory(story);
+
+    // Add a rejected review (required to trigger circuit breaker)
+    appendReviewHistory(story, {
+      timestamp: new Date().toISOString(),
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      feedback: 'Still failing',
+      blockers: ['Issue persists'],
+      codeReviewPassed: false,
+      securityReviewPassed: false,
+      poReviewPassed: false,
+    });
 
     // Step 2: Block the story
     assessState(sdlcRoot);
@@ -388,9 +480,21 @@ describe('Blocked Stories Integration', () => {
 
     story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.plan_complete = true;
+    story.frontmatter.implementation_complete = true;
     story.frontmatter.retry_count = 5;
     story.frontmatter.refinement_count = 2;
-    writeStory(story);
+
+    // Add a rejected review (required to trigger circuit breaker)
+    appendReviewHistory(story, {
+      timestamp: new Date().toISOString(),
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      feedback: 'Still failing',
+      blockers: ['Issue persists'],
+      codeReviewPassed: false,
+      securityReviewPassed: false,
+      poReviewPassed: false,
+    });
 
     // Block it
     assessState(sdlcRoot);
@@ -404,14 +508,26 @@ describe('Blocked Stories Integration', () => {
 
   it('should unblock story to ready when plan is complete but implementation is not', () => {
     // Create and block a story with plan_complete = true
+    // Note: This test uses max_retries circuit breaker since implementation_complete=false
     let story = createStory('Test Feature', sdlcRoot);
 
     story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.plan_complete = true;
     story.frontmatter.implementation_complete = false;
-    story.frontmatter.refinement_count = 2;
-    story.frontmatter.max_refinement_attempts = 2;
-    writeStory(story);
+    story.frontmatter.retry_count = 2;
+    story.frontmatter.max_retries = 2;
+
+    // Add a review history (for max retries circuit breaker)
+    appendReviewHistory(story, {
+      timestamp: new Date().toISOString(),
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      feedback: 'Still failing',
+      blockers: ['Issue persists'],
+      codeReviewPassed: false,
+      securityReviewPassed: false,
+      poReviewPassed: false,
+    });
 
     assessState(sdlcRoot);
 
@@ -424,15 +540,27 @@ describe('Blocked Stories Integration', () => {
 
   it('should unblock story to backlog when no phases are complete', () => {
     // Create and block a story with all phases incomplete
+    // Note: This test uses max_retries circuit breaker since implementation_complete=false
     let story = createStory('Test Feature', sdlcRoot);
 
     story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.research_complete = false;
     story.frontmatter.plan_complete = false;
     story.frontmatter.implementation_complete = false;
-    story.frontmatter.refinement_count = 2;
-    story.frontmatter.max_refinement_attempts = 2;
-    writeStory(story);
+    story.frontmatter.retry_count = 2;
+    story.frontmatter.max_retries = 2;
+
+    // Add a review history (for max retries circuit breaker)
+    appendReviewHistory(story, {
+      timestamp: new Date().toISOString(),
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      feedback: 'Still failing',
+      blockers: ['Issue persists'],
+      codeReviewPassed: false,
+      securityReviewPassed: false,
+      poReviewPassed: false,
+    });
 
     assessState(sdlcRoot);
 

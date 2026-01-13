@@ -1,10 +1,13 @@
-.PHONY: build test lint clean publish publish-dry
+.PHONY: build test test-integration lint clean publish publish-dry verify
 
 build:
 	npm run build
 
 test:
 	npm test
+
+test-integration:
+	npm run test:integration
 
 lint:
 	npm run lint
@@ -17,3 +20,6 @@ publish: clean
 
 publish-dry: clean
 	npm publish --tag alpha --access public --dry-run
+
+verify: lint test test-integration build
+	@echo "All checks passed - ready for commit"

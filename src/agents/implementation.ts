@@ -1,6 +1,6 @@
 import { execSync, spawn } from 'child_process';
 import path from 'path';
-import { parseStory, writeStory, moveStory, updateStoryField } from '../core/story.js';
+import { parseStory, writeStory, updateStoryStatus, updateStoryField } from '../core/story.js';
 import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
 import { Story, AgentResult, TDDTestCycle, TDDConfig } from '../types/index.js';
 import { AgentOptions } from './research.js';
@@ -197,6 +197,61 @@ export async function runAllTests(
       });
     });
   });
+}
+
+/**
+ * Security: Escape shell arguments for safe use in commands
+ * For use with execSync when shell execution is required
+ */
+function escapeShellArg(arg: string): string {
+  // Replace single quotes with '\'' and wrap in single quotes
+  return `'${arg.replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * Commit changes if all tests pass
+ *
+ * @param workingDir - The working directory for git operations
+ * @param message - The commit message
+ * @param testTimeout - Timeout for running tests
+ * @param testRunner - Optional test runner for dependency injection (defaults to runAllTests)
+ * @returns Object indicating whether commit was made and reason if not
+ */
+export async function commitIfAllTestsPass(
+  workingDir: string,
+  message: string,
+  testTimeout: number,
+  testRunner: typeof runAllTests = runAllTests
+): Promise<{ committed: boolean; reason?: string }> {
+  try {
+    // Check for uncommitted changes
+    const status = execSync('git status --porcelain', {
+      cwd: workingDir,
+      encoding: 'utf-8'
+    });
+
+    if (!status.trim()) {
+      return { committed: false, reason: 'nothing to commit' };
+    }
+
+    // Run FULL test suite
+    const testResult = await testRunner(workingDir, testTimeout);
+    if (!testResult.passed) {
+      return { committed: false, reason: 'tests failed' };
+    }
+
+    // Commit changes
+    execSync('git add -A', { cwd: workingDir, stdio: 'pipe' });
+    execSync(`git commit -m ${escapeShellArg(message)}`, {
+      cwd: workingDir,
+      stdio: 'pipe'
+    });
+
+    return { committed: true };
+  } catch (error) {
+    // Re-throw git errors for caller to handle
+    throw error;
+  }
 }
 
 /**
@@ -628,11 +683,11 @@ export async function runImplementationAgent(
       changesMade.push('No git repo detected, skipping branch creation');
     }
 
-    // Move story to in-progress if not already there
+    // Update status to in-progress if not already there
     if (story.frontmatter.status !== 'in-progress') {
-      story = moveStory(story, 'in-progress', sdlcRoot);
+      story = updateStoryStatus(story, 'in-progress');
       currentStoryPath = story.path;
-      changesMade.push('Moved story to in-progress/');
+      changesMade.push('Updated status to in-progress');
     }
 
     // Check if TDD is enabled for this story

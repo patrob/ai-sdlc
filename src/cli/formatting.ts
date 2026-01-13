@@ -154,7 +154,7 @@ export function shouldUseCompactView(terminalWidth: number): boolean {
  */
 export function getColumnWidths(terminalWidth: number): ColumnWidths {
   // Fixed widths for non-title columns (documented rationale):
-  const FIXED_ID_WIDTH = 22;        // Fits 'story-xxxxxxxx-xxxx' format (20 chars) + padding
+  const FIXED_ID_WIDTH = 10;        // Fits 'S-0001' format (6 chars) + padding
   const FIXED_STATUS_WIDTH = 14;    // Longest status 'in-progress' (11 chars) + padding
   const FIXED_LABELS_WIDTH = 30;    // Space for ~3-4 typical labels with commas
   const FIXED_FLAGS_WIDTH = 8;      // Fits '[RPIV!]' (7 chars max) + padding

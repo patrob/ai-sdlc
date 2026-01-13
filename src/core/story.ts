@@ -138,9 +138,42 @@ export function moveToBlocked(storyPath: string, reason: string): void {
 }
 
 /**
- * Generate a unique story ID
+ * Generate a unique story ID in sequential format (S-0001, S-0002, etc.)
+ * Scans the stories folder to find the highest existing number.
+ *
+ * @param storiesFolder - Path to the stories directory
+ * @returns Sequential story ID like "S-0001"
  */
-export function generateStoryId(): string {
+export function generateStoryId(storiesFolder?: string): string {
+  let maxNum = 0;
+
+  if (storiesFolder && fs.existsSync(storiesFolder)) {
+    try {
+      const dirs = fs.readdirSync(storiesFolder, { withFileTypes: true });
+      for (const dir of dirs) {
+        if (!dir.isDirectory()) continue;
+        // Match both S-XXXX format (new) and fall back to checking for any existing
+        const match = dir.name.match(/^S-(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      }
+    } catch {
+      // If we can't read, start from 0
+    }
+  }
+
+  // Generate next ID with zero-padded 4 digits
+  const nextId = `S-${String(maxNum + 1).padStart(4, '0')}`;
+  return nextId;
+}
+
+/**
+ * Generate a legacy story ID (for backwards compatibility/fallback)
+ * @deprecated Use generateStoryId() instead
+ */
+export function generateLegacyStoryId(): string {
   const timestamp = Date.now().toString(36);
   const random = Math.random().toString(36).substring(2, 6);
   return `story-${timestamp}-${random}`;
@@ -176,7 +209,7 @@ export function createStory(
   }
 
   // Generate unique ID and slug
-  const id = generateStoryId();
+  const id = generateStoryId(storiesFolder);
   const slug = slugify(title);
 
   // Create story folder: stories/{id}/

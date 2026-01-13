@@ -134,6 +134,26 @@ NEVER mark implementation as complete until:
 2. `npm run build` succeeds
 3. Story status accurately reflects current state (no conflicting "Complete" claims)
 
+## Handling Test Failures During Implementation
+When tests fail after writing implementation code, DO NOT give up or mark as blocked. Instead:
+
+1. **Analyze the failure output** - Read the error messages carefully to understand what's broken
+2. **Identify root cause** - Is it a bug in production code, missing dependency injection, incorrect mock setup, or test logic error?
+3. **Fix the implementation** - Usually the production code needs fixing, not the tests (tests caught a real bug)
+4. **Re-run tests** - Verify the fix works
+5. **Repeat** - Continue until all tests pass
+
+**Only escalate/stop if:**
+- You've made 3+ fix attempts without progress
+- The failure requires external input (unclear requirements, architectural decision needed)
+- Tests reveal a fundamental design flaw that needs discussion
+
+**Common failure patterns and fixes:**
+- "expected X to be Y" → Check the implementation logic, not the test expectation
+- "undefined is not a function" → Missing import, incorrect mock, or wrong function signature
+- Mock not called → Dependency injection not wired through (pass mocked deps to inner functions)
+- Timeout → Async code missing await, or infinite loop
+
 ## Testing (Critical Rules)
 - **Export testable functions**: Never recreate production logic in tests. Export functions from production code and import them in tests
 - **Integration tests must test integration**: Tests in `tests/integration/` must mock dependencies and verify actual execution flows (e.g., mock `ora`, call `executeAction()`, verify spinner methods called). Tests that only check types/return values are unit tests - name them accordingly

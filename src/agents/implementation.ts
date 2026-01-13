@@ -75,7 +75,6 @@ When implementing:
 5. Update the plan checkboxes as you complete tasks
 6. Do NOT create temporary files, shell scripts, or documentation files - keep all notes in the story file
 7. Follow the Testing Pyramid: prioritize unit tests (colocated with source, e.g., src/foo.test.ts), then integration tests (in tests/integration/)
-8. Do NOT commit changes - that happens in the review phase
 
 CRITICAL RULES ABOUT TESTS:
 - Test updates are PART of implementation, not a separate phase
@@ -600,6 +599,24 @@ export async function runTDDImplementation(
     }
     changesMade.push('REFACTOR: All tests still pass');
 
+    // Commit changes after successful TDD cycle
+    try {
+      const commitResult = await commitIfAllTestsPass(
+        workingDir,
+        `feat(${story.slug}): TDD cycle ${cycleNumber} - ${redResult.testName}`,
+        testTimeout,
+        allTests
+      );
+      if (commitResult.committed) {
+        changesMade.push(`Committed: TDD cycle ${cycleNumber} - ${redResult.testName}`);
+      } else {
+        changesMade.push(`Skipped commit: ${commitResult.reason}`);
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      changesMade.push(`Commit warning: ${errorMsg} (continuing implementation)`);
+    }
+
     // Record the completed cycle
     const cycle = recordTDDCycle(cycleNumber, redResult, greenResult, refactorResult);
 
@@ -808,6 +825,23 @@ ${implementationResult}
         changesMade,
         error: `Implementation blocked: ${verification.failures} test(s) failing. Fix tests before completing.`,
       };
+    }
+
+    // Commit changes after successful standard implementation
+    try {
+      const commitResult = await commitIfAllTestsPass(
+        workingDir,
+        `feat(${story.slug}): ${story.frontmatter.title}`,
+        config.timeouts?.testTimeout || 300000
+      );
+      if (commitResult.committed) {
+        changesMade.push(`Committed: ${story.frontmatter.title}`);
+      } else {
+        changesMade.push(`Skipped commit: ${commitResult.reason}`);
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      changesMade.push(`Commit warning: ${errorMsg} (continuing implementation)`);
     }
 
     updateStoryField(updatedStory, 'implementation_complete', true);

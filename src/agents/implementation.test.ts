@@ -429,6 +429,207 @@ Just a summary, no AC.
     });
   });
 
+  describe('TDD cycle commits', () => {
+    const execSyncMock = vi.mocked(execSync);
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-01-15T10:00:00Z'));
+      execSyncMock.mockReset();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should commit after successful TDD REFACTOR phase', async () => {
+      const story = createMockStory({
+        slug: 'test-story',
+        content: `# Test Story
+
+## Acceptance Criteria
+
+- [x] Feature done
+`,
+      });
+
+      // Mock parseStory to return our mock story
+      vi.mocked(storyModule.parseStory).mockReturnValue(story);
+
+      // Mock git status to show changes
+      execSyncMock.mockReturnValue(' M src/file.ts\n' as any);
+
+      // Mock dependencies
+      const mockRunAgentQuery = vi.fn()
+        .mockResolvedValueOnce('Created test file src/test.test.ts for: should do X') // RED
+        .mockResolvedValueOnce('Implemented code') // GREEN
+        .mockResolvedValueOnce('Refactored code'); // REFACTOR
+
+      const mockRunSingleTest = vi.fn()
+        .mockResolvedValueOnce({ passed: false, output: 'Test failed' }) // RED check (expect fail)
+        .mockResolvedValueOnce({ passed: true, output: 'Test passed' }); // GREEN check (expect pass)
+
+      const mockRunAllTests = vi.fn()
+        .mockResolvedValue({ passed: true, output: 'All tests pass' });
+
+      const result = await runTDDImplementation(
+        story,
+        '/tmp/test/.ai-sdlc',
+        {
+          runAgentQuery: mockRunAgentQuery,
+          runSingleTest: mockRunSingleTest,
+          runAllTests: mockRunAllTests,
+        }
+      );
+
+      expect(result.success).toBe(true);
+      // Verify commit was called with correct message format
+      const commitCalls = execSyncMock.mock.calls.filter(call =>
+        typeof call[0] === 'string' && call[0].includes('git commit')
+      );
+      expect(commitCalls.length).toBeGreaterThan(0);
+      expect(commitCalls[0]![0]).toContain('feat(test-story):');
+      expect(commitCalls[0]![0]).toContain('TDD cycle 1');
+    });
+
+    it('should skip commit when tests fail', async () => {
+      const story = createMockStory({
+        content: `# Test Story
+
+## Acceptance Criteria
+
+- [x] Feature done
+`,
+      });
+
+      // Mock parseStory to return our mock story
+      vi.mocked(storyModule.parseStory).mockReturnValue(story);
+
+      // Mock git status to show changes, but tests fail
+      execSyncMock.mockReturnValue(' M src/file.ts\n' as any);
+
+      const mockRunAgentQuery = vi.fn()
+        .mockResolvedValueOnce('Created test file src/test.test.ts') // RED
+        .mockResolvedValueOnce('Implemented code') // GREEN
+        .mockResolvedValueOnce('Refactored code'); // REFACTOR
+
+      const mockRunSingleTest = vi.fn()
+        .mockResolvedValueOnce({ passed: false, output: 'Test failed' }) // RED check (expect fail)
+        .mockResolvedValueOnce({ passed: true, output: 'Test passed' }); // GREEN check (expect pass)
+
+      // Mock runAllTests to fail after GREEN (regression check fails)
+      const mockRunAllTests = vi.fn()
+        .mockResolvedValueOnce({ passed: false, output: 'Tests failed' }); // GREEN regression check fails
+
+      const result = await runTDDImplementation(
+        story,
+        '/tmp/test/.ai-sdlc',
+        {
+          runAgentQuery: mockRunAgentQuery,
+          runSingleTest: mockRunSingleTest,
+          runAllTests: mockRunAllTests,
+        }
+      );
+
+      expect(result.success).toBe(false);
+      // Verify no commit was called
+      const commitCalls = execSyncMock.mock.calls.filter(call =>
+        typeof call[0] === 'string' && call[0].includes('git commit')
+      );
+      expect(commitCalls.length).toBe(0);
+    });
+
+    it('should skip commit when nothing to commit', async () => {
+      const story = createMockStory({
+        content: `# Test Story
+
+## Acceptance Criteria
+
+- [x] Feature done
+`,
+      });
+
+      // Mock parseStory to return our mock story
+      vi.mocked(storyModule.parseStory).mockReturnValue(story);
+
+      // Mock git status to show NO changes
+      execSyncMock.mockReturnValue('' as any);
+
+      const mockRunAgentQuery = vi.fn()
+        .mockResolvedValueOnce('Created test file src/test.test.ts') // RED
+        .mockResolvedValueOnce('Implemented code') // GREEN
+        .mockResolvedValueOnce('Refactored code'); // REFACTOR
+
+      const mockRunSingleTest = vi.fn()
+        .mockResolvedValueOnce({ passed: false, output: 'Test failed' }) // RED check (expect fail)
+        .mockResolvedValueOnce({ passed: true, output: 'Test passed' }); // GREEN check (expect pass)
+
+      const mockRunAllTests = vi.fn()
+        .mockResolvedValue({ passed: true, output: 'All tests pass' });
+
+      const result = await runTDDImplementation(
+        story,
+        '/tmp/test/.ai-sdlc',
+        {
+          runAgentQuery: mockRunAgentQuery,
+          runSingleTest: mockRunSingleTest,
+          runAllTests: mockRunAllTests,
+        }
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.changesMade).toContain('Skipped commit: nothing to commit');
+    });
+
+    it('should handle commit errors gracefully during TDD', async () => {
+      const story = createMockStory({
+        content: `# Test Story
+
+## Acceptance Criteria
+
+- [x] Feature done
+`,
+      });
+
+      // Mock parseStory to return our mock story
+      vi.mocked(storyModule.parseStory).mockReturnValue(story);
+
+      // Mock git status to show changes, but commit fails
+      execSyncMock
+        .mockReturnValueOnce(' M src/file.ts\n' as any) // git status
+        .mockReturnValueOnce(undefined as any) // git add
+        .mockImplementationOnce(() => {
+          throw new Error('git commit failed');
+        }); // git commit fails
+
+      const mockRunAgentQuery = vi.fn()
+        .mockResolvedValueOnce('Created test file src/test.test.ts') // RED
+        .mockResolvedValueOnce('Implemented code') // GREEN
+        .mockResolvedValueOnce('Refactored code'); // REFACTOR
+
+      const mockRunSingleTest = vi.fn()
+        .mockResolvedValueOnce({ passed: false, output: 'Test failed' }) // RED check (expect fail)
+        .mockResolvedValueOnce({ passed: true, output: 'Test passed' }); // GREEN check (expect pass)
+
+      const mockRunAllTests = vi.fn()
+        .mockResolvedValue({ passed: true, output: 'All tests pass' });
+
+      const result = await runTDDImplementation(
+        story,
+        '/tmp/test/.ai-sdlc',
+        {
+          runAgentQuery: mockRunAgentQuery,
+          runSingleTest: mockRunSingleTest,
+          runAllTests: mockRunAllTests,
+        }
+      );
+
+      // Should succeed despite commit error
+      expect(result.success).toBe(true);
+      expect(result.changesMade.some(msg => msg.includes('Commit warning'))).toBe(true);
+    });
+  });
+
   describe('commitIfAllTestsPass', () => {
     const execSyncMock = vi.mocked(execSync);
 

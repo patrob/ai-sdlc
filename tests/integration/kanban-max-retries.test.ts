@@ -443,4 +443,265 @@ Implementation content.
     expect(blockedStory.frontmatter.review_history).toBeDefined();
     expect(blockedStory.frontmatter.review_history?.length).toBe(2);
   });
+
+  // Security integration tests
+  describe('security - sanitization in blocked reason storage', () => {
+    it('should sanitize ANSI escape sequences in blocked reason stored in frontmatter', () => {
+      // Arrange - create story with ANSI codes in feedback
+      createConfigWithMaxRetries(2);
+
+      const inProgressPath = path.join(sdlcRoot, 'in-progress');
+      const filename = '01-ansi-test.md';
+      const filePath = path.join(inProgressPath, filename);
+
+      // Create story with ANSI escape codes in review feedback
+      const content = `---
+id: ansi-test
+title: ANSI Escape Test Story
+priority: 1
+status: in-progress
+type: feature
+created: '2024-01-01T00:00:00Z'
+updated: '2024-01-15T11:00:00Z'
+labels: []
+research_complete: true
+plan_complete: true
+implementation_complete: true
+reviews_complete: false
+retry_count: 2
+max_retries: 2
+review_history:
+  - timestamp: '2024-01-15T09:00:00Z'
+    decision: rejected
+    severity: blocker
+    feedback: '\x1B[31mRed error text\x1B[0m with \x1B[1;33mbold yellow\x1B[0m'
+    blockers:
+      - Security issue
+    codeReviewPassed: false
+    securityReviewPassed: false
+    poReviewPassed: true
+---
+
+# ANSI Escape Test Story
+
+Content.
+`;
+
+      fs.writeFileSync(filePath, content, 'utf-8');
+
+      // Act
+      assessState(sdlcRoot);
+
+      // Assert
+      const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
+      const blockedFiles = fs.readdirSync(blockedPath);
+      const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
+
+      const blockedStory = parseStory(blockedStoryPath);
+      const blockedReason = blockedStory.frontmatter.blocked_reason || '';
+
+      // ANSI codes should be removed
+      expect(blockedReason).not.toContain('\x1B');
+      expect(blockedReason).not.toContain('[31m');
+      expect(blockedReason).not.toContain('[0m');
+      expect(blockedReason).not.toContain('[1;33m');
+
+      // Text content should be preserved
+      expect(blockedReason).toContain('Red error text');
+      expect(blockedReason).toContain('bold yellow');
+    });
+
+    it('should sanitize newlines in blocked reason stored in frontmatter', () => {
+      // Arrange - create story with newlines in feedback
+      createConfigWithMaxRetries(2);
+
+      const inProgressPath = path.join(sdlcRoot, 'in-progress');
+      const filename = '01-newline-test.md';
+      const filePath = path.join(inProgressPath, filename);
+
+      // Create story with newlines in review feedback (YAML escaped)
+      const content = `---
+id: newline-test
+title: Newline Test Story
+priority: 1
+status: in-progress
+type: feature
+created: '2024-01-01T00:00:00Z'
+updated: '2024-01-15T11:00:00Z'
+labels: []
+research_complete: true
+plan_complete: true
+implementation_complete: true
+reviews_complete: false
+retry_count: 2
+max_retries: 2
+review_history:
+  - timestamp: '2024-01-15T09:00:00Z'
+    decision: rejected
+    severity: blocker
+    feedback: "Line one\\nLine two\\rLine three"
+    blockers:
+      - Multi-line issue
+    codeReviewPassed: false
+    securityReviewPassed: false
+    poReviewPassed: true
+---
+
+# Newline Test Story
+
+Content.
+`;
+
+      fs.writeFileSync(filePath, content, 'utf-8');
+
+      // Act
+      assessState(sdlcRoot);
+
+      // Assert
+      const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
+      const blockedFiles = fs.readdirSync(blockedPath);
+      const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
+
+      const blockedStory = parseStory(blockedStoryPath);
+      const blockedReason = blockedStory.frontmatter.blocked_reason || '';
+
+      // Newlines should be replaced with spaces
+      expect(blockedReason).not.toContain('\n');
+      expect(blockedReason).not.toContain('\r');
+
+      // Content should be preserved
+      expect(blockedReason).toContain('Line one');
+      expect(blockedReason).toContain('Line two');
+      expect(blockedReason).toContain('Line three');
+    });
+
+    it('should sanitize markdown injection characters in blocked reason', () => {
+      // Arrange
+      createConfigWithMaxRetries(2);
+
+      const inProgressPath = path.join(sdlcRoot, 'in-progress');
+      const filename = '01-markdown-test.md';
+      const filePath = path.join(inProgressPath, filename);
+
+      // Create story with markdown injection attempts in feedback
+      const content = `---
+id: markdown-test
+title: Markdown Injection Test Story
+priority: 1
+status: in-progress
+type: feature
+created: '2024-01-01T00:00:00Z'
+updated: '2024-01-15T11:00:00Z'
+labels: []
+research_complete: true
+plan_complete: true
+implementation_complete: true
+reviews_complete: false
+retry_count: 2
+max_retries: 2
+review_history:
+  - timestamp: '2024-01-15T09:00:00Z'
+    decision: rejected
+    severity: blocker
+    feedback: 'Code injection: \`rm -rf /\` and |table| and >quote'
+    blockers:
+      - Injection attempt
+    codeReviewPassed: false
+    securityReviewPassed: false
+    poReviewPassed: true
+---
+
+# Markdown Injection Test Story
+
+Content.
+`;
+
+      fs.writeFileSync(filePath, content, 'utf-8');
+
+      // Act
+      assessState(sdlcRoot);
+
+      // Assert
+      const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
+      const blockedFiles = fs.readdirSync(blockedPath);
+      const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
+
+      const blockedStory = parseStory(blockedStoryPath);
+      const blockedReason = blockedStory.frontmatter.blocked_reason || '';
+
+      // Markdown special characters should be removed
+      expect(blockedReason).not.toContain('`');
+      expect(blockedReason).not.toContain('|');
+      expect(blockedReason).not.toContain('>');
+
+      // Safe content should be preserved
+      expect(blockedReason).toContain('Code injection');
+      expect(blockedReason).toContain('rm -rf /');
+      expect(blockedReason).toContain('table');
+      expect(blockedReason).toContain('quote');
+    });
+
+    it('should handle control characters in feedback gracefully', () => {
+      // Arrange
+      createConfigWithMaxRetries(2);
+
+      const inProgressPath = path.join(sdlcRoot, 'in-progress');
+      const filename = '01-control-chars.md';
+      const filePath = path.join(inProgressPath, filename);
+
+      // Create story with control characters in feedback
+      const content = `---
+id: control-chars
+title: Control Characters Test Story
+priority: 1
+status: in-progress
+type: feature
+created: '2024-01-01T00:00:00Z'
+updated: '2024-01-15T11:00:00Z'
+labels: []
+research_complete: true
+plan_complete: true
+implementation_complete: true
+reviews_complete: false
+retry_count: 2
+max_retries: 2
+review_history:
+  - timestamp: '2024-01-15T09:00:00Z'
+    decision: rejected
+    severity: blocker
+    feedback: 'Error with control chars here'
+    blockers:
+      - Control char issue
+    codeReviewPassed: false
+    securityReviewPassed: false
+    poReviewPassed: true
+---
+
+# Control Characters Test Story
+
+Content.
+`;
+
+      fs.writeFileSync(filePath, content, 'utf-8');
+
+      // Act
+      assessState(sdlcRoot);
+
+      // Assert
+      const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
+      const blockedFiles = fs.readdirSync(blockedPath);
+      const blockedStoryPath = path.join(blockedPath, blockedFiles[0]);
+
+      const blockedStory = parseStory(blockedStoryPath);
+      const blockedReason = blockedStory.frontmatter.blocked_reason || '';
+
+      // Should not contain any control characters (0x00-0x1F, 0x7F-0x9F)
+      const hasControlChars = /[\x00-\x1F\x7F-\x9F]/.test(blockedReason);
+      expect(hasControlChars).toBe(false);
+
+      // Safe content should be preserved
+      expect(blockedReason).toContain('Error');
+      expect(blockedReason).toContain('control chars');
+    });
+  });
 });

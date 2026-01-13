@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
 import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder, ReviewDecision } from '../types/index.js';
-import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt, moveToBlocked, getEffectiveMaxRetries } from './story.js';
+import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt, moveToBlocked, getEffectiveMaxRetries, sanitizeReasonText } from './story.js';
 import { loadConfig } from './config.js';
 import { determineTargetPhase } from '../agents/rework.js';
 
@@ -125,19 +125,23 @@ export function assessState(sdlcRoot: string): StateAssessment {
           });
         } else {
           // Circuit breaker: max refinement attempts reached - move to blocked
-          const refinementCount = story.frontmatter.refinement_count || 0;
-          const maxAttempts = story.frontmatter.max_refinement_attempts || config.refinement.maxIterations;
+          // Bounds checking for numeric values (prevent display issues with malicious frontmatter)
+          const refinementCount = Math.max(0, Math.min(Number(story.frontmatter.refinement_count) || 0, 999));
+          const maxAttempts = Math.max(0, Math.min(Number(story.frontmatter.max_refinement_attempts || config.refinement.maxIterations) || 0, 999));
           const reason = `Max refinement attempts (${refinementCount}/${maxAttempts}) reached`;
 
           try {
             // Move story to blocked folder
             moveToBlocked(story.path, reason);
 
-            // Log blocking action
-            console.log(`Story ${story.frontmatter.id} blocked: ${reason}`);
+            // Log blocking action with sanitized output
+            const sanitizedStoryId = sanitizeReasonText(story.frontmatter.id || 'unknown');
+            console.log(`Story ${sanitizedStoryId} blocked: Max refinement attempts (${refinementCount}/${maxAttempts}) reached`);
           } catch (error) {
-            // Log error but don't crash daemon
-            console.error(`Failed to move story ${story.frontmatter.id} to blocked:`, error);
+            // Log error but don't crash daemon - sanitize error message
+            const sanitizedStoryId = sanitizeReasonText(story.frontmatter.id || 'unknown');
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+            console.error(`Failed to move story ${sanitizedStoryId} to blocked: ${sanitizeReasonText(errorMsg)}`);
 
             // Fall back to high-priority action as before
             recommendedActions.push({
@@ -159,21 +163,28 @@ export function assessState(sdlcRoot: string): StateAssessment {
 
     if (atMaxRetries) {
       // Circuit breaker: max review retries reached - move to blocked
-      const retryCount = story.frontmatter.retry_count || 0;
-      const maxRetries = getEffectiveMaxRetries(story, config);
+      // Bounds checking for numeric values (prevent display issues with malicious frontmatter)
+      const retryCount = Math.max(0, Math.min(Number(story.frontmatter.retry_count) || 0, 999));
+      const maxRetries = Math.max(0, Math.min(Number(getEffectiveMaxRetries(story, config)) || 0, 999));
+
+      // Sanitize feedback for safe storage and display
       const latestReview = getLatestReviewAttempt(story);
-      const lastFailureSummary = latestReview?.feedback.substring(0, 100) || 'unknown';
+      const rawFeedback = latestReview?.feedback || 'unknown';
+      const lastFailureSummary = sanitizeReasonText(rawFeedback).substring(0, 100);
       const reason = `Max review retries (${retryCount}/${maxRetries}) reached - last failure: ${lastFailureSummary}`;
 
       try {
         // Move story to blocked folder
         moveToBlocked(story.path, reason);
 
-        // Log blocking action
-        console.log(`Story ${story.frontmatter.id} blocked: ${reason}`);
+        // Log blocking action with sanitized output
+        const sanitizedStoryId = sanitizeReasonText(story.frontmatter.id || 'unknown');
+        console.log(`Story ${sanitizedStoryId} blocked: Max review retries (${retryCount}/${maxRetries}) reached`);
       } catch (error) {
-        // Log error but don't crash daemon
-        console.error(`Failed to move story ${story.frontmatter.id} to blocked:`, error);
+        // Log error but don't crash daemon - sanitize error message
+        const sanitizedStoryId = sanitizeReasonText(story.frontmatter.id || 'unknown');
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`Failed to move story ${sanitizedStoryId} to blocked: ${sanitizeReasonText(errorMsg)}`);
 
         // Fall back to high-priority action as before
         recommendedActions.push({

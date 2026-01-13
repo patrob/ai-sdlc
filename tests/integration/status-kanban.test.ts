@@ -6,6 +6,7 @@ import { status } from '../../src/cli/commands.js';
 import { getSdlcRoot } from '../../src/core/config.js';
 import { initializeKanban } from '../../src/core/kanban.js';
 import { createStory } from '../../src/core/story.js';
+import { STORIES_FOLDER } from '../../src/types/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,10 +68,13 @@ describe('Status Command - Kanban Layout Integration', () => {
       // Create stories in different columns
       createStory('Backlog Story', sdlcRoot);
 
+      const storyId = 'ready-1';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const readyStory = `---
 id: ready-1
 title: Ready Story
-priority: 1
+slug: ready-story
+priority: 10
 status: ready
 type: feature
 created: 2024-01-01
@@ -83,7 +87,7 @@ reviews_complete: false
 
 # Ready Story
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'ready', 'ready-story.md'), readyStory);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), readyStory);
 
       // Call status
       await status();
@@ -121,10 +125,13 @@ reviews_complete: false
     it('should display stories with IDs and titles', async () => {
       const sdlcRoot = getSdlcRoot();
 
+      const storyId = 'story-abc123';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const story = `---
 id: story-abc123
 title: Test Story Title
-priority: 1
+slug: test-story
+priority: 10
 status: backlog
 type: feature
 created: 2024-01-01
@@ -137,7 +144,7 @@ reviews_complete: false
 
 # Test Story Title
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'backlog', 'test-story.md'), story);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), story);
 
       await status();
 
@@ -151,10 +158,13 @@ reviews_complete: false
     it('should display workflow flags for stories', async () => {
       const sdlcRoot = getSdlcRoot();
 
+      const storyId = 'story-flags';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const story = `---
 id: story-flags
 title: Story with flags
-priority: 1
+slug: story-flags
+priority: 10
 status: in-progress
 type: feature
 created: 2024-01-01
@@ -167,7 +177,7 @@ reviews_complete: false
 
 # Story with flags
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'in-progress', 'story-flags.md'), story);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), story);
 
       await status();
 
@@ -199,10 +209,13 @@ reviews_complete: false
       createStory('Backlog 2', sdlcRoot);
       createStory('Backlog 3', sdlcRoot);
 
+      const storyId = 'ready-1';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const readyStory = `---
 id: ready-1
 title: Ready Story
-priority: 1
+slug: ready-story
+priority: 10
 status: ready
 type: feature
 created: 2024-01-01
@@ -215,7 +228,7 @@ reviews_complete: false
 
 # Ready Story
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'ready', 'ready-story.md'), readyStory);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), readyStory);
 
       await status();
 
@@ -230,10 +243,13 @@ reviews_complete: false
     it('should truncate long story titles', async () => {
       const sdlcRoot = getSdlcRoot();
 
+      const storyId = 'story-long';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const longTitleStory = `---
 id: story-long
 title: This is a very long story title that should be truncated to fit within the allocated column width for the kanban board display
-priority: 1
+slug: long-story
+priority: 10
 status: backlog
 type: feature
 created: 2024-01-01
@@ -246,7 +262,7 @@ reviews_complete: false
 
 # Long Title Story
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'backlog', 'long-story.md'), longTitleStory);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), longTitleStory);
 
       await status();
 
@@ -287,10 +303,13 @@ reviews_complete: false
     it('should use compact or table view for stories in vertical layout', async () => {
       const sdlcRoot = getSdlcRoot();
 
+      const storyId = 'story-vertical';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const story = `---
 id: story-vertical
 title: Vertical Layout Story
-priority: 1
+slug: vertical-story
+priority: 10
 status: backlog
 type: feature
 created: 2024-01-01
@@ -303,7 +322,7 @@ reviews_complete: false
 
 # Vertical Layout Story
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'backlog', 'vertical-story.md'), story);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), story);
 
       await status();
 
@@ -325,10 +344,13 @@ reviews_complete: false
 
       createStory('Backlog Story', sdlcRoot);
 
+      const storyId = 'done-1';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const doneStory = `---
 id: done-1
 title: Done Story
-priority: 1
+slug: done-story
+priority: 10
 status: done
 type: feature
 created: 2024-01-01
@@ -341,7 +363,7 @@ reviews_complete: true
 
 # Done Story
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'done', 'done-story.md'), doneStory);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), doneStory);
 
       await status({ active: true });
 
@@ -366,10 +388,13 @@ reviews_complete: true
     it('should show summary line with done count when --active flag is set', async () => {
       const sdlcRoot = getSdlcRoot();
 
+      const storyId = 'done-1';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const doneStory = `---
 id: done-1
 title: Done Story
-priority: 1
+slug: done-story
+priority: 10
 status: done
 type: feature
 created: 2024-01-01
@@ -382,7 +407,7 @@ reviews_complete: true
 
 # Done Story
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'done', 'done-story.md'), doneStory);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), doneStory);
 
       await status({ active: true });
 
@@ -413,10 +438,13 @@ reviews_complete: true
     it('should handle stories with emojis in titles', async () => {
       const sdlcRoot = getSdlcRoot();
 
+      const storyId = 'story-emoji';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const emojiStory = `---
 id: story-emoji
 title: 🚀 Deploy new feature to production
-priority: 1
+slug: emoji-story
+priority: 10
 status: backlog
 type: feature
 created: 2024-01-01
@@ -429,7 +457,7 @@ reviews_complete: false
 
 # 🚀 Deploy new feature
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'backlog', 'emoji-story.md'), emojiStory);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), emojiStory);
 
       await status();
 

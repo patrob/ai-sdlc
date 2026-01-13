@@ -19,7 +19,7 @@ export const DEFAULT_TIMEOUTS: TimeoutConfig = {
 export const DEFAULT_DAEMON_CONFIG: DaemonConfig = {
   enabled: false,
   pollingInterval: 5000,              // 5 seconds
-  watchPatterns: ['.ai-sdlc/backlog/*.md'],
+  watchPatterns: ['stories/*/story.md'],
   processDelay: 500,                  // 500ms debounce
   shutdownTimeout: 30000,             // 30 seconds
   enableEscShutdown: false,           // MVP: Ctrl+C only
@@ -30,10 +30,11 @@ export const DEFAULT_DAEMON_CONFIG: DaemonConfig = {
  * Default TDD configuration
  */
 export const DEFAULT_TDD_CONFIG: TDDConfig = {
-  enabled: false,     // Opt-in: TDD is disabled by default to preserve existing workflows
-  strictMode: true,   // Enforce strict red-green-refactor cycle
-  maxCycles: 50,      // Maximum test-implement-refactor cycles per story
-  requireApprovalPerCycle: false,  // Don't require approval between each cycle
+  enabled: false,
+  strictMode: true,
+  maxCycles: 50,
+  requireApprovalPerCycle: false,
+  requirePassingTestsForComplete: true,
 };
 
 export const DEFAULT_CONFIG: Config = {
@@ -235,6 +236,14 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
         if (typeof userConfig.tdd.requireApprovalPerCycle !== 'boolean') {
           console.warn('Invalid tdd.requireApprovalPerCycle in config (must be boolean), using default');
           delete userConfig.tdd.requireApprovalPerCycle;
+        }
+      }
+
+      // Validate tdd.requirePassingTestsForComplete (must be boolean)
+      if (userConfig.tdd.requirePassingTestsForComplete !== undefined) {
+        if (typeof userConfig.tdd.requirePassingTestsForComplete !== 'boolean') {
+          console.warn('Invalid tdd.requirePassingTestsForComplete in config (must be boolean), using default');
+          delete userConfig.tdd.requirePassingTestsForComplete;
         }
       }
     }

@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { createStory, moveStory, parseStory, writeStory, unblockStory } from '../../src/core/story.js';
+import { createStory, updateStoryStatus, parseStory, writeStory, unblockStory } from '../../src/core/story.js';
 import { assessState, findStoryById } from '../../src/core/kanban.js';
-import { BLOCKED_DIR } from '../../src/types/index.js';
+import { BLOCKED_DIR, STORIES_FOLDER } from '../../src/types/index.js';
 
 describe('Blocked Stories Integration', () => {
   let testDir: string;
@@ -15,12 +15,9 @@ describe('Blocked Stories Integration', () => {
     testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-'));
     sdlcRoot = path.join(testDir, '.ai-sdlc');
 
-    // Create SDLC folder structure
+    // Create SDLC folder structure (new architecture: stories/ folder)
     fs.mkdirSync(sdlcRoot, { recursive: true });
-    fs.mkdirSync(path.join(sdlcRoot, 'backlog'));
-    fs.mkdirSync(path.join(sdlcRoot, 'ready'));
-    fs.mkdirSync(path.join(sdlcRoot, 'in-progress'));
-    fs.mkdirSync(path.join(sdlcRoot, 'done'));
+    fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER));
 
     // Create config with max_refinement_attempts = 2
     const config = {
@@ -65,25 +62,18 @@ describe('Blocked Stories Integration', () => {
       max_refinement_attempts: 2,
     });
 
-    // Step 2: Move to in-progress and set implementation_complete
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    // Step 2: Update status to in-progress and set implementation_complete
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2; // Reached max
     story.frontmatter.current_iteration = 2;
     writeStory(story);
 
-    // Step 3: Call assessState - should move story to blocked
+    // Step 3: Call assessState - should update story status to blocked
     const assessment = assessState(sdlcRoot);
 
-    // Step 4: Verify story is in blocked folder
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR, `${story.slug}.md`);
-    expect(fs.existsSync(blockedPath)).toBe(true);
-
-    // Step 5: Verify story is no longer in in-progress
-    expect(fs.existsSync(story.path)).toBe(false);
-
-    // Step 6: Parse blocked story and verify metadata
-    const blockedStory = parseStory(blockedPath);
+    // Step 4: Verify story status is blocked (file path stays same in new architecture)
+    const blockedStory = parseStory(story.path);
     expect(blockedStory.frontmatter.status).toBe('blocked');
     expect(blockedStory.frontmatter.blocked_reason).toContain('Max refinement attempts');
     expect(blockedStory.frontmatter.blocked_reason).toContain('(2/2)');
@@ -93,7 +83,7 @@ describe('Blocked Stories Integration', () => {
     const timestamp = new Date(blockedStory.frontmatter.blocked_at!);
     expect(timestamp.getTime()).toBeGreaterThan(0);
 
-    // Step 7: Verify no actions were recommended (story was blocked instead)
+    // Step 5: Verify no actions were recommended (story was blocked instead)
     expect(assessment.recommendedActions.length).toBe(0);
   });
 
@@ -107,7 +97,7 @@ describe('Blocked Stories Integration', () => {
         max_refinement_attempts: 2,
       });
 
-      story = moveStory(story, 'in-progress', sdlcRoot);
+      story = updateStoryStatus(story, 'in-progress');
       story.frontmatter.implementation_complete = true;
       story.frontmatter.refinement_count = 2;
       story.frontmatter.current_iteration = 2;
@@ -115,25 +105,19 @@ describe('Blocked Stories Integration', () => {
       stories.push(story);
     }
 
-    // Call assessState - should block all 3 stories
+    // Call assessState - should block all 3 stories (update status in frontmatter)
     assessState(sdlcRoot);
 
-    // Verify all 3 stories are in blocked folder
-    const blockedDir = path.join(sdlcRoot, BLOCKED_DIR);
-    expect(fs.existsSync(blockedDir)).toBe(true);
-
-    const blockedFiles = fs.readdirSync(blockedDir);
-    expect(blockedFiles.length).toBe(3);
-
-    // Verify all stories have correct metadata
+    // Verify all stories have blocked status (path stays same in new architecture)
+    let blockedCount = 0;
     for (const story of stories) {
-      const blockedPath = path.join(blockedDir, `${story.slug}.md`);
-      expect(fs.existsSync(blockedPath)).toBe(true);
-
-      const blockedStory = parseStory(blockedPath);
-      expect(blockedStory.frontmatter.status).toBe('blocked');
-      expect(blockedStory.frontmatter.blocked_reason).toBeDefined();
+      const updatedStory = parseStory(story.path);
+      expect(updatedStory.frontmatter.status).toBe('blocked');
+      expect(updatedStory.frontmatter.blocked_reason).toBeDefined();
+      blockedCount++;
     }
+
+    expect(blockedCount).toBe(3);
   });
 
   it('should log clear message when blocking a story', () => {
@@ -146,7 +130,7 @@ describe('Blocked Stories Integration', () => {
       max_refinement_attempts: 2,
     });
 
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2;
     story.frontmatter.current_iteration = 2;
@@ -173,7 +157,7 @@ describe('Blocked Stories Integration', () => {
       labels: ['test'],
     });
 
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2; // Reached config default
     story.frontmatter.current_iteration = 2;
@@ -182,11 +166,9 @@ describe('Blocked Stories Integration', () => {
     // Call assessState
     assessState(sdlcRoot);
 
-    // Verify story is in blocked folder
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR, `${story.slug}.md`);
-    expect(fs.existsSync(blockedPath)).toBe(true);
-
-    const blockedStory = parseStory(blockedPath);
+    // Verify story has blocked status (path stays same)
+    const blockedStory = parseStory(story.path);
+    expect(blockedStory.frontmatter.status).toBe('blocked');
     expect(blockedStory.frontmatter.blocked_reason).toContain('(2/2)');
   });
 
@@ -197,7 +179,7 @@ describe('Blocked Stories Integration', () => {
       max_refinement_attempts: 2,
     });
 
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 1; // Below max
     story.frontmatter.current_iteration = 1;
@@ -206,12 +188,10 @@ describe('Blocked Stories Integration', () => {
     // Call assessState
     assessState(sdlcRoot);
 
-    // Verify story is NOT in blocked folder
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR, `${story.slug}.md`);
-    expect(fs.existsSync(blockedPath)).toBe(false);
-
-    // Verify story is still in in-progress
-    expect(fs.existsSync(story.path)).toBe(true);
+    // Verify story status is still in-progress (not blocked)
+    const updatedStory = parseStory(story.path);
+    expect(updatedStory.frontmatter.status).toBe('in-progress');
+    expect(updatedStory.frontmatter.blocked_reason).toBeUndefined();
   });
 
   it('should preserve all story content and metadata when blocking', () => {
@@ -223,7 +203,7 @@ describe('Blocked Stories Integration', () => {
       estimated_effort: 'medium',
     });
 
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
     story.frontmatter.research_complete = true;
     story.frontmatter.plan_complete = true;
@@ -240,9 +220,8 @@ describe('Blocked Stories Integration', () => {
     // Call assessState
     assessState(sdlcRoot);
 
-    // Parse blocked story
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR, `${story.slug}.md`);
-    const blockedStory = parseStory(blockedPath);
+    // Parse blocked story (path stays same in new architecture)
+    const blockedStory = parseStory(story.path);
 
     // Verify all metadata preserved
     expect(blockedStory.frontmatter.id).toBe(originalStory.frontmatter.id);
@@ -261,35 +240,21 @@ describe('Blocked Stories Integration', () => {
     // Mock console.error to capture errors
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    // Create story with invalid path to trigger error
-    // We'll manually create a malformed story file
-    const inProgressDir = path.join(sdlcRoot, 'in-progress');
-    const storyPath = path.join(inProgressDir, '01-test-story.md');
+    // Create story and manually make it fail the blocking process
+    let story = createStory('Test Story', sdlcRoot, {
+      type: 'feature',
+      max_refinement_attempts: 2,
+    });
 
-    // Write story with incomplete frontmatter
-    fs.writeFileSync(storyPath, `---
-id: test-1
-title: Test
-priority: 1
-status: in-progress
-type: feature
-created: '2024-01-01'
-labels: []
-research_complete: true
-plan_complete: true
-implementation_complete: true
-reviews_complete: false
-refinement_count: 2
-max_refinement_attempts: 2
-current_iteration: 2
----
+    // Update to in-progress
+    story = updateStoryStatus(story, 'in-progress');
+    story.frontmatter.implementation_complete = true;
+    story.frontmatter.refinement_count = 2;
+    story.frontmatter.current_iteration = 2;
+    writeStory(story);
 
-# Test
-`);
-
-    // Temporarily make blocked folder creation fail by creating it as a file
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
-    fs.writeFileSync(blockedPath, 'this is a file, not a directory');
+    // Make the story file read-only to trigger write error
+    fs.chmodSync(story.path, 0o444);
 
     // Call assessState - should catch error and fall back
     const assessment = assessState(sdlcRoot);
@@ -307,30 +272,26 @@ current_iteration: 2
 
     errorSpy.mockRestore();
 
-    // Clean up the file we created
-    fs.unlinkSync(blockedPath);
+    // Restore file permissions
+    fs.chmodSync(story.path, 0o644);
   });
 
   it('should not process stories from blocked folder on daemon watch', () => {
-    // Create a story and manually move it to blocked folder
+    // Create a story and set it to blocked status
     let story = createStory('Blocked Test', sdlcRoot, {
       type: 'feature',
       labels: ['test'],
     });
 
-    // Manually move story to blocked folder
-    const blockedDir = path.join(sdlcRoot, BLOCKED_DIR);
-    fs.mkdirSync(blockedDir, { recursive: true });
-
-    const blockedPath = path.join(blockedDir, `${story.slug}.md`);
+    // Update status to blocked (in new architecture, status is in frontmatter)
     story.frontmatter.status = 'blocked';
     story.frontmatter.blocked_reason = 'Manual block for testing';
     story.frontmatter.blocked_at = new Date().toISOString();
-    story.path = blockedPath;
     writeStory(story);
 
-    // Verify story is in blocked folder
-    expect(fs.existsSync(blockedPath)).toBe(true);
+    // Verify story has blocked status
+    const blockedStory = parseStory(story.path);
+    expect(blockedStory.frontmatter.status).toBe('blocked');
 
     // Call assessState - should NOT generate any actions for blocked story
     const assessment = assessState(sdlcRoot);
@@ -343,24 +304,20 @@ current_iteration: 2
   });
 
   it('should verify daemon watches only backlog, ready, and in-progress', () => {
-    // This test verifies the daemon configuration only includes active workflow folders
-    // The actual watch paths are: backlog/, ready/, in-progress/
-    // The blocked/ folder is explicitly excluded
+    // This test verifies stories with blocked status are not processed
+    // In new architecture, status is in frontmatter, not folder location
 
-    // Create stories in each folder to verify which ones would be processed
+    // Create stories with different statuses
     const backlogStory = createStory('Backlog Story', sdlcRoot, { type: 'feature' });
-    const readyStory = createStory('Ready Story', sdlcRoot, { type: 'feature' });
-    moveStory(readyStory, 'ready', sdlcRoot);
 
-    const inProgressStory = createStory('In Progress Story', sdlcRoot, { type: 'feature' });
-    moveStory(inProgressStory, 'in-progress', sdlcRoot);
+    let readyStory = createStory('Ready Story', sdlcRoot, { type: 'feature' });
+    readyStory = updateStoryStatus(readyStory, 'ready');
+
+    let inProgressStory = createStory('In Progress Story', sdlcRoot, { type: 'feature' });
+    inProgressStory = updateStoryStatus(inProgressStory, 'in-progress');
 
     // Create a blocked story
-    const blockedDir = path.join(sdlcRoot, BLOCKED_DIR);
-    fs.mkdirSync(blockedDir, { recursive: true });
     let blockedStory = createStory('Blocked Story', sdlcRoot, { type: 'feature' });
-    const blockedPath = path.join(blockedDir, `${blockedStory.slug}.md`);
-    blockedStory.path = blockedPath;
     blockedStory.frontmatter.status = 'blocked';
     blockedStory.frontmatter.blocked_reason = 'Testing';
     blockedStory.frontmatter.blocked_at = new Date().toISOString();
@@ -370,31 +327,29 @@ current_iteration: 2
     const assessment = assessState(sdlcRoot);
 
     // Verify that backlog, ready, and in-progress stories could have actions
-    // (They might not if they're already complete, but the assessment includes them)
     const backlogItems = assessment.backlogItems;
     const readyItems = assessment.readyItems;
     const inProgressItems = assessment.inProgressItems;
 
-    // Blocked folder should never have items in the assessment
-    // because assessState only scans KANBAN_FOLDERS (backlog, ready, in-progress, done)
+    // Verify assessment includes non-blocked stories
     expect(assessment.recommendedActions).toBeDefined();
 
-    // The important thing: no story from blocked/ should appear in assessment
+    // The important thing: blocked stories should not appear in assessment
     const blockedStoriesInAssessment = assessment.recommendedActions.filter(
       a => a.storyId === blockedStory.frontmatter.id
     );
     expect(blockedStoriesInAssessment).toHaveLength(0);
   });
 
-  it('should unblock a story and move it to the correct folder', () => {
-    // Step 1: Create story and move to in-progress
+  it('should unblock a story and update status correctly', () => {
+    // Step 1: Create story and update to in-progress
     let story = createStory('Test Feature', sdlcRoot, {
       type: 'feature',
       labels: ['test'],
       max_refinement_attempts: 2,
     });
 
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.plan_complete = true;
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2;
@@ -403,32 +358,25 @@ current_iteration: 2
     // Step 2: Block the story
     assessState(sdlcRoot);
 
-    // Step 3: Verify story is in blocked folder
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR, `${story.slug}.md`);
-    expect(fs.existsSync(blockedPath)).toBe(true);
-
-    const blockedStory = parseStory(blockedPath);
+    // Step 3: Verify story has blocked status (path stays same in new architecture)
+    const blockedStory = parseStory(story.path);
     expect(blockedStory.frontmatter.status).toBe('blocked');
     expect(blockedStory.frontmatter.blocked_reason).toBeDefined();
 
     // Step 4: Unblock the story
     const unblockedStory = unblockStory(story.frontmatter.id, sdlcRoot);
 
-    // Step 5: Verify story moved to in-progress (implementation_complete = true)
+    // Step 5: Verify story status updated to in-progress (implementation_complete = true)
     expect(unblockedStory.frontmatter.status).toBe('in-progress');
-    expect(unblockedStory.path).toContain('/in-progress/');
 
     // Step 6: Verify blocking fields are cleared
     expect(unblockedStory.frontmatter.blocked_reason).toBeUndefined();
     expect(unblockedStory.frontmatter.blocked_at).toBeUndefined();
 
-    // Step 7: Verify story is no longer in blocked folder
-    expect(fs.existsSync(blockedPath)).toBe(false);
-
-    // Step 8: Verify story can be found by ID in new location
+    // Step 7: Verify story can be found by ID
     const foundStory = findStoryById(sdlcRoot, story.frontmatter.id);
     expect(foundStory).toBeDefined();
-    expect(foundStory?.path).toContain('/in-progress/');
+    expect(foundStory?.frontmatter.status).toBe('in-progress');
   });
 
   it('should unblock story with resetRetries flag', () => {
@@ -438,7 +386,7 @@ current_iteration: 2
       max_refinement_attempts: 2,
     });
 
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.plan_complete = true;
     story.frontmatter.retry_count = 5;
     story.frontmatter.refinement_count = 2;
@@ -458,7 +406,7 @@ current_iteration: 2
     // Create and block a story with plan_complete = true
     let story = createStory('Test Feature', sdlcRoot);
 
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.plan_complete = true;
     story.frontmatter.implementation_complete = false;
     story.frontmatter.refinement_count = 2;
@@ -470,16 +418,15 @@ current_iteration: 2
     // Unblock
     const unblockedStory = unblockStory(story.frontmatter.id, sdlcRoot);
 
-    // Should move to ready (plan_complete = true, implementation_complete = false)
+    // Should update status to ready (plan_complete = true, implementation_complete = false)
     expect(unblockedStory.frontmatter.status).toBe('ready');
-    expect(unblockedStory.path).toContain('/ready/');
   });
 
   it('should unblock story to backlog when no phases are complete', () => {
     // Create and block a story with all phases incomplete
     let story = createStory('Test Feature', sdlcRoot);
 
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.research_complete = false;
     story.frontmatter.plan_complete = false;
     story.frontmatter.implementation_complete = false;
@@ -492,8 +439,7 @@ current_iteration: 2
     // Unblock
     const unblockedStory = unblockStory(story.frontmatter.id, sdlcRoot);
 
-    // Should move to backlog (no phases complete)
+    // Should update status to backlog (no phases complete)
     expect(unblockedStory.frontmatter.status).toBe('backlog');
-    expect(unblockedStory.path).toContain('/backlog/');
   });
 });

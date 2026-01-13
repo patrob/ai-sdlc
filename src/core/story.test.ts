@@ -26,15 +26,18 @@ describe('moveToBlocked', () => {
   });
 
   function createTestStory(folder: string, slug: string, priority: number = 1): string {
-    const folderPath = path.join(sdlcRoot, folder);
-    fs.mkdirSync(folderPath, { recursive: true });
+    const storiesFolder = path.join(sdlcRoot, 'stories');
+    fs.mkdirSync(storiesFolder, { recursive: true });
 
-    const filename = `${String(priority).padStart(2, '0')}-${slug}.md`;
-    const filePath = path.join(folderPath, filename);
+    const storyFolder = path.join(storiesFolder, slug);
+    fs.mkdirSync(storyFolder, { recursive: true });
+
+    const filePath = path.join(storyFolder, 'story.md');
 
     const content = `---
 id: ${slug}
 title: Test Story ${slug}
+slug: ${slug}
 priority: ${priority}
 status: in-progress
 type: feature
@@ -55,25 +58,24 @@ Test content
     return filePath;
   }
 
-  it('should create blocked directory if missing', () => {
+  it('should update status to blocked in frontmatter', () => {
     const storyPath = createTestStory('in-progress', 'test-story');
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR);
+    const originalStory = parseStory(storyPath);
 
-    expect(fs.existsSync(blockedPath)).toBe(false);
+    expect(originalStory.frontmatter.status).toBe('in-progress');
 
     moveToBlocked(storyPath, 'Test reason');
 
-    expect(fs.existsSync(blockedPath)).toBe(true);
+    const updatedStory = parseStory(storyPath);
+    expect(updatedStory.frontmatter.status).toBe('blocked');
   });
 
-  it('should move file to correct location', () => {
+  it('should keep file in same location', () => {
     const storyPath = createTestStory('in-progress', 'test-story');
-    const expectedNewPath = path.join(sdlcRoot, BLOCKED_DIR, 'test-story.md');
 
     moveToBlocked(storyPath, 'Test reason');
 
-    expect(fs.existsSync(expectedNewPath)).toBe(true);
-    expect(fs.existsSync(storyPath)).toBe(false);
+    expect(fs.existsSync(storyPath)).toBe(true);
   });
 
   it('should set frontmatter fields correctly', () => {
@@ -82,8 +84,7 @@ Test content
 
     moveToBlocked(storyPath, reason);
 
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR, 'test-story.md');
-    const blockedStory = parseStory(blockedPath);
+    const blockedStory = parseStory(storyPath);
 
     expect(blockedStory.frontmatter.status).toBe('blocked');
     expect(blockedStory.frontmatter.blocked_reason).toBe(reason);
@@ -101,8 +102,7 @@ Test content
 
     moveToBlocked(storyPath, 'Test reason');
 
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR, 'test-story.md');
-    const blockedStory = parseStory(blockedPath);
+    const blockedStory = parseStory(storyPath);
 
     expect(blockedStory.frontmatter.id).toBe(originalStory.frontmatter.id);
     expect(blockedStory.frontmatter.title).toBe(originalStory.frontmatter.title);
@@ -112,24 +112,20 @@ Test content
     expect(blockedStory.content).toBe(originalStory.content);
   });
 
-  it('should handle filename conflicts by appending timestamp', () => {
-    // Create first story and move to blocked
-    const story1Path = createTestStory('in-progress', 'test-story', 1);
+  it('should allow blocking multiple stories with different IDs', () => {
+    const story1Path = createTestStory('in-progress', 'test-story-1', 1);
     moveToBlocked(story1Path, 'First block');
 
-    // Create second story with same slug
-    const story2Path = createTestStory('ready', 'test-story', 2);
+    const story2Path = createTestStory('ready', 'test-story-2', 2);
     moveToBlocked(story2Path, 'Second block');
 
-    const blockedDir = path.join(sdlcRoot, BLOCKED_DIR);
-    const files = fs.readdirSync(blockedDir);
+    const story1 = parseStory(story1Path);
+    const story2 = parseStory(story2Path);
 
-    expect(files.length).toBe(2);
-    expect(files).toContain('test-story.md');
-
-    // Second file should have timestamp appended
-    const timestampFiles = files.filter(f => f.match(/^test-story-\d+\.md$/));
-    expect(timestampFiles.length).toBe(1);
+    expect(story1.frontmatter.status).toBe('blocked');
+    expect(story2.frontmatter.status).toBe('blocked');
+    expect(story1.frontmatter.blocked_reason).toBe('First block');
+    expect(story2.frontmatter.blocked_reason).toBe('Second block');
   });
 
   it('should validate path security and reject path traversal', () => {
@@ -153,7 +149,7 @@ Test content
     }).toThrow('Invalid story path: not within .ai-sdlc folder');
   });
 
-  it('should be idempotent when story already in blocked folder', () => {
+  it('should be idempotent when story already blocked', () => {
     // Use fake timers for deterministic timestamps
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-12T10:00:00.000Z'));
@@ -162,17 +158,16 @@ Test content
 
     // Move to blocked first time - timestamp should be 10:00:00.000Z
     moveToBlocked(storyPath, 'First reason');
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR, 'test-story.md');
-    const story1 = parseStory(blockedPath);
+    const story1 = parseStory(storyPath);
     // Capture timestamp as primitive immediately to avoid any reference issues
     const firstBlockedAt = story1.frontmatter.blocked_at;
 
     // Advance time by 100ms - timestamp should now be 10:00:00.100Z
     vi.advanceTimersByTime(100);
 
-    // Move to blocked second time (already there)
-    moveToBlocked(blockedPath, 'Second reason');
-    const story2 = parseStory(blockedPath);
+    // Move to blocked second time (already blocked)
+    moveToBlocked(storyPath, 'Second reason');
+    const story2 = parseStory(storyPath);
 
     // Should update the reason and timestamp
     expect(story2.frontmatter.blocked_reason).toBe('Second reason');
@@ -181,17 +176,16 @@ Test content
     expect(story2.frontmatter.blocked_at).not.toBe(firstBlockedAt);
 
     // Should still be in the same location
-    expect(fs.existsSync(blockedPath)).toBe(true);
+    expect(fs.existsSync(storyPath)).toBe(true);
   });
 
-  it('should preserve content when moving to blocked', () => {
+  it('should preserve content when blocking', () => {
     const storyPath = createTestStory('in-progress', 'test-story');
     const originalStory = parseStory(storyPath);
 
     moveToBlocked(storyPath, 'Test reason');
 
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR, 'test-story.md');
-    const blockedStory = parseStory(blockedPath);
+    const blockedStory = parseStory(storyPath);
 
     expect(blockedStory.content).toBe(originalStory.content);
   });
@@ -341,15 +335,18 @@ describe('unblockStory', () => {
   });
 
   function createBlockedStory(slug: string, overrides: any = {}): string {
-    const blockedFolder = path.join(sdlcRoot, BLOCKED_DIR);
-    fs.mkdirSync(blockedFolder, { recursive: true });
+    const storiesFolder = path.join(sdlcRoot, 'stories');
+    fs.mkdirSync(storiesFolder, { recursive: true });
 
-    const filename = `${slug}.md`;
-    const filePath = path.join(blockedFolder, filename);
+    const storyFolder = path.join(storiesFolder, slug);
+    fs.mkdirSync(storyFolder, { recursive: true });
+
+    const filePath = path.join(storyFolder, 'story.md');
 
     const frontmatter = {
       id: slug,
       title: `Test Story ${slug}`,
+      slug: slug,
       priority: 1,
       status: 'blocked',
       type: 'feature',
@@ -386,13 +383,13 @@ Test content`;
     return filePath;
   }
 
-  it('should throw error when story not found in blocked folder', () => {
+  it('should throw error when story not found', () => {
     expect(() => {
       unblockStory('nonexistent-id', sdlcRoot);
-    }).toThrow('not found in blocked folder');
+    }).toThrow('Story nonexistent-id not found');
   });
 
-  it('should move blocked story to backlog when no phases complete', () => {
+  it('should change status to in-progress when unblocking', () => {
     createBlockedStory('test-story', {
       research_complete: false,
       plan_complete: false,
@@ -401,13 +398,12 @@ Test content`;
 
     const unblockedStory = unblockStory('test-story', sdlcRoot);
 
-    expect(unblockedStory.frontmatter.status).toBe('backlog');
-    expect(unblockedStory.path).toContain('/backlog/');
+    expect(unblockedStory.frontmatter.status).toBe('in-progress');
     expect(unblockedStory.frontmatter.blocked_reason).toBeUndefined();
     expect(unblockedStory.frontmatter.blocked_at).toBeUndefined();
   });
 
-  it('should move blocked story to ready when research is complete', () => {
+  it('should preserve completion flags when unblocking', () => {
     createBlockedStory('test-story', {
       research_complete: true,
       plan_complete: false,
@@ -416,12 +412,13 @@ Test content`;
 
     const unblockedStory = unblockStory('test-story', sdlcRoot);
 
-    expect(unblockedStory.frontmatter.status).toBe('ready');
-    expect(unblockedStory.path).toContain('/ready/');
+    expect(unblockedStory.frontmatter.status).toBe('in-progress');
+    expect(unblockedStory.frontmatter.research_complete).toBe(true);
+    expect(unblockedStory.frontmatter.plan_complete).toBe(false);
   });
 
-  it('should move blocked story to ready when plan is complete', () => {
-    createBlockedStory('test-story', {
+  it('should keep story in same folder', () => {
+    const storyPath = createBlockedStory('test-story', {
       research_complete: false,
       plan_complete: true,
       implementation_complete: false,
@@ -429,11 +426,11 @@ Test content`;
 
     const unblockedStory = unblockStory('test-story', sdlcRoot);
 
-    expect(unblockedStory.frontmatter.status).toBe('ready');
-    expect(unblockedStory.path).toContain('/ready/');
+    expect(unblockedStory.path).toBe(storyPath);
+    expect(fs.existsSync(storyPath)).toBe(true);
   });
 
-  it('should move blocked story to in-progress when implementation is complete', () => {
+  it('should update status regardless of completion state', () => {
     createBlockedStory('test-story', {
       research_complete: true,
       plan_complete: true,
@@ -443,7 +440,6 @@ Test content`;
     const unblockedStory = unblockStory('test-story', sdlcRoot);
 
     expect(unblockedStory.frontmatter.status).toBe('in-progress');
-    expect(unblockedStory.path).toContain('/in-progress/');
   });
 
   it('should clear blocked_reason and blocked_at fields', () => {
@@ -499,29 +495,24 @@ Test content`;
   });
 
   it('should preserve story content when unblocking', () => {
-    createBlockedStory('test-story');
+    const storyPath = createBlockedStory('test-story');
 
-    const originalBlocked = parseStory(path.join(sdlcRoot, BLOCKED_DIR, 'test-story.md'));
+    const originalBlocked = parseStory(storyPath);
     const unblockedStory = unblockStory('test-story', sdlcRoot);
 
     expect(unblockedStory.content).toBe(originalBlocked.content);
   });
 
-  it('should update file path and remove old blocked file', () => {
-    createBlockedStory('test-story', {
+  it('should keep file in same location after unblocking', () => {
+    const storyPath = createBlockedStory('test-story', {
       plan_complete: true,
     });
 
-    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR, 'test-story.md');
-    expect(fs.existsSync(blockedPath)).toBe(true);
+    expect(fs.existsSync(storyPath)).toBe(true);
 
     const unblockedStory = unblockStory('test-story', sdlcRoot);
 
-    // Old blocked file should be removed
-    expect(fs.existsSync(blockedPath)).toBe(false);
-
-    // New file should exist in ready folder
-    expect(fs.existsSync(unblockedStory.path)).toBe(true);
-    expect(unblockedStory.path).toContain('/ready/');
+    expect(fs.existsSync(storyPath)).toBe(true);
+    expect(unblockedStory.path).toBe(storyPath);
   });
 });

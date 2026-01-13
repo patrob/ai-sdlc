@@ -1,5 +1,34 @@
 # Claude Code Instructions for ai-sdlc
 
+## Pre-Commit Requirements
+- Run `make verify` before committing ANY changes
+- If errors occur, fix them immediately before proceeding
+- Never commit code that fails verification
+
+## Code Principles
+
+### DRY (Don't Repeat Yourself)
+- If you write the same or similar code 3+ times, extract it into a service or utility
+- Look for existing abstractions before creating new ones
+- Consolidate duplicate logic into shared functions
+
+### SOLID Principles
+- **Single Responsibility**: Each module/class should have one reason to change
+- **Open/Closed**: Open for extension, closed for modification
+- **Liskov Substitution**: Subtypes must be substitutable for their base types
+- **Interface Segregation**: Prefer small, focused interfaces over large ones
+- **Dependency Inversion**: Depend on abstractions, not concrete implementations
+
+### Update All References
+- When changing an endpoint, service call, or interface, update ALL references - not just the initial area of concern
+- Use grep/search to find all usages before making changes
+- Verify no broken references remain after modifications
+
+### Tidy First
+- Always leave the codebase better than you found it
+- Small improvements (rename unclear variables, add missing types, fix minor issues) are encouraged
+- Keep scope creep under control: tidying should not increase the scope of work by more than 10%
+
 ## Code Conventions
 
 ### Action Types
@@ -48,12 +77,49 @@ case 'rework':
 ## Testing
 - Run `npm test` before completing implementation
 - Run `npm run build` to verify TypeScript compilation succeeds
-- Follow the Testing Pyramid: many unit tests, fewer integration tests, fewest E2E tests
-- **Unit tests**: Colocate with the files they test (e.g., `src/core/story.ts` → `src/core/story.test.ts`)
-- **Integration tests**: Place in `tests/integration/` when testing multiple components together
-- The `tests/` directory is for integration tests, test utilities, helpers, and fixtures
 - Do NOT create shell scripts for manual testing - use vitest instead
 - Do NOT test frameworks or SDKs - trust that they work as documented (e.g., don't test that the Claude Agent SDK discovers CLAUDE.md)
+
+### Test Pyramid
+Follow the Testing Pyramid: **many unit tests, fewer integration tests, fewest E2E tests**.
+
+```
+        /\
+       /  \      E2E Tests (fewest)
+      /----\     - Full system workflows
+     /      \
+    /--------\   Integration Tests (some)
+   /          \  - Component boundaries
+  /------------\
+ /              \ Unit Tests (many)
+/________________\ - Individual functions/modules
+```
+
+**Unit tests** (the foundation):
+- Test individual functions, classes, and modules in isolation
+- Fast, deterministic, no external dependencies
+- Colocate with the files they test (e.g., `src/core/story.ts` → `src/core/story.test.ts`)
+- Mock external dependencies (file system, network, etc.)
+- Should cover edge cases, error conditions, and happy paths
+
+**Integration tests** (the middle layer):
+- Place in `tests/integration/` when testing multiple components together
+- The `tests/` directory is for integration tests, test utilities, helpers, and fixtures
+- Test that components work together correctly at boundaries
+- More expensive to run, so be selective
+
+**When to write an integration test:**
+- Testing CLI command execution flow (mocking ora, verifying spinner behavior)
+- Testing file system operations across multiple services
+- Testing that configuration loading integrates with dependent components
+- Testing error propagation across module boundaries
+- Verifying that mocked dependencies are called with correct arguments during real execution flows
+
+**When NOT to write an integration test:**
+- Testing pure logic that can be unit tested
+- Testing return values or types (that's a unit test)
+- Testing third-party libraries or frameworks
+- Testing individual function behavior in isolation
 
 ## File Hygiene
 - Do NOT create temporary/scratch files in the project root (e.g., `verify-*.md`, `IMPLEMENTATION_SUMMARY.md`)

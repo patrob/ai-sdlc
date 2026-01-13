@@ -172,7 +172,7 @@ describe('Configuration Security Tests', () => {
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Invalid AI_SDLC_MAX_RETRIES value')
       );
-      expect(config.reviewConfig.maxRetries).toBe(Infinity); // Default (infinite)
+      expect(config.reviewConfig.maxRetries).toBe(3); // Default is 3
     });
 
     it('should reject negative AI_SDLC_MAX_RETRIES', () => {
@@ -184,19 +184,19 @@ describe('Configuration Security Tests', () => {
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Invalid AI_SDLC_MAX_RETRIES value')
       );
-      expect(config.reviewConfig.maxRetries).toBe(Infinity); // Default (infinite)
+      expect(config.reviewConfig.maxRetries).toBe(3); // Default is 3
     });
 
-    it('should reject AI_SDLC_MAX_RETRIES above 100', () => {
+    it('should reject AI_SDLC_MAX_RETRIES above 10', () => {
       process.env.AI_SDLC_MAX_RETRIES = '150';
 
       const config = loadConfig(tempDir);
 
-      // Should warn and ignore invalid value
+      // Should warn and ignore invalid value (env var limit is 0-10)
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Invalid AI_SDLC_MAX_RETRIES value')
       );
-      expect(config.reviewConfig.maxRetries).toBe(Infinity); // Default (infinite)
+      expect(config.reviewConfig.maxRetries).toBe(3); // Default is 3
     });
 
     it('should accept valid AI_SDLC_MAX_RETRIES', () => {

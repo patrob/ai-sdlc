@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import {
   TDD_SYSTEM_PROMPT,
   runSingleTest,
@@ -9,10 +9,21 @@ import {
   recordTDDCycle,
   checkACCoverage,
   runTDDImplementation,
+  commitIfAllTestsPass,
   type TDDPhaseResult,
 } from './implementation.js';
 import { Story, TDDTestCycle } from '../types/index.js';
 import * as storyModule from '../core/story.js';
+import { execSync } from 'child_process';
+
+// Mock child_process module
+vi.mock('child_process', async () => {
+  const actual = await vi.importActual<typeof import('child_process')>('child_process');
+  return {
+    ...actual,
+    execSync: vi.fn(),
+  };
+});
 
 // Mock the story module for tests that need it
 vi.mock('../core/story.js', async () => {
@@ -415,6 +426,176 @@ Just a summary, no AC.
 
       expect(result).toHaveProperty('success');
       expect(result).toHaveProperty('changesMade');
+    });
+  });
+
+  describe('commitIfAllTestsPass', () => {
+    const execSyncMock = vi.mocked(execSync);
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-01-15T10:00:00Z'));
+      execSyncMock.mockReset();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should export commitIfAllTestsPass function', () => {
+      expect(commitIfAllTestsPass).toBeDefined();
+      expect(typeof commitIfAllTestsPass).toBe('function');
+    });
+
+    it('should return { committed: true } when tests pass and changes exist', async () => {
+      // Mock git status to show uncommitted changes
+      execSyncMock
+        .mockReturnValueOnce(' M src/file.ts\n' as any) // git status --porcelain
+        .mockReturnValueOnce(undefined as any) // git add -A
+        .mockReturnValueOnce(undefined as any); // git commit
+
+      // Mock runAllTests to pass
+      const mockRunAllTests = vi.fn().mockResolvedValue({
+        passed: true,
+        output: 'All tests passed',
+      });
+
+      // Pass mock as dependency injection parameter
+      const result = await commitIfAllTestsPass('/test/dir', 'feat(story): test message', 300000, mockRunAllTests);
+
+      expect(result.committed).toBe(true);
+      expect(result.reason).toBeUndefined();
+      expect(mockRunAllTests).toHaveBeenCalledWith('/test/dir', 300000);
+      expect(execSyncMock).toHaveBeenCalledWith('git status --porcelain', { cwd: '/test/dir', encoding: 'utf-8' });
+      expect(execSyncMock).toHaveBeenCalledWith('git add -A', { cwd: '/test/dir', stdio: 'pipe' });
+      expect(execSyncMock).toHaveBeenCalledWith(
+        expect.stringContaining('git commit -m'),
+        expect.objectContaining({ cwd: '/test/dir' })
+      );
+    });
+
+    it('should return { committed: false, reason: "tests failed" } when tests fail', async () => {
+      // Mock git status to show uncommitted changes
+      execSyncMock
+        .mockReturnValueOnce(' M src/file.ts\n' as any); // git status --porcelain
+
+      // Mock runAllTests to fail
+      const mockRunAllTests = vi.fn().mockResolvedValue({
+        passed: false,
+        output: 'Test failed',
+      });
+
+      // Pass mock as dependency injection parameter
+      const result = await commitIfAllTestsPass('/test/dir', 'feat(story): test message', 300000, mockRunAllTests);
+
+      expect(result.committed).toBe(false);
+      expect(result.reason).toBe('tests failed');
+      expect(mockRunAllTests).toHaveBeenCalledWith('/test/dir', 300000);
+      // Git add and commit should NOT be called
+      expect(execSyncMock).toHaveBeenCalledTimes(1); // Only status check
+    });
+
+    it('should return { committed: false, reason: "nothing to commit" } when no changes exist', async () => {
+      // Mock git status to show no changes
+      execSyncMock
+        .mockReturnValueOnce('' as any); // git status --porcelain (empty)
+
+      const result = await commitIfAllTestsPass('/test/dir', 'feat(story): test message', 300000);
+
+      expect(result.committed).toBe(false);
+      expect(result.reason).toBe('nothing to commit');
+      // runAllTests should NOT be called if there are no changes
+      expect(execSyncMock).toHaveBeenCalledTimes(1); // Only status check
+    });
+
+    it('should handle git command errors gracefully', async () => {
+      // Mock git status to show changes, then git add, then git commit fails
+      execSyncMock
+        .mockReturnValueOnce(' M src/file.ts\n' as any) // git status --porcelain
+        .mockReturnValueOnce(undefined as any) // git add -A
+        .mockImplementationOnce(() => {
+          throw new Error('git commit failed');
+        }); // git commit fails
+
+      // Mock runAllTests to pass
+      const mockRunAllTests = vi.fn().mockResolvedValue({
+        passed: true,
+        output: 'All tests passed',
+      });
+
+      // Pass mock as dependency injection parameter
+      await expect(commitIfAllTestsPass('/test/dir', 'feat(story): test message', 300000, mockRunAllTests)).rejects.toThrow('git commit failed');
+    });
+
+    it('should properly escape special characters in commit message', async () => {
+      // Mock git operations
+      execSyncMock
+        .mockReturnValueOnce(' M src/file.ts\n' as any) // git status --porcelain
+        .mockReturnValueOnce(undefined as any) // git add -A
+        .mockReturnValueOnce(undefined as any); // git commit
+
+      // Mock runAllTests to pass
+      const mockRunAllTests = vi.fn().mockResolvedValue({
+        passed: true,
+        output: 'All tests passed',
+      });
+
+      const messageWithQuotes = "feat(story): add 'quotes' and \"double quotes\"";
+      // Pass mock as dependency injection parameter
+      await commitIfAllTestsPass('/test/dir', messageWithQuotes, 300000, mockRunAllTests);
+
+      // Check that the commit command was called with properly escaped message
+      const commitCall = execSyncMock.mock.calls.find(call =>
+        typeof call[0] === 'string' && call[0].includes('git commit')
+      );
+      expect(commitCall).toBeDefined();
+      expect(commitCall![0]).toContain("git commit -m '");
+      // Verify the escaping pattern is applied (single quotes wrapped, internal quotes escaped)
+    });
+
+    it('should call runAllTests with correct parameters', async () => {
+      // Mock git status to show changes
+      execSyncMock
+        .mockReturnValueOnce(' M src/file.ts\n' as any) // git status --porcelain
+        .mockReturnValueOnce(undefined as any) // git add -A
+        .mockReturnValueOnce(undefined as any); // git commit
+
+      // Mock runAllTests
+      const mockRunAllTests = vi.fn().mockResolvedValue({
+        passed: true,
+        output: 'All tests passed',
+      });
+
+      const testTimeout = 600000; // Different timeout for testing
+      // Pass mock as dependency injection parameter
+      await commitIfAllTestsPass('/custom/dir', 'feat(story): test', testTimeout, mockRunAllTests);
+
+      expect(mockRunAllTests).toHaveBeenCalledWith('/custom/dir', testTimeout);
+    });
+
+    it('should execute git commands in correct sequence', async () => {
+      const executionOrder: string[] = [];
+
+      // Mock git operations and track execution order
+      execSyncMock.mockImplementation((cmd: string) => {
+        if (typeof cmd === 'string') {
+          if (cmd.includes('git status')) executionOrder.push('status');
+          if (cmd.includes('git add')) executionOrder.push('add');
+          if (cmd.includes('git commit')) executionOrder.push('commit');
+        }
+        return cmd.includes('git status') ? ' M file.ts\n' : undefined;
+      });
+
+      // Mock runAllTests
+      const mockRunAllTests = vi.fn().mockResolvedValue({
+        passed: true,
+        output: 'All tests passed',
+      });
+
+      // Pass mock as dependency injection parameter
+      await commitIfAllTestsPass('/test/dir', 'feat(story): test', 300000, mockRunAllTests);
+
+      expect(executionOrder).toEqual(['status', 'add', 'commit']);
     });
   });
 });

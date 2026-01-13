@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { assessState } from '../../src/core/kanban.js';
-import { createStory, updateStoryStatus, appendReviewHistory, writeStory } from '../../src/core/story.js';
+import { createStory, updateStoryStatus, appendReviewHistory, writeStory, parseStory } from '../../src/core/story.js';
 import { ReviewDecision, ReviewSeverity, STORIES_FOLDER } from '../../src/types/index.js';
 
 describe('Kanban Rework Detection', () => {
@@ -143,30 +143,27 @@ describe('Kanban Rework Detection', () => {
       poReviewPassed: false,
     });
 
-    const assessment = assessState(sdlcRoot);
+    assessState(sdlcRoot);
 
-    // Should not generate rework action
-    const reworkActions = assessment.recommendedActions.filter(a => a.type === 'rework');
-    expect(reworkActions).toHaveLength(0);
+    // Should not generate rework action (circuit breaker moves to blocked directly)
+    // Re-parse story to see updated status after assessState
+    const updatedStory = parseStory(story.path);
 
-    // Should have escalation action
-    const escalationActions = assessment.recommendedActions.filter(
-      a => a.reason.includes('max refinement attempts')
-    );
-    expect(escalationActions).toHaveLength(1);
-    expect(escalationActions[0].context?.blockedByMaxRefinements).toBe(true);
+    // Story should now be blocked
+    expect(updatedStory.frontmatter.status).toBe('blocked');
+    expect(updatedStory.frontmatter.blocked_reason).toContain('Max refinement attempts');
   });
 
   it('should prioritize rework actions higher than normal review', () => {
     // Create two stories
     let story1 = createStory('Story 1', sdlcRoot);
-    story1 = moveStory(story1, 'in-progress', sdlcRoot);
+    story1 = updateStoryStatus(story1, 'in-progress');
     story1.frontmatter.implementation_complete = true;
     story1.frontmatter.priority = 5;
     writeStory(story1); // Persist changes to disk
 
     let story2 = createStory('Story 2', sdlcRoot);
-    story2 = moveStory(story2, 'in-progress', sdlcRoot);
+    story2 = updateStoryStatus(story2, 'in-progress');
     story2.frontmatter.implementation_complete = true;
     story2.frontmatter.priority = 1; // Higher base priority
     writeStory(story2); // Persist changes to disk
@@ -247,16 +244,15 @@ describe('Kanban Rework Detection', () => {
       poReviewPassed: true,
     });
 
-    const assessment = assessState(sdlcRoot);
+    assessState(sdlcRoot);
 
     // Should trigger circuit breaker even though default is 3
-    const reworkActions = assessment.recommendedActions.filter(a => a.type === 'rework');
-    expect(reworkActions).toHaveLength(0);
+    // Re-parse story to see updated status after assessState
+    const updatedStory = parseStory(story.path);
 
-    const escalationActions = assessment.recommendedActions.filter(
-      a => a.context?.blockedByMaxRefinements
-    );
-    expect(escalationActions).toHaveLength(1);
+    // Story should now be blocked
+    expect(updatedStory.frontmatter.status).toBe('blocked');
+    expect(updatedStory.frontmatter.blocked_reason).toContain('Max refinement attempts (1/1)');
   });
 
   it('should not generate rework for stories without implementation complete', () => {

@@ -2,7 +2,7 @@ import { execSync, spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
-import { parseStory, writeStory, moveStory, appendToSection, updateStoryField, isAtMaxRetries, appendReviewHistory, snapshotMaxRetries, getEffectiveMaxRetries } from '../core/story.js';
+import { parseStory, writeStory, updateStoryStatus, appendToSection, updateStoryField, isAtMaxRetries, appendReviewHistory, snapshotMaxRetries, getEffectiveMaxRetries } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from '../core/config.js';
 import { Story, AgentResult, ReviewResult, ReviewIssue, ReviewIssueSeverity, ReviewDecision, ReviewSeverity, ReviewAttempt, Config, TDDTestCycle } from '../types/index.js';
@@ -878,9 +878,9 @@ export async function createPullRequest(
     } catch {
       changesMade.push('GitHub CLI not available - PR creation skipped');
 
-      // Still move to done for MVP
-      story = moveStory(story, 'done', sdlcRoot);
-      changesMade.push('Moved story to done/');
+      // Still update to done for MVP
+      story = updateStoryStatus(story, 'done');
+      changesMade.push('Updated status to done');
 
       return {
         success: true,
@@ -946,9 +946,9 @@ ${story.content.substring(0, 1000)}...
       changesMade.push(`PR creation failed: ${sanitizedError}`);
     }
 
-    // Move story to done
-    story = moveStory(story, 'done', sdlcRoot);
-    changesMade.push('Moved story to done/');
+    // Update status to done
+    story = updateStoryStatus(story, 'done');
+    changesMade.push('Updated status to done');
 
     return {
       success: true,

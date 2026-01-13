@@ -389,11 +389,11 @@ Test content`;
     }).toThrow('Story nonexistent-id not found');
   });
 
-  it('should change status to in-progress when unblocking', () => {
+  it('should change status to in-progress when implementation is complete', () => {
     createBlockedStory('test-story', {
-      research_complete: false,
-      plan_complete: false,
-      implementation_complete: false,
+      research_complete: true,
+      plan_complete: true,
+      implementation_complete: true,
     });
 
     const unblockedStory = unblockStory('test-story', sdlcRoot);
@@ -406,15 +406,16 @@ Test content`;
   it('should preserve completion flags when unblocking', () => {
     createBlockedStory('test-story', {
       research_complete: true,
-      plan_complete: false,
+      plan_complete: true,
       implementation_complete: false,
     });
 
     const unblockedStory = unblockStory('test-story', sdlcRoot);
 
-    expect(unblockedStory.frontmatter.status).toBe('in-progress');
+    // Plan complete but not implementation → ready status
+    expect(unblockedStory.frontmatter.status).toBe('ready');
     expect(unblockedStory.frontmatter.research_complete).toBe(true);
-    expect(unblockedStory.frontmatter.plan_complete).toBe(false);
+    expect(unblockedStory.frontmatter.plan_complete).toBe(true);
   });
 
   it('should keep story in same folder', () => {

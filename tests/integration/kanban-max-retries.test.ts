@@ -427,6 +427,10 @@ Implementation content.
       const filePath = path.join(storyFolder, 'story.md');
 
       // Create story with ANSI escape codes in review feedback
+      // Use actual escape characters (ESC = 0x1B = \x1B)
+      const ESC = '\x1B';
+      const feedbackWithAnsi = `${ESC}[31mRed error text${ESC}[0m with ${ESC}[1;33mbold yellow${ESC}[0m`;
+
       const content = `---
 id: ansi-test
 title: ANSI Escape Test Story
@@ -439,7 +443,7 @@ updated: '2024-01-15T11:00:00Z'
 labels: []
 research_complete: true
 plan_complete: true
-implementation_complete: true
+implementation_complete: false
 reviews_complete: false
 retry_count: 2
 max_retries: 2
@@ -447,7 +451,7 @@ review_history:
   - timestamp: '2024-01-15T09:00:00Z'
     decision: rejected
     severity: blocker
-    feedback: '\x1B[31mRed error text\x1B[0m with \x1B[1;33mbold yellow\x1B[0m'
+    feedback: ${JSON.stringify(feedbackWithAnsi)}
     blockers:
       - Security issue
     codeReviewPassed: false

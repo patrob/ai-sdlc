@@ -123,13 +123,15 @@ reviews_complete: false
     });
 
     it('should display stories with IDs and titles', async () => {
+      // Use wider terminal for this test to fit full title
+      process.stdout.columns = 200;
       const sdlcRoot = getSdlcRoot();
 
-      const storyId = 'story-abc123';
+      const storyId = 'st-123';
       fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const story = `---
-id: story-abc123
-title: Test Story Title
+id: st-123
+title: Test Title
 slug: test-story
 priority: 10
 status: backlog
@@ -142,7 +144,7 @@ implementation_complete: false
 reviews_complete: false
 ---
 
-# Test Story Title
+# Test Title
 `;
       fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), story);
 
@@ -151,18 +153,20 @@ reviews_complete: false
       const output = consoleLogSpy.mock.calls.map((call: any[]) => call[0]).join('\n');
 
       // Should contain story ID and title
-      expect(output).toContain('story-abc123');
-      expect(output).toContain('Test Story Title');
+      expect(output).toContain('st-123');
+      expect(output).toContain('Test Title');
     });
 
     it('should display workflow flags for stories', async () => {
+      // Use wider terminal for this test to fit flags
+      process.stdout.columns = 200;
       const sdlcRoot = getSdlcRoot();
 
-      const storyId = 'story-flags';
+      const storyId = 'st-fl';
       fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const story = `---
-id: story-flags
-title: Story with flags
+id: st-fl
+title: Flags
 slug: story-flags
 priority: 10
 status: in-progress
@@ -175,7 +179,7 @@ implementation_complete: false
 reviews_complete: false
 ---
 
-# Story with flags
+# Flags
 `;
       fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), story);
 

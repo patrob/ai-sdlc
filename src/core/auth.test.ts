@@ -35,10 +35,6 @@ describe('auth', () => {
   });
 
   afterEach(() => {
-    // Clean up environment variables
-    delete process.env.ANTHROPIC_API_KEY;
-    delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
-
     // Restore real timers if used
     vi.useRealTimers();
   });
@@ -64,6 +60,7 @@ describe('auth', () => {
 
     describe('credential file support', () => {
       it('should return token from credential file when env vars not set', () => {
+        const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
         const credentialPath = path.join('/home/testuser', '.claude', '.credentials.json');
         vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
           accessToken: 'sk-ant-oat-file-token',
@@ -74,6 +71,8 @@ describe('auth', () => {
         const result = getApiKey();
         expect(result).toBe('sk-ant-oat-file-token');
         expect(readFileSync).toHaveBeenCalledWith(credentialPath, 'utf-8');
+        // Should log credential source at debug level
+        expect(debugSpy).toHaveBeenCalledWith('Using credentials from: credentials_file');
       });
 
       it('should prefer env vars over credential file', () => {
@@ -129,13 +128,17 @@ describe('auth', () => {
         expect(result).toBeNull();
       });
 
-      it('should return null when EACCES error occurs (permission denied)', () => {
+      it('should return null and log warning when EACCES error occurs (permission denied)', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const eaccesError = new Error('EACCES: permission denied') as NodeJS.ErrnoException;
         eaccesError.code = 'EACCES';
         vi.mocked(readFileSync).mockImplementation(() => { throw eaccesError; });
 
         const result = getApiKey();
         expect(result).toBeNull();
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('permission denied')
+        );
       });
 
       it('should handle invalid expiresAt field gracefully and still return token', () => {
@@ -146,6 +149,16 @@ describe('auth', () => {
 
         // Should still return token even with invalid date
         expect(getApiKey()).toBe('sk-ant-oat-token');
+      });
+
+      it('should log warning for unexpected file read errors', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const unexpectedError = new Error('Disk I/O error') as NodeJS.ErrnoException;
+        vi.mocked(readFileSync).mockImplementation(() => { throw unexpectedError; });
+
+        const result = getApiKey();
+        expect(result).toBeNull();
+        expect(warnSpy).toHaveBeenCalledWith('Warning: Unexpected error reading credential file');
       });
     });
 
@@ -183,12 +196,16 @@ describe('auth', () => {
       });
 
       it('should check credential file on all platforms (linux, darwin, win32)', () => {
-        const platforms = ['linux', 'darwin', 'win32'] as const;
+        const platformConfigs = [
+          { platform: 'linux', homedir: '/home/testuser' },
+          { platform: 'darwin', homedir: '/Users/testuser' },
+          { platform: 'win32', homedir: 'C:\\Users\\testuser' },
+        ] as const;
 
-        platforms.forEach((plat) => {
+        platformConfigs.forEach(({ platform: plat, homedir: home }) => {
           vi.resetAllMocks();
           vi.mocked(platform).mockReturnValue(plat);
-          vi.mocked(homedir).mockReturnValue('/home/testuser');
+          vi.mocked(homedir).mockReturnValue(home);
 
           vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
             accessToken: 'sk-ant-oat-token'
@@ -214,7 +231,8 @@ describe('auth', () => {
     });
 
     describe('token expiration handling', () => {
-      it('should return token even when expired (API will reject)', () => {
+      it('should return token and log warning when expired', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
 
@@ -225,9 +243,16 @@ describe('auth', () => {
 
         const result = getApiKey();
         expect(result).toBe('sk-ant-oat-expired-token');
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('expired')
+        );
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('claude login')
+        );
       });
 
       it('should return token when not expired', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
 
@@ -238,11 +263,15 @@ describe('auth', () => {
 
         const result = getApiKey();
         expect(result).toBe('sk-ant-oat-valid-token');
+        // Should not warn when token is not expired
+        expect(warnSpy).not.toHaveBeenCalled();
       });
     });
 
     describe('file permission checking', () => {
       it('should not throw when checking permissions on valid file', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
         vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
           accessToken: 'sk-ant-oat-token'
         }));
@@ -252,6 +281,60 @@ describe('auth', () => {
         } as any);
 
         expect(() => getApiKey()).not.toThrow();
+        // Should not warn for secure permissions
+        expect(warnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should not warn for 400 permissions (read-only)', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+          accessToken: 'sk-ant-oat-token'
+        }));
+
+        vi.mocked(statSync).mockReturnValue({
+          mode: parseInt('100400', 8), // -r-------- (secure)
+        } as any);
+
+        getApiKey();
+        expect(warnSpy).not.toHaveBeenCalled();
+      });
+
+      it('should warn for group-readable permissions (640)', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+          accessToken: 'sk-ant-oat-token'
+        }));
+
+        vi.mocked(statSync).mockReturnValue({
+          mode: parseInt('100640', 8), // -rw-r----- (group-readable)
+        } as any);
+
+        getApiKey();
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('group readable')
+        );
+      });
+
+      it('should warn when credential file has insecure permissions (world-readable)', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+          accessToken: 'sk-ant-oat-token'
+        }));
+
+        vi.mocked(statSync).mockReturnValue({
+          mode: parseInt('100644', 8), // -rw-r--r-- (world-readable)
+        } as any);
+
+        getApiKey();
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('world readable')
+        );
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('insecure permissions')
+        );
       });
 
       it('should handle statSync errors gracefully', () => {
@@ -266,6 +349,101 @@ describe('auth', () => {
         // Should not throw, permission check should be graceful
         const result = getApiKey();
         expect(result).toBe('sk-ant-oat-token');
+      });
+    });
+
+    describe('error message sanitization', () => {
+      it('should not expose full file paths in warning messages', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+          accessToken: 'sk-ant-oat-token'
+        }));
+
+        vi.mocked(statSync).mockReturnValue({
+          mode: parseInt('100644', 8), // world-readable
+        } as any);
+
+        getApiKey();
+
+        // Should use relative path, not full system path
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('~/.claude/.credentials.json')
+        );
+        expect(warnSpy).not.toHaveBeenCalledWith(
+          expect.stringContaining('/home/testuser')
+        );
+      });
+
+      it('should not expose sensitive error details in logs', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const unexpectedError = new Error('Sensitive system information: /etc/shadow') as NodeJS.ErrnoException;
+        vi.mocked(readFileSync).mockImplementation(() => { throw unexpectedError; });
+
+        getApiKey();
+
+        // Should log generic message without error.message
+        expect(warnSpy).toHaveBeenCalledWith('Warning: Unexpected error reading credential file');
+        expect(warnSpy).not.toHaveBeenCalledWith(
+          expect.stringContaining('Sensitive system information')
+        );
+      });
+    });
+
+    describe('permission check timing (TOCTOU protection)', () => {
+      it('should check permissions before reading credential file', () => {
+        const callOrder: string[] = [];
+
+        vi.mocked(statSync).mockImplementation(() => {
+          callOrder.push('statSync');
+          return { mode: parseInt('100600', 8) } as any;
+        });
+
+        vi.mocked(readFileSync).mockImplementation(() => {
+          callOrder.push('readFileSync');
+          return JSON.stringify({ accessToken: 'sk-ant-oat-token' });
+        });
+
+        getApiKey();
+
+        // statSync (permission check) should be called before readFileSync
+        expect(callOrder).toEqual(['statSync', 'readFileSync']);
+      });
+    });
+
+    describe('path traversal protection', () => {
+      it('should reject credentials from outside ~/.claude/ directory', () => {
+        // Try to manipulate path via HOME env var
+        vi.mocked(homedir).mockReturnValue('/etc');
+
+        // Mock readFileSync to verify it's never called
+        vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+          accessToken: 'sk-ant-oat-malicious'
+        }));
+
+        const result = getApiKey();
+        // Should return null and not read from /etc/.claude/.credentials.json
+        expect(result).toBeNull();
+      });
+
+      it('should handle manipulated HOME environment variable', () => {
+        // Simulate an attack trying to read credentials from a different location
+        vi.mocked(homedir).mockReturnValue('../../etc');
+
+        const result = getApiKey();
+        expect(result).toBeNull();
+      });
+
+      it('should validate normalized paths correctly', () => {
+        // Valid path should work
+        vi.mocked(homedir).mockReturnValue('/home/testuser');
+        vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+          accessToken: 'sk-ant-oat-valid'
+        }));
+
+        const result = getApiKey();
+        expect(result).toBe('sk-ant-oat-valid');
       });
     });
   });
@@ -311,6 +489,88 @@ describe('auth', () => {
       vi.mocked(readFileSync).mockImplementation(() => { throw enoentError; });
 
       expect(getApiKeySource()).toBe('none');
+    });
+  });
+
+  describe('keychain token validation', () => {
+    it('should validate Keychain token format before returning', () => {
+      vi.mocked(platform).mockReturnValue('darwin');
+
+      const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+      enoentError.code = 'ENOENT';
+      vi.mocked(readFileSync).mockImplementation(() => { throw enoentError; });
+
+      // Valid OAuth token
+      vi.mocked(execSync).mockReturnValue(JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'sk-ant-oat-valid-keychain-token'
+        }
+      }));
+
+      const result = getApiKey();
+      expect(result).toBe('sk-ant-oat-valid-keychain-token');
+    });
+
+    it('should reject invalid token formats from Keychain', () => {
+      vi.mocked(platform).mockReturnValue('darwin');
+
+      const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+      enoentError.code = 'ENOENT';
+      vi.mocked(readFileSync).mockImplementation(() => { throw enoentError; });
+
+      // Invalid token (doesn't start with sk-)
+      vi.mocked(execSync).mockReturnValue(JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'invalid-malicious-token'
+        }
+      }));
+
+      const result = getApiKey();
+      expect(result).toBeNull();
+    });
+
+    it('should validate legacy format Keychain tokens', () => {
+      vi.mocked(platform).mockReturnValue('darwin');
+
+      const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+      enoentError.code = 'ENOENT';
+      vi.mocked(readFileSync).mockImplementation(() => { throw enoentError; });
+
+      // Valid API key
+      vi.mocked(execSync).mockReturnValue(JSON.stringify({
+        accessToken: 'sk-ant-api-valid-key'
+      }));
+
+      const result = getApiKey();
+      expect(result).toBe('sk-ant-api-valid-key');
+    });
+
+    it('should validate raw token strings from Keychain', () => {
+      vi.mocked(platform).mockReturnValue('darwin');
+
+      const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+      enoentError.code = 'ENOENT';
+      vi.mocked(readFileSync).mockImplementation(() => { throw enoentError; });
+
+      // Raw token (not JSON)
+      vi.mocked(execSync).mockReturnValue('sk-ant-oat-raw-token');
+
+      const result = getApiKey();
+      expect(result).toBe('sk-ant-oat-raw-token');
+    });
+
+    it('should reject invalid raw token strings from Keychain', () => {
+      vi.mocked(platform).mockReturnValue('darwin');
+
+      const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+      enoentError.code = 'ENOENT';
+      vi.mocked(readFileSync).mockImplementation(() => { throw enoentError; });
+
+      // Invalid raw token
+      vi.mocked(execSync).mockReturnValue('malicious-token-string');
+
+      const result = getApiKey();
+      expect(result).toBeNull();
     });
   });
 

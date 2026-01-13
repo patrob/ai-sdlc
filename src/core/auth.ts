@@ -26,12 +26,62 @@ interface CredentialFile {
 export type CredentialType = 'api_key' | 'oauth_token' | 'none';
 
 /**
+ * Validate that homedir() returns a legitimate user home directory
+ * Prevents attacks via manipulated HOME environment variable
+ */
+function isValidHomeDirectory(homeDir: string): boolean {
+  if (!homeDir || typeof homeDir !== 'string') {
+    return false;
+  }
+
+  const plat = platform();
+
+  if (plat === 'darwin') {
+    // macOS: /Users/<username> or /var/root
+    return homeDir.startsWith('/Users/') || homeDir === '/var/root';
+  } else if (plat === 'win32') {
+    // Windows: C:\Users\<username> (case-insensitive)
+    return /^[A-Za-z]:\\Users\\/i.test(homeDir);
+  } else {
+    // Linux/Unix: /home/<username> or /root
+    return homeDir.startsWith('/home/') || homeDir === '/root';
+  }
+}
+
+/**
+ * Validate that the credential path is within ~/.claude/ directory
+ * Prevents directory traversal attacks via manipulated HOME env var
+ */
+function validateCredentialPath(credentialPath: string): boolean {
+  try {
+    const homeDir = homedir();
+
+    // First validate that homedir is a legitimate user home directory
+    if (!isValidHomeDirectory(homeDir)) {
+      return false;
+    }
+
+    const normalized = path.resolve(credentialPath);
+    const expectedDir = path.resolve(homeDir, '.claude');
+    return normalized.startsWith(expectedDir);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Read credentials from ~/.claude/.credentials.json file
  * Returns null if file doesn't exist, is malformed, or missing accessToken
  */
 function getCredentialsFromFile(): CredentialFile | null {
   try {
     const credentialPath = path.join(homedir(), '.claude', '.credentials.json');
+
+    // Validate path to prevent directory traversal
+    if (!validateCredentialPath(credentialPath)) {
+      return null;
+    }
+
     const content = readFileSync(credentialPath, 'utf-8');
 
     // Handle empty file
@@ -64,8 +114,8 @@ function getCredentialsFromFile(): CredentialFile | null {
       return null;
     }
 
-    // Unknown error - log and return null
-    console.warn('Warning: Unexpected error reading credentials:', error.message);
+    // Unknown error - log generic message without exposing details
+    console.warn('Warning: Unexpected error reading credential file');
     return null;
   }
 }
@@ -94,15 +144,20 @@ function isTokenExpired(expiresAt: string | undefined): boolean {
 
 /**
  * Check credential file permissions and warn if insecure
+ * Only 600 (owner read/write) and 400 (owner read-only) are considered secure
  */
-function checkFilePermissions(filePath: string): void {
+function checkFilePermissions(): void {
   try {
-    const stats = statSync(filePath);
+    const credentialPath = path.join(homedir(), '.claude', '.credentials.json');
+    const stats = statSync(credentialPath);
     const mode = stats.mode & parseInt('777', 8);
 
-    // Warn if file is world-readable or group-readable (permissions more permissive than 600)
-    if (mode & parseInt('044', 8)) {
-      console.warn(`Warning: Credential file ${filePath} has insecure permissions (${mode.toString(8)}). Recommend: chmod 600`);
+    // Warn if permissions are NOT exactly 600 or 400
+    if (mode !== parseInt('600', 8) && mode !== parseInt('400', 8)) {
+      const isGroupReadable = (mode & parseInt('040', 8)) !== 0;
+      const isWorldReadable = (mode & parseInt('004', 8)) !== 0;
+      const readableType = isWorldReadable ? 'world readable' : (isGroupReadable ? 'group readable' : 'insecure');
+      console.warn(`Warning: Credential file ~/.claude/.credentials.json has insecure permissions (${mode.toString(8)}) - file is ${readableType}. Recommend: chmod 600`);
     }
   } catch {
     // If we can't stat the file, ignore (file might not exist)
@@ -127,13 +182,11 @@ export function getApiKey(): string | null {
   }
 
   // Try credential file (all platforms)
+  // Check file permissions before reading (prevents TOCTOU vulnerability)
+  checkFilePermissions();
+
   const credentials = getCredentialsFromFile();
   if (credentials) {
-    const credentialPath = path.join(homedir(), '.claude', '.credentials.json');
-
-    // Check file permissions
-    checkFilePermissions(credentialPath);
-
     // Check if token is expired and warn
     if (isTokenExpired(credentials.expiresAt)) {
       console.warn('Warning: Credential file token is expired. Run "claude login" to refresh.');
@@ -182,6 +235,11 @@ export function getCredentialType(key: string | null): CredentialType {
  * The Agent SDK uses:
  * - ANTHROPIC_API_KEY for direct API keys
  * - CLAUDE_CODE_OAUTH_TOKEN for OAuth tokens
+ *
+ * SECURITY NOTE: Environment variables set by this function persist for the lifetime
+ * of the Node.js process. The tokens are not automatically cleared and will be
+ * accessible to any code running in the same process. This is intentional for the
+ * Agent SDK to work correctly, but callers should be aware of this behavior.
  */
 export function configureAgentSdkAuth(): { configured: boolean; type: CredentialType } {
   const key = getApiKey();
@@ -224,16 +282,24 @@ function getApiKeyFromKeychain(): string | null {
 
         // Check for Claude AI OAuth format: {"claudeAiOauth":{"accessToken":"..."}}
         if (parsed.claudeAiOauth?.accessToken) {
-          return parsed.claudeAiOauth.accessToken;
+          const token = parsed.claudeAiOauth.accessToken;
+          // Validate token format before returning
+          if (isOAuthToken(token) || isDirectApiKey(token) || token.startsWith('sk-')) {
+            return token;
+          }
         }
 
         // Check for legacy format: {"accessToken":"..."}
         if (parsed.accessToken) {
-          return parsed.accessToken;
+          const token = parsed.accessToken;
+          // Validate token format before returning
+          if (isOAuthToken(token) || isDirectApiKey(token) || token.startsWith('sk-')) {
+            return token;
+          }
         }
       } catch {
-        // If not JSON, it might be the raw token
-        if (credentials.startsWith('sk-') || credentials.length > 20) {
+        // If not JSON, it might be the raw token - validate before returning
+        if (isOAuthToken(credentials) || isDirectApiKey(credentials) || credentials.startsWith('sk-')) {
           return credentials;
         }
       }

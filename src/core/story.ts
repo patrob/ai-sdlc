@@ -10,20 +10,11 @@ import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, 
  * and slug is read from frontmatter (with fallback to ID if missing).
  */
 export function parseStory(filePath: string): Story {
-  // Read fresh content from disk
   const content = fs.readFileSync(filePath, 'utf-8');
 
-  // WORKAROUND: gray-matter returns stale parsed data after file updates in tests.
-  // Despite fs.readFileSync returning correct content, matter() returns old values.
-  // TODO: Investigate root cause - gray-matter is documented as stateless but
-  // exhibits caching behavior. May be Node.js string interning or V8 optimization.
-  // This workaround adds ~0.1ms overhead per parse. See: story.test.ts unblockStory tests
-  const cacheKey = `<!-- cache-bust: ${Date.now()}-${Math.random()} -->`;
-  const contentWithCacheBust = content + cacheKey;
-  const { data, content: body } = matter(contentWithCacheBust);
-
-  // Remove the cache-bust comment from body
-  const cleanBody = body.replace(/<!-- cache-bust:.*? -->/g, '').trim();
+  // Pass empty options to bypass gray-matter's content-based cache.
+  // Without this, repeated parses of modified files return stale data.
+  const { data, content: body } = matter(content, {});
 
   const frontmatter = data as StoryFrontmatter;
 
@@ -47,7 +38,7 @@ export function parseStory(filePath: string): Story {
     path: filePath,
     slug,
     frontmatter,
-    content: cleanBody,
+    content: body.trim(),
   };
 }
 

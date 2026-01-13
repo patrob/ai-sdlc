@@ -97,7 +97,7 @@ describe('review config validation', () => {
     it('should ignore invalid AI_SDLC_MAX_RETRIES values', () => {
       process.env.AI_SDLC_MAX_RETRIES = 'invalid';
       const config = loadConfig();
-      expect(config.reviewConfig.maxRetries).toBe(Infinity); // default (infinite)
+      expect(config.reviewConfig.maxRetries).toBe(3); // default value
     });
 
     it('should apply all environment variable overrides together', () => {
@@ -113,7 +113,7 @@ describe('review config validation', () => {
     it('should ignore invalid negative environment variable values', () => {
       process.env.AI_SDLC_MAX_RETRIES = '-5';
       const config = loadConfig();
-      expect(config.reviewConfig.maxRetries).toBe(Infinity); // invalid, uses default (infinite)
+      expect(config.reviewConfig.maxRetries).toBe(3); // invalid, uses default value
     });
 
     it('should allow environment variable maxRetries up to 10', () => {
@@ -127,8 +127,8 @@ describe('review config validation', () => {
     it('should have default values when no config file exists', () => {
       const config = loadConfig();
       expect(config.reviewConfig).toBeDefined();
-      expect(config.reviewConfig.maxRetries).toBe(Infinity); // infinite by default
-      expect(config.reviewConfig.maxRetriesUpperBound).toBe(Infinity);
+      expect(config.reviewConfig.maxRetries).toBe(3); // default value
+      expect(config.reviewConfig.maxRetriesUpperBound).toBe(10); // default upper bound
       expect(config.reviewConfig.autoCompleteOnApproval).toBe(true);
       expect(config.reviewConfig.autoRestartOnRejection).toBe(true);
     });

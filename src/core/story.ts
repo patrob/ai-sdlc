@@ -509,3 +509,77 @@ export function sanitizeReasonText(text: string): string {
 
   return sanitized.trim();
 }
+
+/**
+ * Unblock a story from the blocked folder and move it back to the workflow
+ * Determines destination folder based on workflow completion state
+ *
+ * @param storyId - Story ID to unblock
+ * @param sdlcRoot - Root path of the .ai-sdlc folder
+ * @param options - Optional configuration { resetRetries?: boolean }
+ * @returns The unblocked and moved story
+ */
+export function unblockStory(
+  storyId: string,
+  sdlcRoot: string,
+  options?: { resetRetries?: boolean }
+): Story {
+  const blockedFolder = path.join(sdlcRoot, BLOCKED_DIR);
+
+  // Find story in blocked folder
+  if (!fs.existsSync(blockedFolder)) {
+    throw new Error(`Story ${storyId} not found in blocked folder`);
+  }
+
+  const blockedFiles = fs.readdirSync(blockedFolder).filter(f => f.endsWith('.md'));
+  let foundStory: Story | null = null;
+  let foundPath: string | null = null;
+
+  for (const file of blockedFiles) {
+    const filePath = path.join(blockedFolder, file);
+    const story = parseStory(filePath);
+    if (story.frontmatter.id === storyId) {
+      foundStory = story;
+      foundPath = filePath;
+      break;
+    }
+  }
+
+  if (!foundStory) {
+    throw new Error(`Story ${storyId} not found in blocked folder`);
+  }
+
+  // Clear blocking fields
+  delete foundStory.frontmatter.blocked_reason;
+  delete foundStory.frontmatter.blocked_at;
+
+  // Determine destination folder based on workflow state
+  let destinationFolder: string;
+
+  if (foundStory.frontmatter.implementation_complete) {
+    // If implementation is complete, move to in-progress for review
+    destinationFolder = 'in-progress';
+  } else if (foundStory.frontmatter.plan_complete || foundStory.frontmatter.research_complete) {
+    // If plan or research is complete, move to ready for next phase
+    destinationFolder = 'ready';
+  } else {
+    // Otherwise, return to backlog
+    destinationFolder = 'backlog';
+  }
+
+  // Reset retries if requested
+  if (options?.resetRetries) {
+    foundStory.frontmatter.retry_count = 0;
+    foundStory.frontmatter.refinement_count = 0;
+  }
+
+  // Move story to destination folder
+  const movedStory = moveStory(foundStory, destinationFolder, sdlcRoot);
+
+  // Clean up the old blocked file if it still exists (in case of collision handling)
+  if (fs.existsSync(foundPath!) && foundPath !== movedStory.path) {
+    fs.unlinkSync(foundPath!);
+  }
+
+  return movedStory;
+}

@@ -49,8 +49,10 @@ export const DEFAULT_CONFIG: Config = {
     enableCircuitBreaker: true,
   },
   reviewConfig: {
-    maxRetries: Infinity,
-    maxRetriesUpperBound: Infinity,
+    /** Maximum retry attempts before blocking. @default 3 */
+    maxRetries: 3,
+    /** Hard upper bound for maxRetries. @default 10 */
+    maxRetriesUpperBound: 10,
     autoCompleteOnApproval: true,
     autoRestartOnRejection: true,
   },

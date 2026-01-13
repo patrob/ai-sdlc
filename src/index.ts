@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { init, status, add, run, details } from './cli/commands.js';
+import { init, status, add, run, details, unblock } from './cli/commands.js';
 import { hasApiKey } from './core/auth.js';
 import { loadConfig, saveConfig } from './core/config.js';
 import { getThemedChalk } from './core/theme.js';
@@ -56,6 +56,12 @@ program
   .action(details);
 
 program
+  .command('unblock <story-id>')
+  .description('Unblock a story from the blocked folder and return it to the workflow')
+  .option('--reset-retries', 'Reset retry_count and refinement_count to 0')
+  .action((storyId, options) => unblock(storyId, options));
+
+program
   .command('run')
   .description('Run the workflow (process next action)')
   .option('--auto', 'Process all pending actions (combine with --story for full SDLC: refine → research → plan → implement → review)')
@@ -65,6 +71,7 @@ program
   .option('--step <phase>', 'Run a specific phase (refine, research, plan, implement, review) - cannot be combined with --auto --story')
   .option('--max-iterations <number>', 'Maximum retry iterations (default: infinite)')
   .option('--watch', 'Run in daemon mode, continuously processing backlog')
+  .option('-v, --verbose', 'Show detailed daemon output (use with --watch)')
   .action((options) => {
     if (!options.dryRun && !options.watch) {
       checkApiKey();

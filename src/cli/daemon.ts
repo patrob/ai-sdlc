@@ -11,12 +11,26 @@ import { runImplementationAgent } from '../agents/implementation.js';
 import { runReviewAgent } from '../agents/review.js';
 import { runReworkAgent } from '../agents/rework.js';
 import { Action } from '../types/index.js';
+import { formatSummaryStatus, formatCompactStoryCompletion } from './formatting.js';
+
+/**
+ * Daemon statistics tracking
+ */
+export interface DaemonStats {
+  done: number;
+  active: number;
+  queued: number;
+  blocked: number;
+  startTime: Date;
+  currentStoryStartTime?: Date;
+}
 
 /**
  * Options for the DaemonRunner
  */
 export interface DaemonOptions {
   maxIterations?: number;
+  verbose?: boolean;
 }
 
 /**
@@ -48,11 +62,54 @@ export class DaemonRunner {
   private hasLoggedIdle: boolean = false;  // Prevent repeated "Queue empty" messages
   private ctrlCCount: number = 0;
   private lastCtrlCTime: number = 0;
+  private pollTimerId: ReturnType<typeof setTimeout> | null = null;
+  private stats: DaemonStats;
 
   constructor(options: DaemonOptions = {}) {
     this.sdlcRoot = getSdlcRoot();
     this.config = loadConfig();
     this.options = options;
+    this.stats = {
+      done: 0,
+      active: 0,
+      queued: 0,
+      blocked: 0,
+      startTime: new Date(),
+    };
+  }
+
+  /**
+   * Start polling for new work at regular intervals
+   * Uses recursive setTimeout pattern to respect shutdown state
+   */
+  private startPolling(): void {
+    const poll = async () => {
+      if (this.isShuttingDown) return;
+
+      // Only poll if not currently processing
+      if (!this.isProcessingQueue) {
+        const assessment = assessState(this.sdlcRoot);
+        if (assessment.recommendedActions.length > 0) {
+          const topAction = assessment.recommendedActions[0];
+          // Queue if not already queued/active/completed
+          if (!this.completedStoryIds.has(topAction.storyId) &&
+              !this.activeStoryIds.has(topAction.storyId) &&
+              !this.processingQueue.some(q => q.id === topAction.storyId)) {
+            this.hasLoggedIdle = false;
+            this.processingQueue.push({ path: topAction.storyPath, id: topAction.storyId });
+            if (!this.isProcessingQueue) {
+              this.processQueue();
+            }
+          }
+        }
+      }
+
+      // Schedule next poll
+      this.pollTimerId = setTimeout(poll, this.config.daemon?.pollingInterval || 5000);
+    };
+
+    // Start first poll after initial delay
+    this.pollTimerId = setTimeout(poll, this.config.daemon?.pollingInterval || 5000);
   }
 
   /**
@@ -77,7 +134,7 @@ export class DaemonRunner {
     try {
       this.watcher = chokidar.watch(watchDirs, {
         persistent: true,
-        ignoreInitial: false, // Process existing files on startup
+        ignoreInitial: true, // Manual initial assessment below
         awaitWriteFinish: {
           stabilityThreshold: this.config.daemon?.processDelay || 500,
           pollInterval: 100,
@@ -101,6 +158,19 @@ export class DaemonRunner {
       console.log(c.info('👀 Watching for stories...'));
       console.log(c.dim(`   Press Ctrl+C to shutdown gracefully`));
       console.log();
+
+      // Initial assessment - pick single highest priority story
+      const initialAssessment = assessState(this.sdlcRoot);
+      if (initialAssessment.recommendedActions.length > 0) {
+        const topAction = initialAssessment.recommendedActions[0];
+        console.log(c.info(`Found ${initialAssessment.recommendedActions.length} stories, starting with: ${topAction.storyId}`));
+        console.log(c.dim(`   Reason: ${topAction.reason}`));
+        this.processingQueue.push({ path: topAction.storyPath, id: topAction.storyId });
+        this.processQueue();
+      }
+
+      // Start polling for new work at regular intervals
+      this.startPolling();
 
     } catch (error) {
       console.log(c.error('Failed to start file watcher:'));
@@ -198,7 +268,10 @@ export class DaemonRunner {
     // Log idle state only once when transitioning to idle
     if (this.processingQueue.length === 0 && !this.isShuttingDown && !this.hasLoggedIdle) {
       const c = getThemedChalk(this.config);
-      console.log(c.dim('\n👀 Queue empty, waiting for new stories...'));
+      // Update queued count for summary
+      this.stats.queued = 0;
+      const summary = formatSummaryStatus(this.stats);
+      console.log(c.dim(`\n👀 Waiting for work... (${summary})`));
       this.hasLoggedIdle = true;
     }
   }
@@ -220,7 +293,13 @@ export class DaemonRunner {
 
     this.logWorkflowStart(storyId);
 
+    // Track start time for elapsed time calculation
+    const storyStartTime = Date.now();
+    this.stats.currentStoryStartTime = new Date();
+    this.stats.active = 1;
+
     let completed = false;
+    let actionCount = 0;
 
     // Create processing promise and store it for graceful shutdown
     this.currentProcessing = (async () => {
@@ -246,24 +325,37 @@ export class DaemonRunner {
           // Execute the action
           await this.executeAction(storyAction);
           iterationCount++;
+          actionCount++;
 
-          console.log(c.dim(`   (${iterationCount}/${maxIterations} iterations)`));
+          if (this.options.verbose) {
+            console.log(c.dim(`   (${iterationCount}/${maxIterations} iterations)`));
+          }
         }
 
         if (iterationCount >= maxIterations) {
           console.log(c.warning(`   ⚠️  Max iterations (${maxIterations}) reached for ${storyId}`));
         }
 
-        this.logWorkflowComplete(storyId, completed);
+        // Calculate elapsed time
+        const elapsedMs = Date.now() - storyStartTime;
+        this.logWorkflowComplete(storyId, completed, actionCount, elapsedMs);
 
       } catch (error) {
-        this.logWorkflowComplete(storyId, false);
+        const elapsedMs = Date.now() - storyStartTime;
+        this.logWorkflowComplete(storyId, false, actionCount, elapsedMs);
         this.logError(error, `Workflow failed for ${storyId}`);
       }
     })();
 
     await this.currentProcessing;
     this.currentProcessing = null;
+
+    // Update stats after story completes
+    this.stats.active = 0;
+    if (completed) {
+      this.stats.done++;
+    }
+    this.stats.currentStoryStartTime = undefined;
 
     return completed;
   }
@@ -412,6 +504,13 @@ export class DaemonRunner {
       }
     }
 
+    // Clear polling timer
+    if (this.pollTimerId) {
+      clearTimeout(this.pollTimerId);
+      this.pollTimerId = null;
+      log(c?.dim, '   Polling timer cleared');
+    }
+
     // Wait for current processing to complete (with timeout)
     if (this.currentProcessing) {
       log(c?.dim, '   Waiting for current story to complete...');
@@ -474,12 +573,24 @@ export class DaemonRunner {
   /**
    * Log workflow completion
    */
-  private logWorkflowComplete(storyId: string, success: boolean): void {
+  private logWorkflowComplete(storyId: string, success: boolean, actionCount: number = 0, elapsedMs: number = 0): void {
     const c = getThemedChalk(this.config);
-    if (success) {
-      console.log(c.success(`   ✅ Workflow completed: ${storyId}`));
+    if (this.options.verbose) {
+      // Verbose: show multi-line output
+      if (success) {
+        console.log(c.success(`   ✅ Workflow completed: ${storyId}`));
+      } else {
+        console.log(c.error(`   ❌ Workflow failed: ${storyId}`));
+      }
     } else {
-      console.log(c.error(`   ❌ Workflow failed: ${storyId}`));
+      // Compact: show single line with stats
+      if (success) {
+        const compactMsg = formatCompactStoryCompletion(storyId, actionCount, elapsedMs);
+        console.log(c.success(compactMsg));
+      } else {
+        const compactMsg = formatCompactStoryCompletion(storyId, actionCount, elapsedMs);
+        console.log(c.error(compactMsg));
+      }
     }
   }
 

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
-import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder, ReviewDecision } from '../types/index.js';
+import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder, ReviewDecision, BLOCKED_DIR } from '../types/index.js';
 import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt, moveToBlocked, getEffectiveMaxRetries, sanitizeReasonText } from './story.js';
 import { loadConfig } from './config.js';
 import { determineTargetPhase } from '../agents/rework.js';
@@ -37,14 +37,29 @@ export function getAllStories(sdlcRoot: string): Map<KanbanFolder, Story[]> {
 }
 
 /**
- * Find a story by ID across all folders
+ * Find a story by ID across all folders (including blocked)
  */
 export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
+  // Search kanban folders first
   for (const folder of KANBAN_FOLDERS) {
     const stories = getStoriesInFolder(sdlcRoot, folder);
     const found = stories.find(s => s.frontmatter.id === storyId);
     if (found) return found;
   }
+
+  // Also search blocked folder
+  const blockedFolder = path.join(sdlcRoot, BLOCKED_DIR);
+  if (fs.existsSync(blockedFolder)) {
+    const blockedFiles = fs.readdirSync(blockedFolder).filter(f => f.endsWith('.md'));
+    for (const file of blockedFiles) {
+      const filePath = path.join(blockedFolder, file);
+      const story = parseStory(filePath);
+      if (story.frontmatter.id === storyId) {
+        return story;
+      }
+    }
+  }
+
   return null;
 }
 
@@ -58,6 +73,20 @@ export function findStoryBySlug(sdlcRoot: string, slug: string): Story | null {
     if (found) return found;
   }
   return null;
+}
+
+/**
+ * Calculate completion score for a story based on workflow progress.
+ * Higher scores indicate more progress toward completion.
+ * Used to prioritize nearly-complete stories over early-stage ones.
+ */
+export function calculateCompletionScore(story: Story): number {
+  let score = 0;
+  if (story.frontmatter.reviews_complete) score += 40;
+  if (story.frontmatter.implementation_complete) score += 30;
+  if (story.frontmatter.plan_complete) score += 20;
+  if (story.frontmatter.research_complete) score += 10;
+  return score;
 }
 
 /**
@@ -197,45 +226,49 @@ export function assessState(sdlcRoot: string): StateAssessment {
         });
       }
     } else if (!story.frontmatter.implementation_complete) {
+      const completionScore = calculateCompletionScore(story);
       recommendedActions.push({
         type: 'implement',
         storyId: story.frontmatter.id,
         storyPath: story.path,
         reason: `Story "${story.frontmatter.title}" implementation in progress`,
-        priority: story.frontmatter.priority + 50,
+        priority: story.frontmatter.priority + 50 - completionScore,
       });
     } else if (!story.frontmatter.reviews_complete) {
       // Deprioritize stories with high retry counts
       const retryCount = story.frontmatter.retry_count || 0;
       const priorityPenalty = retryCount * 50; // Add 50 to priority per retry
+      const completionScore = calculateCompletionScore(story);
 
       recommendedActions.push({
         type: 'review',
         storyId: story.frontmatter.id,
         storyPath: story.path,
         reason: `Story "${story.frontmatter.title}" needs review${retryCount > 0 ? ` (retry ${retryCount})` : ''}`,
-        priority: story.frontmatter.priority + 100 + priorityPenalty,
+        priority: story.frontmatter.priority + 100 + priorityPenalty - completionScore,
       });
     } else {
+      const completionScore = calculateCompletionScore(story);
       recommendedActions.push({
         type: 'create_pr',
         storyId: story.frontmatter.id,
         storyPath: story.path,
         reason: `Story "${story.frontmatter.title}" is ready for PR`,
-        priority: story.frontmatter.priority + 150,
+        priority: story.frontmatter.priority + 150 - completionScore,
       });
     }
   }
 
   // Check ready items SECOND (medium priority)
   for (const story of readyItems) {
+    const completionScore = calculateCompletionScore(story);
     if (!story.frontmatter.research_complete) {
       recommendedActions.push({
         type: 'research',
         storyId: story.frontmatter.id,
         storyPath: story.path,
         reason: `Story "${story.frontmatter.title}" needs research`,
-        priority: story.frontmatter.priority + 200,
+        priority: story.frontmatter.priority + 200 - completionScore,
       });
     } else if (!story.frontmatter.plan_complete) {
       recommendedActions.push({
@@ -243,7 +276,7 @@ export function assessState(sdlcRoot: string): StateAssessment {
         storyId: story.frontmatter.id,
         storyPath: story.path,
         reason: `Story "${story.frontmatter.title}" needs implementation plan`,
-        priority: story.frontmatter.priority + 300,
+        priority: story.frontmatter.priority + 300 - completionScore,
       });
     } else {
       recommendedActions.push({
@@ -251,7 +284,7 @@ export function assessState(sdlcRoot: string): StateAssessment {
         storyId: story.frontmatter.id,
         storyPath: story.path,
         reason: `Story "${story.frontmatter.title}" is ready for implementation`,
-        priority: story.frontmatter.priority + 400,
+        priority: story.frontmatter.priority + 400 - completionScore,
       });
     }
   }

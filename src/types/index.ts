@@ -218,7 +218,9 @@ export interface RefinementConfig {
  * Review flow configuration
  */
 export interface ReviewConfig {
+  /** Maximum retry attempts before blocking. @default 3 */
   maxRetries: number;
+  /** Hard upper bound for maxRetries. @default 10 */
   maxRetriesUpperBound: number;
   autoCompleteOnApproval: boolean;
   autoRestartOnRejection: boolean;

@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import ora from 'ora';
 import fs from 'fs';
+import path from 'path';
 import { getSdlcRoot, loadConfig, initConfig } from '../core/config.js';
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoryById } from '../core/kanban.js';
 import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory } from '../core/story.js';
@@ -16,6 +17,7 @@ import {
 } from '../core/workflow-state.js';
 import { renderStories, renderKanbanBoard, shouldUseKanbanLayout, KanbanColumn } from './table-renderer.js';
 import { getStoryFlags as getStoryFlagsUtil, formatStatus as formatStatusUtil } from './story-utils.js';
+import { migrateToFolderPerStory } from './commands/migrate.js';
 
 /**
  * Initialize the .ai-sdlc folder structure
@@ -36,10 +38,7 @@ export async function init(): Promise<void> {
     initializeKanban(sdlcRoot);
 
     spinner.succeed(c.success('Initialized .ai-sdlc/'));
-    console.log(c.dim('  ├── backlog/'));
-    console.log(c.dim('  ├── ready/'));
-    console.log(c.dim('  ├── in-progress/'));
-    console.log(c.dim('  └── done/'));
+    console.log(c.dim('  └── stories/'));
     console.log();
     console.log(c.info('Get started:'));
     console.log(c.dim(`  ai-sdlc add "Your first story"`));
@@ -829,14 +828,14 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
         break;
 
       case 'move_to_done':
-        // Move story to done folder
-        const { moveStory } = await import('../core/story.js');
+        // Update story status to done (no file move in new architecture)
+        const { updateStoryStatus } = await import('../core/story.js');
         const storyToMove = parseStory(action.storyPath);
-        const movedStory = moveStory(storyToMove, 'done', sdlcRoot);
+        const updatedStory = updateStoryStatus(storyToMove, 'done');
         result = {
           success: true,
-          story: movedStory,
-          changesMade: ['Moved story to done/'],
+          story: updatedStory,
+          changesMade: ['Updated story status to done'],
         };
         break;
 
@@ -1447,6 +1446,118 @@ export function unblock(storyId: string, options?: { resetRetries?: boolean }): 
     spinner.fail('Failed to unblock story');
     const message = error instanceof Error ? error.message : String(error);
     console.error(c.error(`  ${message}`));
+    process.exit(1);
+  }
+}
+
+export async function migrate(options: { dryRun?: boolean; backup?: boolean; force?: boolean }): Promise<void> {
+  const config = loadConfig();
+  const sdlcRoot = getSdlcRoot();
+  const c = getThemedChalk(config);
+
+  // Migration needs to check for OLD structure (kanban folders) OR new structure (stories/)
+  // It's valid to run migration when old folders exist but stories/ doesn't yet
+  const oldFolders = ['backlog', 'ready', 'in-progress', 'done', 'blocked'];
+  const hasOldStructure = oldFolders.some(folder => fs.existsSync(path.join(sdlcRoot, folder)));
+  const hasNewStructure = kanbanExists(sdlcRoot);
+
+  if (!hasOldStructure && !hasNewStructure) {
+    console.log(c.warning('ai-sdlc not initialized. Run `ai-sdlc init` first.'));
+    return;
+  }
+
+  const spinner = options.dryRun
+    ? ora('Analyzing migration...').start()
+    : ora('Migrating stories...').start();
+
+  try {
+    const result = await migrateToFolderPerStory(sdlcRoot, options);
+
+    if (result.warnings.some(w => w.includes('Already migrated'))) {
+      spinner.info(c.info('Already migrated'));
+      console.log(c.dim('Stories are already using folder-per-story structure.'));
+      console.log(c.dim('Delete .ai-sdlc/.migrated to force re-migration.'));
+      return;
+    }
+
+    if (result.errors.length > 0) {
+      spinner.fail(c.error('Migration failed'));
+      console.log();
+      for (const error of result.errors) {
+        console.log(c.error(`  ✗ ${error}`));
+      }
+      return;
+    }
+
+    if (result.migrations.length === 0) {
+      spinner.info(c.info('No stories to migrate'));
+      console.log(c.dim('No old folder structure found.'));
+      return;
+    }
+
+    if (options.dryRun) {
+      spinner.succeed(c.info('Migration plan ready'));
+      console.log();
+      console.log(c.bold('Migration Plan (dry run)'));
+      console.log(c.dim('═'.repeat(60)));
+      console.log();
+      console.log(c.info(`Stories to migrate: ${result.migrations.length}`));
+      console.log();
+
+      for (const item of result.migrations) {
+        const statusColorMap: Record<string, any> = {
+          'backlog': c.backlog,
+          'ready': c.ready,
+          'in-progress': c.inProgress,
+          'done': c.done,
+          'blocked': c.blocked,
+        };
+        const statusColor = statusColorMap[item.status] || c.dim;
+        console.log(c.dim(`  ${item.oldPath}`));
+        console.log(c.success(`    → ${item.newPath}`));
+        console.log(c.dim(`    ${statusColor(`status: ${item.status}`)}, priority: ${item.priority}, slug: ${item.slug}`));
+        console.log();
+      }
+
+      if (result.warnings.length > 0) {
+        console.log(c.warning('Warnings:'));
+        for (const warning of result.warnings) {
+          console.log(c.warning(`  ⚠ ${warning}`));
+        }
+        console.log();
+      }
+
+      console.log(c.info('Run without --dry-run to execute migration.'));
+    } else {
+      spinner.succeed(c.success('Migration complete!'));
+      console.log();
+      console.log(c.success(`✓ ${result.migrations.length} stories migrated`));
+
+      const removedFolders = ['backlog', 'ready', 'in-progress', 'done', 'blocked'].filter(folder => {
+        const folderPath = `${sdlcRoot}/${folder}`;
+        return !fs.existsSync(folderPath);
+      });
+
+      if (removedFolders.length > 0) {
+        console.log(c.dim(`  Old folders removed: ${removedFolders.join(', ')}`));
+      }
+
+      if (result.warnings.length > 0) {
+        console.log();
+        console.log(c.warning('Warnings:'));
+        for (const warning of result.warnings) {
+          console.log(c.warning(`  ⚠ ${warning}`));
+        }
+      }
+
+      console.log();
+      console.log(c.info('Next steps:'));
+      console.log(c.dim('  git add -A'));
+      console.log(c.dim('  git commit -m "chore: migrate to folder-per-story architecture"'));
+    }
+  } catch (error) {
+    spinner.fail(c.error('Migration failed'));
+    console.error(error);
     process.exit(1);
   }
 }

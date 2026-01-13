@@ -1,23 +1,40 @@
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
-import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config, BLOCKED_DIR } from '../types/index.js';
+import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, DEFAULT_PRIORITY_GAP } from '../types/index.js';
 
 /**
  * Parse a story markdown file into a Story object
+ *
+ * In the new architecture, story ID is extracted from the parent folder name,
+ * and slug is read from frontmatter (with fallback to ID if missing).
  */
 export function parseStory(filePath: string): Story {
   const content = fs.readFileSync(filePath, 'utf-8');
   const { data, content: body } = matter(content);
 
-  // Extract slug from filename (remove priority prefix and .md extension)
-  const filename = path.basename(filePath, '.md');
-  const slug = filename.replace(/^\d+-/, '');
+  const frontmatter = data as StoryFrontmatter;
+
+  // Extract slug from frontmatter (new architecture) or filename (old architecture fallback)
+  let slug: string;
+  if (frontmatter.slug) {
+    // New architecture: slug is in frontmatter
+    slug = frontmatter.slug;
+  } else {
+    // Fallback for old architecture: extract from filename
+    const filename = path.basename(filePath, '.md');
+    slug = filename.replace(/^\d+-/, '');
+
+    // Also fallback to ID if available
+    if (!slug && frontmatter.id) {
+      slug = frontmatter.id;
+    }
+  }
 
   return {
     path: filePath,
     slug,
-    frontmatter: data as StoryFrontmatter,
+    frontmatter,
     content: body.trim(),
   };
 }
@@ -31,9 +48,23 @@ export function writeStory(story: Story): void {
 }
 
 /**
+ * Update story status in frontmatter without moving files
+ * This is the preferred method in the new folder-per-story architecture
+ */
+export function updateStoryStatus(story: Story, newStatus: StoryStatus): Story {
+  story.frontmatter.status = newStatus;
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+  writeStory(story);
+  return story;
+}
+
+/**
  * Move a story to a different kanban folder
+ * @deprecated Use updateStoryStatus() instead. Will be removed in v2.0
  */
 export function moveStory(story: Story, toFolder: string, sdlcRoot: string): Story {
+  console.warn('moveStory() is deprecated. Use updateStoryStatus() instead. Will be removed in v2.0');
+
   const targetFolder = path.join(sdlcRoot, toFolder);
 
   // Ensure target folder exists
@@ -68,7 +99,8 @@ export function moveStory(story: Story, toFolder: string, sdlcRoot: string): Sto
 }
 
 /**
- * Move a story to the blocked folder with reason and timestamp
+ * Move a story to blocked status with reason and timestamp
+ * In the new architecture, this only updates frontmatter - file path remains unchanged
  *
  * @param storyPath - Absolute path to the story file
  * @param reason - Reason for blocking (e.g., "Max refinement attempts (2/2) reached")
@@ -77,7 +109,8 @@ export function moveToBlocked(storyPath: string, reason: string): void {
   // Security: Validate path BEFORE any file I/O operations
   const resolvedPath = path.resolve(storyPath);
   const storyDir = path.dirname(resolvedPath);
-  const sdlcRoot = path.dirname(storyDir);
+  const storiesFolder = path.dirname(storyDir);
+  const sdlcRoot = path.dirname(storiesFolder);
   const resolvedRoot = path.resolve(sdlcRoot);
 
   // Validate that the path is within an SDLC root
@@ -91,40 +124,14 @@ export function moveToBlocked(storyPath: string, reason: string): void {
   // Parse the story (after security validation passes)
   const story = parseStory(storyPath);
 
-  // Calculate blocked folder path
-  const blockedFolder = path.join(sdlcRoot, BLOCKED_DIR);
-
-  // Create blocked directory if it doesn't exist
-  if (!fs.existsSync(blockedFolder)) {
-    fs.mkdirSync(blockedFolder, { recursive: true });
-  }
-
-  // Handle filename conflicts by appending timestamp
-  let filename = `${story.slug}.md`;
-  let newPath = path.join(blockedFolder, filename);
-
-  // If story already exists in blocked folder with same slug, append timestamp
-  if (fs.existsSync(newPath) && newPath !== storyPath) {
-    const timestamp = Date.now();
-    filename = `${story.slug}-${timestamp}.md`;
-    newPath = path.join(blockedFolder, filename);
-  }
-
-  // Update frontmatter (sanitize reason at storage point for defense in depth)
+  // Update frontmatter only - no file moves in new architecture
   story.frontmatter.status = 'blocked';
   story.frontmatter.blocked_reason = sanitizeReasonText(reason);
   story.frontmatter.blocked_at = new Date().toISOString();
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
 
-  // Write to new location
-  const oldPath = story.path;
-  story.path = newPath;
+  // Write back to same location
   writeStory(story);
-
-  // Remove old file (only if it's different from new path)
-  if (fs.existsSync(oldPath) && oldPath !== newPath) {
-    fs.unlinkSync(oldPath);
-  }
 }
 
 /**
@@ -148,31 +155,67 @@ export function slugify(title: string): string {
 }
 
 /**
- * Create a new story in the backlog
+ * Create a new story in the folder-per-story structure
+ *
+ * Creates stories/{id}/story.md with slug and priority in frontmatter.
+ * Priority uses gaps (10, 20, 30...) for easy insertion without renumbering.
  */
 export function createStory(
   title: string,
   sdlcRoot: string,
   options: Partial<StoryFrontmatter> = {}
 ): Story {
-  const backlogFolder = path.join(sdlcRoot, 'backlog');
+  const storiesFolder = path.join(sdlcRoot, STORIES_FOLDER);
 
-  // Ensure backlog folder exists
-  if (!fs.existsSync(backlogFolder)) {
-    fs.mkdirSync(backlogFolder, { recursive: true });
+  // Validate parent stories/ directory exists
+  if (!fs.existsSync(storiesFolder)) {
+    throw new Error(`Stories folder does not exist: ${storiesFolder}. Run 'ai-sdlc init' first.`);
   }
 
-  // Get existing stories to determine priority
-  const existingFiles = fs.readdirSync(backlogFolder).filter(f => f.endsWith('.md'));
-  const priority = existingFiles.length + 1;
-
+  // Generate unique ID and slug
+  const id = generateStoryId();
   const slug = slugify(title);
-  const filename = `${String(priority).padStart(2, '0')}-${slug}.md`;
-  const filePath = path.join(backlogFolder, filename);
+
+  // Create story folder: stories/{id}/
+  const storyFolder = path.join(storiesFolder, id);
+  fs.mkdirSync(storyFolder, { recursive: true });
+
+  // Create story file path: stories/{id}/story.md
+  const filePath = path.join(storyFolder, STORY_FILENAME);
+
+  // Calculate priority using gaps - find max priority and add DEFAULT_PRIORITY_GAP
+  let priority = DEFAULT_PRIORITY_GAP; // Start at 10 for first story
+  try {
+    const existingDirs = fs.readdirSync(storiesFolder, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory());
+
+    if (existingDirs.length > 0) {
+      let maxPriority = 0;
+      for (const dir of existingDirs) {
+        const storyPath = path.join(storiesFolder, dir.name, STORY_FILENAME);
+        if (fs.existsSync(storyPath)) {
+          try {
+            const existingStory = parseStory(storyPath);
+            if (existingStory.frontmatter.priority > maxPriority) {
+              maxPriority = existingStory.frontmatter.priority;
+            }
+          } catch (err) {
+            // Skip malformed stories
+            continue;
+          }
+        }
+      }
+      priority = maxPriority + DEFAULT_PRIORITY_GAP;
+    }
+  } catch (err) {
+    // If we can't read existing stories, start at DEFAULT_PRIORITY_GAP
+    priority = DEFAULT_PRIORITY_GAP;
+  }
 
   const frontmatter: StoryFrontmatter = {
-    id: generateStoryId(),
+    id,
     title,
+    slug,
     priority,
     status: 'backlog',
     type: options.type || 'feature',
@@ -511,61 +554,55 @@ export function sanitizeReasonText(text: string): string {
 }
 
 /**
- * Unblock a story from the blocked folder and move it back to the workflow
- * Determines destination folder based on workflow completion state
+ * Unblock a story and set status back to in-progress
+ * In the new architecture, this only updates frontmatter - file path remains unchanged
  *
  * @param storyId - Story ID to unblock
  * @param sdlcRoot - Root path of the .ai-sdlc folder
  * @param options - Optional configuration { resetRetries?: boolean }
- * @returns The unblocked and moved story
+ * @returns The unblocked story
  */
 export function unblockStory(
   storyId: string,
   sdlcRoot: string,
   options?: { resetRetries?: boolean }
 ): Story {
-  const blockedFolder = path.join(sdlcRoot, BLOCKED_DIR);
+  // In new architecture, try direct path lookup first
+  const storyPath = path.join(sdlcRoot, STORIES_FOLDER, storyId, STORY_FILENAME);
 
-  // Find story in blocked folder
-  if (!fs.existsSync(blockedFolder)) {
-    throw new Error(`Story ${storyId} not found in blocked folder`);
-  }
-
-  const blockedFiles = fs.readdirSync(blockedFolder).filter(f => f.endsWith('.md'));
   let foundStory: Story | null = null;
-  let foundPath: string | null = null;
 
-  for (const file of blockedFiles) {
-    const filePath = path.join(blockedFolder, file);
-    const story = parseStory(filePath);
-    if (story.frontmatter.id === storyId) {
-      foundStory = story;
-      foundPath = filePath;
-      break;
+  if (fs.existsSync(storyPath)) {
+    // Found in new structure
+    foundStory = parseStory(storyPath);
+  } else {
+    // Fallback: search for story in old blocked folder (backwards compatibility)
+    const blockedFolder = path.join(sdlcRoot, BLOCKED_DIR);
+    if (fs.existsSync(blockedFolder)) {
+      const blockedFiles = fs.readdirSync(blockedFolder).filter(f => f.endsWith('.md'));
+      for (const file of blockedFiles) {
+        const filePath = path.join(blockedFolder, file);
+        const story = parseStory(filePath);
+        if (story.frontmatter.id === storyId) {
+          foundStory = story;
+          break;
+        }
+      }
     }
   }
 
   if (!foundStory) {
-    throw new Error(`Story ${storyId} not found in blocked folder`);
+    throw new Error(`Story ${storyId} not found`);
+  }
+
+  // Verify story is actually blocked
+  if (foundStory.frontmatter.status !== 'blocked') {
+    throw new Error(`Story ${storyId} is not blocked (current status: ${foundStory.frontmatter.status})`);
   }
 
   // Clear blocking fields
   delete foundStory.frontmatter.blocked_reason;
   delete foundStory.frontmatter.blocked_at;
-
-  // Determine destination folder based on workflow state
-  let destinationFolder: string;
-
-  if (foundStory.frontmatter.implementation_complete) {
-    // If implementation is complete, move to in-progress for review
-    destinationFolder = 'in-progress';
-  } else if (foundStory.frontmatter.plan_complete || foundStory.frontmatter.research_complete) {
-    // If plan or research is complete, move to ready for next phase
-    destinationFolder = 'ready';
-  } else {
-    // Otherwise, return to backlog
-    destinationFolder = 'backlog';
-  }
 
   // Reset retries if requested
   if (options?.resetRetries) {
@@ -573,13 +610,12 @@ export function unblockStory(
     foundStory.frontmatter.refinement_count = 0;
   }
 
-  // Move story to destination folder
-  const movedStory = moveStory(foundStory, destinationFolder, sdlcRoot);
+  // Update status to in-progress (no file moves in new architecture)
+  foundStory.frontmatter.status = 'in-progress';
+  foundStory.frontmatter.updated = new Date().toISOString().split('T')[0];
 
-  // Clean up the old blocked file if it still exists (in case of collision handling)
-  if (fs.existsSync(foundPath!) && foundPath !== movedStory.path) {
-    fs.unlinkSync(foundPath!);
-  }
+  // Write back to same location
+  writeStory(foundStory);
 
-  return movedStory;
+  return foundStory;
 }

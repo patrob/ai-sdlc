@@ -76,7 +76,8 @@ export interface RefinementIteration {
 export interface StoryFrontmatter {
   id: string;
   title: string;
-  priority: number;
+  slug: string;
+  priority: number; // Numeric with gaps (10, 20, 30...) for easy insertion without renumbering
   status: StoryStatus;
   type: StoryType;
   created: string;
@@ -109,6 +110,12 @@ export interface StoryFrontmatter {
   tdd_enabled?: boolean;
   tdd_current_test?: TDDTestCycle;
   tdd_test_history?: TDDTestCycle[];
+  // Implementation verification
+  last_test_run?: {
+    passed: boolean;
+    failures: number;
+    timestamp: string;
+  };
 }
 
 export interface Story {
@@ -203,6 +210,7 @@ export interface TDDConfig {
   strictMode: boolean;
   maxCycles: number;
   requireApprovalPerCycle: boolean;
+  requirePassingTestsForComplete: boolean;
 }
 
 /**
@@ -328,13 +336,24 @@ export interface ReworkContext {
 }
 
 // Kanban folder structure
+/**
+ * @deprecated Use stories/ folder structure instead. Will be removed in v2.0
+ */
 export const KANBAN_FOLDERS = ['backlog', 'ready', 'in-progress', 'done'] as const;
 export type KanbanFolder = typeof KANBAN_FOLDERS[number];
 
 // Blocked folder (separate from kanban workflow)
 export const BLOCKED_DIR = 'blocked';
 
+// New folder-per-story structure constants
+export const STORIES_FOLDER = 'stories';
+export const STORY_FILENAME = 'story.md';
+export const DEFAULT_PRIORITY_GAP = 10;
+
 // Map status to folder (only for kanban statuses, not 'blocked')
+/**
+ * @deprecated Status is now in frontmatter. Will be removed in v2.0
+ */
 export const STATUS_TO_FOLDER: Record<Exclude<StoryStatus, 'blocked'>, KanbanFolder> = {
   'backlog': 'backlog',
   'ready': 'ready',
@@ -343,6 +362,9 @@ export const STATUS_TO_FOLDER: Record<Exclude<StoryStatus, 'blocked'>, KanbanFol
 };
 
 // Map folder to status
+/**
+ * @deprecated Status is now in frontmatter. Will be removed in v2.0
+ */
 export const FOLDER_TO_STATUS: Record<KanbanFolder, StoryStatus> = {
   'backlog': 'backlog',
   'ready': 'ready',

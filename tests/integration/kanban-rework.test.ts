@@ -3,8 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { assessState } from '../../src/core/kanban.js';
-import { createStory, moveStory, appendReviewHistory, writeStory } from '../../src/core/story.js';
-import { ReviewDecision, ReviewSeverity } from '../../src/types/index.js';
+import { createStory, updateStoryStatus, appendReviewHistory, writeStory } from '../../src/core/story.js';
+import { ReviewDecision, ReviewSeverity, STORIES_FOLDER } from '../../src/types/index.js';
 
 describe('Kanban Rework Detection', () => {
   let testDir: string;
@@ -15,12 +15,9 @@ describe('Kanban Rework Detection', () => {
     testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-'));
     sdlcRoot = path.join(testDir, '.ai-sdlc');
 
-    // Create SDLC folder structure
+    // Create SDLC folder structure (new architecture: stories/ folder)
     fs.mkdirSync(sdlcRoot, { recursive: true });
-    fs.mkdirSync(path.join(sdlcRoot, 'backlog'));
-    fs.mkdirSync(path.join(sdlcRoot, 'ready'));
-    fs.mkdirSync(path.join(sdlcRoot, 'in-progress'));
-    fs.mkdirSync(path.join(sdlcRoot, 'done'));
+    fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER));
 
     // Create default config
     const config = {
@@ -58,7 +55,7 @@ describe('Kanban Rework Detection', () => {
   it('should generate rework action when review is rejected', () => {
     // Create story and move to in-progress
     let story = createStory('Test Story', sdlcRoot);
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
 
     // Mark implementation complete
     story.frontmatter.implementation_complete = true;
@@ -88,7 +85,7 @@ describe('Kanban Rework Detection', () => {
   it('should not generate rework action when review is approved', () => {
     // Create story and move to in-progress
     let story = createStory('Test Story', sdlcRoot);
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
 
     // Mark implementation complete
     story.frontmatter.implementation_complete = true;
@@ -121,7 +118,7 @@ describe('Kanban Rework Detection', () => {
   it('should trigger circuit breaker after max refinement attempts', () => {
     // Create story and move to in-progress
     let story = createStory('Test Story', sdlcRoot);
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
 
     // Mark implementation complete
     story.frontmatter.implementation_complete = true;
@@ -205,7 +202,7 @@ describe('Kanban Rework Detection', () => {
 
   it('should track iteration number in rework action context', () => {
     let story = createStory('Test Story', sdlcRoot);
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Set to iteration 2
@@ -232,7 +229,7 @@ describe('Kanban Rework Detection', () => {
 
   it('should respect per-story max_refinement_attempts override', () => {
     let story = createStory('Test Story', sdlcRoot);
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Set custom max to 1
@@ -264,7 +261,7 @@ describe('Kanban Rework Detection', () => {
 
   it('should not generate rework for stories without implementation complete', () => {
     let story = createStory('Test Story', sdlcRoot);
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     // implementation_complete is false
 
     appendReviewHistory(story, {

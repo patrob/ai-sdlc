@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { createStory, moveStory, appendReviewHistory, parseStory, writeStory } from '../../src/core/story.js';
+import { createStory, updateStoryStatus, appendReviewHistory, parseStory, writeStory } from '../../src/core/story.js';
 import { assessState } from '../../src/core/kanban.js';
 import { runReworkAgent } from '../../src/agents/rework.js';
 import { runReviewAgent } from '../../src/agents/review.js';
-import { ReviewDecision, ReviewSeverity, ReviewResult } from '../../src/types/index.js';
+import { ReviewDecision, ReviewSeverity, ReviewResult, STORIES_FOLDER } from '../../src/types/index.js';
 import { spawn } from 'child_process';
 
 // Mock child_process for test execution simulation
@@ -27,10 +27,7 @@ describe('Refinement Loop Integration', () => {
 
     // Create SDLC folder structure
     fs.mkdirSync(sdlcRoot, { recursive: true });
-    fs.mkdirSync(path.join(sdlcRoot, 'backlog'));
-    fs.mkdirSync(path.join(sdlcRoot, 'ready'));
-    fs.mkdirSync(path.join(sdlcRoot, 'in-progress'));
-    fs.mkdirSync(path.join(sdlcRoot, 'done'));
+    fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER), { recursive: true });
 
     // Create default config
     const config = {
@@ -71,7 +68,7 @@ describe('Refinement Loop Integration', () => {
       type: 'feature',
       labels: ['test'],
     });
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Step 2: Add failed review
@@ -161,7 +158,7 @@ describe('Refinement Loop Integration', () => {
   it('should escalate after multiple failed refinement iterations', async () => {
     // Create story and move to in-progress
     let story = createStory('Difficult Feature', sdlcRoot);
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Iteration 1: First failure
@@ -275,7 +272,7 @@ describe('Refinement Loop Integration', () => {
 
   it('should track refinement history across multiple iterations', async () => {
     let story = createStory('Test Story', sdlcRoot);
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // First refinement
@@ -325,10 +322,7 @@ describe('Review Agent Pre-check Integration', () => {
 
     // Create SDLC folder structure
     fs.mkdirSync(sdlcRoot, { recursive: true });
-    fs.mkdirSync(path.join(sdlcRoot, 'backlog'));
-    fs.mkdirSync(path.join(sdlcRoot, 'ready'));
-    fs.mkdirSync(path.join(sdlcRoot, 'in-progress'));
-    fs.mkdirSync(path.join(sdlcRoot, 'done'));
+    fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER), { recursive: true });
 
     // Create default config with test/build commands
     const config = {
@@ -376,7 +370,7 @@ describe('Review Agent Pre-check Integration', () => {
   it('should block review and skip LLM calls when tests fail', async () => {
     // Setup: Create a story with completed implementation
     let story = createStory('Feature with Failing Tests', sdlcRoot);
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Mock spawn to simulate failed test execution
@@ -436,7 +430,7 @@ describe('Review Agent Pre-check Integration', () => {
   it('should proceed with reviews when tests pass', async () => {
     // Setup: Create a story with completed implementation
     let story = createStory('Feature with Passing Tests', sdlcRoot);
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Mock spawn to simulate successful test execution
@@ -480,7 +474,7 @@ describe('Review Agent Pre-check Integration', () => {
   it('should truncate large test output in BLOCKER issue', async () => {
     // Setup: Create a story
     let story = createStory('Feature with Verbose Test Failure', sdlcRoot);
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Mock spawn to return very large test output (>10KB)
@@ -526,7 +520,7 @@ describe('Review Agent Pre-check Integration', () => {
   it('should handle test timeout gracefully', async () => {
     // Setup: Create a story
     let story = createStory('Feature with Hanging Tests', sdlcRoot);
-    story = moveStory(story, 'in-progress', sdlcRoot);
+    story = updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Mock spawn to simulate timeout scenario

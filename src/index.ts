@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { init, status, add, run, details, unblock } from './cli/commands.js';
+import { init, status, add, run, details, unblock, migrate } from './cli/commands.js';
 import { hasApiKey } from './core/auth.js';
 import { loadConfig, saveConfig } from './core/config.js';
 import { getThemedChalk } from './core/theme.js';
@@ -60,6 +60,14 @@ program
   .description('Unblock a story from the blocked folder and return it to the workflow')
   .option('--reset-retries', 'Reset retry_count and refinement_count to 0')
   .action((storyId, options) => unblock(storyId, options));
+
+program
+  .command('migrate')
+  .description('Migrate stories from old kanban folder structure to folder-per-story architecture')
+  .option('--dry-run', 'Show migration plan without making changes')
+  .option('--no-backup', 'Skip backup creation (use with caution)')
+  .option('--force', 'Force migration even with uncommitted git changes')
+  .action((options) => migrate(options));
 
 program
   .command('run')

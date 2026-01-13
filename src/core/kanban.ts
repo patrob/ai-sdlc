@@ -1,15 +1,72 @@
 import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
-import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder, ReviewDecision, BLOCKED_DIR } from '../types/index.js';
+import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder, ReviewDecision, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, StoryStatus } from '../types/index.js';
 import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt, moveToBlocked, getEffectiveMaxRetries, sanitizeReasonText } from './story.js';
 import { loadConfig } from './config.js';
 import { determineTargetPhase } from '../agents/rework.js';
 
 /**
+ * Find all stories in the stories/ folder structure
+ * Globs stories/*\u200B/story.md and returns all story objects
+ * Skips malformed folders (folders without story.md)
+ */
+export function findAllStories(sdlcRoot: string): Story[] {
+  const storiesFolder = path.join(sdlcRoot, STORIES_FOLDER);
+
+  if (!fs.existsSync(storiesFolder)) {
+    return [];
+  }
+
+  const stories: Story[] = [];
+  const pattern = path.join(storiesFolder, '*', STORY_FILENAME);
+
+  try {
+    const storyPaths = glob.sync(pattern);
+
+    for (const storyPath of storyPaths) {
+      try {
+        const story = parseStory(storyPath);
+        stories.push(story);
+      } catch (err) {
+        // Skip malformed stories
+        continue;
+      }
+    }
+  } catch (err) {
+    // If glob fails, return empty array
+    return [];
+  }
+
+  return stories;
+}
+
+/**
+ * Find stories by frontmatter status
+ * Filters stories by frontmatter status and sorts by priority ascending
+ */
+export function findStoriesByStatus(sdlcRoot: string, status: StoryStatus): Story[] {
+  const allStories = findAllStories(sdlcRoot);
+
+  return allStories
+    .filter(story => story.frontmatter.status === status)
+    .sort((a, b) => {
+      // Sort by priority ascending
+      if (a.frontmatter.priority !== b.frontmatter.priority) {
+        return a.frontmatter.priority - b.frontmatter.priority;
+      }
+      // Tiebreaker: sort by creation date
+      return a.frontmatter.created.localeCompare(b.frontmatter.created);
+    });
+}
+
+/**
  * Get all stories in a specific kanban folder
+ * @deprecated Use findStoriesByStatus() instead
  */
 export function getStoriesInFolder(sdlcRoot: string, folder: KanbanFolder): Story[] {
+  console.warn('getStoriesInFolder() is deprecated. Use findStoriesByStatus() instead.');
+
   const folderPath = path.join(sdlcRoot, folder);
 
   if (!fs.existsSync(folderPath)) {
@@ -25,21 +82,60 @@ export function getStoriesInFolder(sdlcRoot: string, folder: KanbanFolder): Stor
 
 /**
  * Get all stories across all kanban folders
+ * In new architecture, uses findAllStories() and groups by status
  */
 export function getAllStories(sdlcRoot: string): Map<KanbanFolder, Story[]> {
   const stories = new Map<KanbanFolder, Story[]>();
 
+  // Initialize empty arrays for each folder
   for (const folder of KANBAN_FOLDERS) {
-    stories.set(folder, getStoriesInFolder(sdlcRoot, folder));
+    stories.set(folder, []);
+  }
+
+  // Get all stories and group by status
+  const allStories = findAllStories(sdlcRoot);
+  for (const story of allStories) {
+    const status = story.frontmatter.status;
+    // Only add to map if status matches a kanban folder (exclude 'blocked')
+    if (status === 'backlog' || status === 'ready' || status === 'in-progress' || status === 'done') {
+      const folder = status as KanbanFolder;
+      const folderStories = stories.get(folder) || [];
+      folderStories.push(story);
+      stories.set(folder, folderStories);
+    }
+  }
+
+  // Sort each folder's stories by priority
+  for (const [folder, folderStories] of stories.entries()) {
+    folderStories.sort((a, b) => {
+      if (a.frontmatter.priority !== b.frontmatter.priority) {
+        return a.frontmatter.priority - b.frontmatter.priority;
+      }
+      return a.frontmatter.created.localeCompare(b.frontmatter.created);
+    });
+    stories.set(folder, folderStories);
   }
 
   return stories;
 }
 
 /**
- * Find a story by ID across all folders (including blocked)
+ * Find a story by ID using O(1) direct path lookup
+ * Falls back to searching old folder structure for backwards compatibility
  */
 export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
+  // O(1) direct path construction for new architecture
+  const storyPath = path.join(sdlcRoot, STORIES_FOLDER, storyId, STORY_FILENAME);
+
+  if (fs.existsSync(storyPath)) {
+    try {
+      return parseStory(storyPath);
+    } catch (err) {
+      // Story file exists but is malformed, fall through to search
+    }
+  }
+
+  // Fallback: search old folder structure for backwards compatibility
   // Search kanban folders first
   for (const folder of KANBAN_FOLDERS) {
     const stories = getStoriesInFolder(sdlcRoot, folder);
@@ -53,9 +149,13 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
     const blockedFiles = fs.readdirSync(blockedFolder).filter(f => f.endsWith('.md'));
     for (const file of blockedFiles) {
       const filePath = path.join(blockedFolder, file);
-      const story = parseStory(filePath);
-      if (story.frontmatter.id === storyId) {
-        return story;
+      try {
+        const story = parseStory(filePath);
+        if (story.frontmatter.id === storyId) {
+          return story;
+        }
+      } catch (err) {
+        continue;
       }
     }
   }
@@ -67,12 +167,8 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
  * Find a story by slug across all folders
  */
 export function findStoryBySlug(sdlcRoot: string, slug: string): Story | null {
-  for (const folder of KANBAN_FOLDERS) {
-    const stories = getStoriesInFolder(sdlcRoot, folder);
-    const found = stories.find(s => s.slug === slug);
-    if (found) return found;
-  }
-  return null;
+  const allStories = findAllStories(sdlcRoot);
+  return allStories.find(s => s.slug === slug) || null;
 }
 
 /**
@@ -106,10 +202,10 @@ function hasFailedReview(story: Story): boolean {
  * Assess the current state of the kanban board and recommend actions
  */
 export function assessState(sdlcRoot: string): StateAssessment {
-  const backlogItems = getStoriesInFolder(sdlcRoot, 'backlog');
-  const readyItems = getStoriesInFolder(sdlcRoot, 'ready');
-  const inProgressItems = getStoriesInFolder(sdlcRoot, 'in-progress');
-  const doneItems = getStoriesInFolder(sdlcRoot, 'done');
+  const backlogItems = findStoriesByStatus(sdlcRoot, 'backlog');
+  const readyItems = findStoriesByStatus(sdlcRoot, 'ready');
+  const inProgressItems = findStoriesByStatus(sdlcRoot, 'in-progress');
+  const doneItems = findStoriesByStatus(sdlcRoot, 'done');
 
   const recommendedActions: Action[] = [];
   const workingDir = path.dirname(sdlcRoot);
@@ -316,11 +412,10 @@ export function assessState(sdlcRoot: string): StateAssessment {
  * Initialize the kanban folder structure
  */
 export function initializeKanban(sdlcRoot: string): void {
-  for (const folder of KANBAN_FOLDERS) {
-    const folderPath = path.join(sdlcRoot, folder);
-    if (!fs.existsSync(folderPath)) {
-      fs.mkdirSync(folderPath, { recursive: true });
-    }
+  // Create stories/ folder for new architecture
+  const storiesFolder = path.join(sdlcRoot, STORIES_FOLDER);
+  if (!fs.existsSync(storiesFolder)) {
+    fs.mkdirSync(storiesFolder, { recursive: true });
   }
 }
 
@@ -328,9 +423,9 @@ export function initializeKanban(sdlcRoot: string): void {
  * Check if kanban structure exists
  */
 export function kanbanExists(sdlcRoot: string): boolean {
-  return KANBAN_FOLDERS.every(folder =>
-    fs.existsSync(path.join(sdlcRoot, folder))
-  );
+  // Check for new stories/ folder architecture
+  const storiesFolder = path.join(sdlcRoot, STORIES_FOLDER);
+  return fs.existsSync(storiesFolder);
 }
 
 /**
@@ -345,7 +440,7 @@ export function getBoardStats(sdlcRoot: string): Record<KanbanFolder, number> {
   };
 
   for (const folder of KANBAN_FOLDERS) {
-    stats[folder] = getStoriesInFolder(sdlcRoot, folder).length;
+    stats[folder] = findStoriesByStatus(sdlcRoot, folder).length;
   }
 
   return stats;

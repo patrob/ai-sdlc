@@ -11,6 +11,7 @@ import { getSdlcRoot } from '../../src/core/config.js';
 import { createStory, parseStory, updateStory } from '../../src/core/story.js';
 import { clearWorkflowState } from '../../src/core/workflow-state.js';
 import { initializeKanban } from '../../src/core/kanban.js';
+import { STORIES_FOLDER } from '../../src/types/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -88,11 +89,15 @@ describe('--auto --story Full SDLC Workflow', () => {
       const sdlcRoot = getSdlcRoot();
 
       // Create story directly in ready
-      const storyPath = path.join(sdlcRoot, 'ready', 'test-story.md');
+      const storyId = 'test-1';
+      const storyFolder = path.join(sdlcRoot, STORIES_FOLDER, storyId);
+      fs.mkdirSync(storyFolder, { recursive: true });
+      const storyPath = path.join(storyFolder, 'story.md');
       const frontmatter = {
         id: 'test-1',
         title: 'Test Story',
-        priority: 1,
+        slug: 'test-story',
+        priority: 10,
         status: 'ready' as const,
         type: 'feature' as const,
         created: new Date().toISOString(),
@@ -125,11 +130,15 @@ describe('--auto --story Full SDLC Workflow', () => {
       const sdlcRoot = getSdlcRoot();
 
       // Create story with some phases complete
-      const storyPath = path.join(sdlcRoot, 'ready', 'test-story.md');
+      const storyId = 'test-1';
+      const storyFolder = path.join(sdlcRoot, STORIES_FOLDER, storyId);
+      fs.mkdirSync(storyFolder, { recursive: true });
+      const storyPath = path.join(storyFolder, 'story.md');
       const frontmatter = {
         id: 'test-1',
         title: 'Test Story',
-        priority: 1,
+        slug: 'test-story',
+        priority: 10,
         status: 'ready' as const,
         type: 'feature' as const,
         created: new Date().toISOString(),
@@ -236,11 +245,15 @@ describe('--auto --story Full SDLC Workflow', () => {
       const sdlcRoot = getSdlcRoot();
 
       // Create fully complete story
-      const storyPath = path.join(sdlcRoot, 'done', 'test-story.md');
+      const storyId = 'test-1';
+      const storyFolder = path.join(sdlcRoot, STORIES_FOLDER, storyId);
+      fs.mkdirSync(storyFolder, { recursive: true });
+      const storyPath = path.join(storyFolder, 'story.md');
       const frontmatter = {
         id: 'test-1',
         title: 'Test Story',
-        priority: 1,
+        slug: 'test-story',
+        priority: 10,
         status: 'done' as const,
         type: 'feature' as const,
         created: new Date().toISOString(),

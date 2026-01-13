@@ -1,7 +1,7 @@
 ---
 id: story-3irsu11w5t2d
 title: Consolidate story lookup to ID-based resolution (DRY principle)
-priority: 4
+priority: 2
 status: ready
 type: refactor
 created: '2026-01-10'

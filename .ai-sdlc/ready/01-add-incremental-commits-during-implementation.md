@@ -2,7 +2,7 @@
 id: story-aad83a4b-b851
 title: Add incremental commits during implementation phase
 priority: 1
-status: backlog
+status: ready
 type: feature
 created: '2026-01-13'
 labels:

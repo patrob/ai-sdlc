@@ -5,7 +5,7 @@ title: >-
   containing story.md plus related artifacts (implementation docs, research
   notes, etc.)
 priority: 3
-status: ready
+status: backlog
 type: feature
 created: '2026-01-09'
 labels:

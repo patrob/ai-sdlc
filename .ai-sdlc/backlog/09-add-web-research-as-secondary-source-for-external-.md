@@ -2,7 +2,7 @@
 id: story-mk8p9hcm-163q
 title: Add web research as secondary source for external libraries and docs
 priority: 9
-status: ready
+status: backlog
 type: feature
 created: '2026-01-10'
 labels:

@@ -5,6 +5,9 @@ import {
   renderCompactView,
   shouldUseCompactView,
   renderStories,
+  renderKanbanBoard,
+  formatKanbanStoryEntry,
+  shouldUseKanbanLayout,
 } from './table-renderer.js';
 
 // Mock themed chalk
@@ -441,6 +444,384 @@ describe('table-renderer', () => {
 
       expect(result).not.toContain('Compact view');
       expect(result).not.toContain('terminal width');
+    });
+  });
+
+  describe('kanban board rendering', () => {
+    interface KanbanColumn {
+      name: string;
+      stories: Story[];
+      color: any;
+    }
+
+    describe('shouldUseKanbanLayout', () => {
+      it('should return true for terminal width >= 80', () => {
+        expect(shouldUseKanbanLayout(80)).toBe(true);
+        expect(shouldUseKanbanLayout(120)).toBe(true);
+        expect(shouldUseKanbanLayout(200)).toBe(true);
+      });
+
+      it('should return false for terminal width < 80', () => {
+        expect(shouldUseKanbanLayout(60)).toBe(false);
+        expect(shouldUseKanbanLayout(79)).toBe(false);
+      });
+
+      it('should handle undefined terminal width', () => {
+        process.stdout.columns = undefined;
+        expect(shouldUseKanbanLayout()).toBe(true); // Falls back to 80
+      });
+
+      it('should use process.stdout.columns when no width provided', () => {
+        process.stdout.columns = 100;
+        expect(shouldUseKanbanLayout()).toBe(true);
+
+        process.stdout.columns = 70;
+        expect(shouldUseKanbanLayout()).toBe(false);
+      });
+    });
+
+    describe('formatKanbanStoryEntry', () => {
+      it('should format story with ID and title', () => {
+        const story = createMockStory({
+          id: 'story-123',
+          title: 'Test Story',
+        });
+
+        const result = formatKanbanStoryEntry(story, 30, mockThemedChalk);
+
+        expect(result).toContain('story-123');
+        expect(result).toContain('Test Story');
+      });
+
+      it('should include flags when present', () => {
+        const story = createMockStory({
+          id: 'story-456',
+          title: 'Story with flags',
+          research_complete: true,
+          plan_complete: true,
+        });
+
+        const result = formatKanbanStoryEntry(story, 40, mockThemedChalk);
+
+        expect(result).toContain('[RP]');
+      });
+
+      it('should truncate long titles within column width', () => {
+        const story = createMockStory({
+          id: 'story-789',
+          title: 'This is a very long story title that should be truncated to fit within the column width',
+        });
+
+        const result = formatKanbanStoryEntry(story, 30, mockThemedChalk);
+
+        expect(result.length).toBeLessThanOrEqual(30);
+        expect(result).toContain('...');
+      });
+
+      it('should return empty string for null story', () => {
+        const result = formatKanbanStoryEntry(null, 30, mockThemedChalk);
+
+        expect(result).toBe('');
+      });
+
+      it('should handle story with all flags', () => {
+        const story = createMockStory({
+          id: 'story-abc',
+          title: 'Complete story',
+          research_complete: true,
+          plan_complete: true,
+          implementation_complete: true,
+          reviews_complete: true,
+        });
+
+        const result = formatKanbanStoryEntry(story, 50, mockThemedChalk);
+
+        expect(result).toContain('[RPIV]');
+      });
+
+      it('should handle very narrow column width', () => {
+        const story = createMockStory({
+          id: 'story-narrow',
+          title: 'Test',
+        });
+
+        const result = formatKanbanStoryEntry(story, 10, mockThemedChalk);
+
+        expect(result.length).toBeLessThanOrEqual(10);
+      });
+    });
+
+    describe('renderKanbanBoard', () => {
+      it('should render 4 columns side-by-side', () => {
+        const columns: KanbanColumn[] = [
+          {
+            name: 'BACKLOG',
+            color: mockThemedChalk.backlog,
+            stories: [createMockStory({ id: 'story-1', title: 'Story 1' })],
+          },
+          {
+            name: 'READY',
+            color: mockThemedChalk.ready,
+            stories: [createMockStory({ id: 'story-2', title: 'Story 2' })],
+          },
+          {
+            name: 'IN-PROGRESS',
+            color: mockThemedChalk.inProgress,
+            stories: [createMockStory({ id: 'story-3', title: 'Story 3' })],
+          },
+          {
+            name: 'DONE',
+            color: mockThemedChalk.done,
+            stories: [createMockStory({ id: 'story-4', title: 'Story 4' })],
+          },
+        ];
+
+        process.stdout.columns = 120;
+        const result = renderKanbanBoard(columns, mockThemedChalk);
+
+        // Should contain all column headers
+        expect(result).toContain('BACKLOG');
+        expect(result).toContain('READY');
+        expect(result).toContain('IN-PROGRESS');
+        expect(result).toContain('DONE');
+
+        // Should contain stories
+        expect(result).toContain('story-1');
+        expect(result).toContain('story-2');
+        expect(result).toContain('story-3');
+        expect(result).toContain('story-4');
+
+        // Should contain column separators
+        expect(result).toContain('│');
+      });
+
+      it('should display empty columns with placeholder', () => {
+        const columns: KanbanColumn[] = [
+          {
+            name: 'BACKLOG',
+            color: mockThemedChalk.backlog,
+            stories: [createMockStory()],
+          },
+          {
+            name: 'READY',
+            color: mockThemedChalk.ready,
+            stories: [],
+          },
+          {
+            name: 'IN-PROGRESS',
+            color: mockThemedChalk.inProgress,
+            stories: [],
+          },
+          {
+            name: 'DONE',
+            color: mockThemedChalk.done,
+            stories: [createMockStory()],
+          },
+        ];
+
+        process.stdout.columns = 120;
+        const result = renderKanbanBoard(columns, mockThemedChalk);
+
+        // Should show placeholder for empty columns
+        expect(result).toContain('(empty)');
+      });
+
+      it('should handle uneven column heights', () => {
+        const columns: KanbanColumn[] = [
+          {
+            name: 'BACKLOG',
+            color: mockThemedChalk.backlog,
+            stories: [
+              createMockStory({ id: 'story-1' }),
+              createMockStory({ id: 'story-2' }),
+              createMockStory({ id: 'story-3' }),
+            ],
+          },
+          {
+            name: 'READY',
+            color: mockThemedChalk.ready,
+            stories: [createMockStory({ id: 'story-4' })],
+          },
+          {
+            name: 'IN-PROGRESS',
+            color: mockThemedChalk.inProgress,
+            stories: [],
+          },
+          {
+            name: 'DONE',
+            color: mockThemedChalk.done,
+            stories: [
+              createMockStory({ id: 'story-5' }),
+              createMockStory({ id: 'story-6' }),
+            ],
+          },
+        ];
+
+        process.stdout.columns = 120;
+        const result = renderKanbanBoard(columns, mockThemedChalk);
+
+        // Should render without errors
+        expect(result).toBeDefined();
+        // All stories should be present
+        expect(result).toContain('story-1');
+        expect(result).toContain('story-4');
+        expect(result).toContain('story-5');
+        expect(result).toContain('story-6');
+      });
+
+      it('should display story counts in headers', () => {
+        const columns: KanbanColumn[] = [
+          {
+            name: 'BACKLOG',
+            color: mockThemedChalk.backlog,
+            stories: [createMockStory(), createMockStory(), createMockStory()],
+          },
+          {
+            name: 'READY',
+            color: mockThemedChalk.ready,
+            stories: [createMockStory(), createMockStory()],
+          },
+          {
+            name: 'IN-PROGRESS',
+            color: mockThemedChalk.inProgress,
+            stories: [createMockStory()],
+          },
+          {
+            name: 'DONE',
+            color: mockThemedChalk.done,
+            stories: [],
+          },
+        ];
+
+        process.stdout.columns = 120;
+        const result = renderKanbanBoard(columns, mockThemedChalk);
+
+        // Should show counts
+        expect(result).toContain('(3)');
+        expect(result).toContain('(2)');
+        expect(result).toContain('(1)');
+        expect(result).toContain('(0)');
+      });
+
+      it('should handle all empty columns', () => {
+        const columns: KanbanColumn[] = [
+          {
+            name: 'BACKLOG',
+            color: mockThemedChalk.backlog,
+            stories: [],
+          },
+          {
+            name: 'READY',
+            color: mockThemedChalk.ready,
+            stories: [],
+          },
+          {
+            name: 'IN-PROGRESS',
+            color: mockThemedChalk.inProgress,
+            stories: [],
+          },
+          {
+            name: 'DONE',
+            color: mockThemedChalk.done,
+            stories: [],
+          },
+        ];
+
+        process.stdout.columns = 120;
+        const result = renderKanbanBoard(columns, mockThemedChalk);
+
+        // Should render headers even when all empty
+        expect(result).toContain('BACKLOG');
+        expect(result).toContain('READY');
+        expect(result).toContain('IN-PROGRESS');
+        expect(result).toContain('DONE');
+        expect(result).toContain('(empty)');
+      });
+
+      it('should truncate long story titles to fit column width', () => {
+        const longTitle = 'This is a very long story title that should be truncated to fit within the allocated column width for the kanban board';
+        const columns: KanbanColumn[] = [
+          {
+            name: 'BACKLOG',
+            color: mockThemedChalk.backlog,
+            stories: [createMockStory({ title: longTitle })],
+          },
+          {
+            name: 'READY',
+            color: mockThemedChalk.ready,
+            stories: [],
+          },
+          {
+            name: 'IN-PROGRESS',
+            color: mockThemedChalk.inProgress,
+            stories: [],
+          },
+          {
+            name: 'DONE',
+            color: mockThemedChalk.done,
+            stories: [],
+          },
+        ];
+
+        process.stdout.columns = 120;
+        const result = renderKanbanBoard(columns, mockThemedChalk);
+
+        // Should contain ellipsis indicating truncation
+        expect(result).toContain('...');
+        // Should not contain full title
+        expect(result).not.toContain(longTitle);
+      });
+
+      it('should align column borders correctly', () => {
+        const columns: KanbanColumn[] = [
+          {
+            name: 'BACKLOG',
+            color: mockThemedChalk.backlog,
+            stories: [createMockStory()],
+          },
+          {
+            name: 'READY',
+            color: mockThemedChalk.ready,
+            stories: [createMockStory()],
+          },
+          {
+            name: 'IN-PROGRESS',
+            color: mockThemedChalk.inProgress,
+            stories: [createMockStory()],
+          },
+          {
+            name: 'DONE',
+            color: mockThemedChalk.done,
+            stories: [createMockStory()],
+          },
+        ];
+
+        process.stdout.columns = 120;
+        const result = renderKanbanBoard(columns, mockThemedChalk);
+
+        const lines = result.split('\n');
+        // Check that we have the expected structure:
+        // - Header row (with 3 │ separators for 4 columns)
+        // - Separator row (with ┼ instead of │)
+        // - Story rows (with 3 column │ separators + │ in each story entry)
+        expect(lines.length).toBeGreaterThan(0);
+
+        // Header row should have numColumns - 1 separators
+        const headerLine = lines[0];
+        const headerBorderCount = (headerLine.match(/│/g) || []).length;
+        expect(headerBorderCount).toBe(3); // 4 columns = 3 separators
+
+        // Story rows should have column separators + story dividers
+        const storyLines = lines.filter((line, idx) => idx > 1 && line.includes('│'));
+        if (storyLines.length > 0) {
+          // Each story row should have consistent number of │ characters
+          const storyBorderCount = (storyLines[0].match(/│/g) || []).length;
+          for (const line of storyLines) {
+            const currentBorderCount = (line.match(/│/g) || []).length;
+            expect(currentBorderCount).toBe(storyBorderCount);
+          }
+        }
+      });
     });
   });
 });

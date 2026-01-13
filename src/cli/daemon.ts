@@ -2,7 +2,7 @@ import chokidar, { FSWatcher } from 'chokidar';
 import path from 'path';
 import { getSdlcRoot, loadConfig } from '../core/config.js';
 import { assessState } from '../core/kanban.js';
-import { parseStory } from '../core/story.js';
+import { parseStory, getStory } from '../core/story.js';
 import { getThemedChalk } from '../core/theme.js';
 import { runRefinementAgent } from '../agents/refinement.js';
 import { runResearchAgent } from '../agents/research.js';
@@ -367,34 +367,47 @@ export class DaemonRunner {
     const c = getThemedChalk(this.config);
 
     try {
+      // Resolve story by ID to get current path (handles moves between folders)
+      let currentStoryPath: string;
+      try {
+        const story = getStory(this.sdlcRoot, action.storyId);
+        currentStoryPath = story.path;
+      } catch (error) {
+        console.log(c.error(`   ✗ Story not found: ${action.storyId}`));
+        if (error instanceof Error) {
+          console.log(c.dim(`     ${error.message}`));
+        }
+        throw new Error(`Story not found: ${action.storyId}`);
+      }
+
       let result;
 
       switch (action.type) {
         case 'refine':
-          result = await runRefinementAgent(action.storyPath, this.sdlcRoot);
+          result = await runRefinementAgent(currentStoryPath, this.sdlcRoot);
           break;
 
         case 'research':
-          result = await runResearchAgent(action.storyPath, this.sdlcRoot);
+          result = await runResearchAgent(currentStoryPath, this.sdlcRoot);
           break;
 
         case 'plan':
-          result = await runPlanningAgent(action.storyPath, this.sdlcRoot);
+          result = await runPlanningAgent(currentStoryPath, this.sdlcRoot);
           break;
 
         case 'implement':
-          result = await runImplementationAgent(action.storyPath, this.sdlcRoot);
+          result = await runImplementationAgent(currentStoryPath, this.sdlcRoot);
           break;
 
         case 'review':
-          result = await runReviewAgent(action.storyPath, this.sdlcRoot);
+          result = await runReviewAgent(currentStoryPath, this.sdlcRoot);
           break;
 
         case 'rework':
           if (!action.context) {
             throw new Error('Rework action requires context with review feedback');
           }
-          result = await runReworkAgent(action.storyPath, this.sdlcRoot, action.context as any);
+          result = await runReworkAgent(currentStoryPath, this.sdlcRoot, action.context as any);
           break;
 
         default:

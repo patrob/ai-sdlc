@@ -590,6 +590,97 @@ export function sanitizeReasonText(text: string): string {
 }
 
 /**
+ * Find a story by ID using O(1) direct path lookup
+ * Falls back to searching old folder structure for backwards compatibility
+ *
+ * This function is the internal lookup mechanism. Use getStory() for external access.
+ *
+ * @param sdlcRoot - Root directory of the SDLC workspace
+ * @param storyId - Story ID (e.g., 'S-0001')
+ * @returns Story object or null if not found
+ */
+export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
+  // O(1) direct path construction for new architecture
+  const storyPath = path.join(sdlcRoot, STORIES_FOLDER, storyId, STORY_FILENAME);
+
+  if (fs.existsSync(storyPath)) {
+    try {
+      return parseStory(storyPath);
+    } catch (err) {
+      // Story file exists but is malformed, fall through to search
+    }
+  }
+
+  // Fallback: search old folder structure for backwards compatibility
+  // Search kanban folders first
+  const KANBAN_FOLDERS: ('backlog' | 'ready' | 'in-progress' | 'done')[] = ['backlog', 'ready', 'in-progress', 'done'];
+  for (const folder of KANBAN_FOLDERS) {
+    const folderPath = path.join(sdlcRoot, folder);
+    if (!fs.existsSync(folderPath)) {
+      continue;
+    }
+
+    const files = fs.readdirSync(folderPath).filter(f => f.endsWith('.md'));
+    for (const file of files) {
+      const filePath = path.join(folderPath, file);
+      try {
+        const story = parseStory(filePath);
+        if (story.frontmatter.id === storyId) {
+          return story;
+        }
+      } catch (err) {
+        continue;
+      }
+    }
+  }
+
+  // Also search blocked folder
+  const blockedFolder = path.join(sdlcRoot, BLOCKED_DIR);
+  if (fs.existsSync(blockedFolder)) {
+    const blockedFiles = fs.readdirSync(blockedFolder).filter(f => f.endsWith('.md'));
+    for (const file of blockedFiles) {
+      const filePath = path.join(blockedFolder, file);
+      try {
+        const story = parseStory(filePath);
+        if (story.frontmatter.id === storyId) {
+          return story;
+        }
+      } catch (err) {
+        continue;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Retrieves a story by ID, resolving its current location across all folders.
+ * This is the single source of truth for story lookup - use this instead of
+ * directly calling parseStory() with cached paths.
+ *
+ * @param sdlcRoot - Root directory of the SDLC workspace
+ * @param storyId - Story ID (e.g., 'S-0001')
+ * @returns Fully parsed Story object with current path and metadata
+ * @throws Error if story ID not found in any folder
+ */
+export function getStory(sdlcRoot: string, storyId: string): Story {
+  const story = findStoryById(sdlcRoot, storyId);
+
+  if (!story) {
+    const newStructurePath = path.join(sdlcRoot, STORIES_FOLDER, storyId, STORY_FILENAME);
+    throw new Error(
+      `Story not found: ${storyId}\n` +
+      `Searched in: ${newStructurePath}\n` +
+      `Also searched old folder structure (backlog, in-progress, done, blocked).\n` +
+      `The story may have been deleted or the ID is incorrect.`
+    );
+  }
+
+  return story;
+}
+
+/**
  * Unblock a story and set status back to in-progress
  * In the new architecture, this only updates frontmatter - file path remains unchanged
  *
@@ -603,29 +694,8 @@ export function unblockStory(
   sdlcRoot: string,
   options?: { resetRetries?: boolean }
 ): Story {
-  // In new architecture, try direct path lookup first
-  const storyPath = path.join(sdlcRoot, STORIES_FOLDER, storyId, STORY_FILENAME);
-
-  let foundStory: Story | null = null;
-
-  if (fs.existsSync(storyPath)) {
-    // Found in new structure
-    foundStory = parseStory(storyPath);
-  } else {
-    // Fallback: search for story in old blocked folder (backwards compatibility)
-    const blockedFolder = path.join(sdlcRoot, BLOCKED_DIR);
-    if (fs.existsSync(blockedFolder)) {
-      const blockedFiles = fs.readdirSync(blockedFolder).filter(f => f.endsWith('.md'));
-      for (const file of blockedFiles) {
-        const filePath = path.join(blockedFolder, file);
-        const story = parseStory(filePath);
-        if (story.frontmatter.id === storyId) {
-          foundStory = story;
-          break;
-        }
-      }
-    }
-  }
+  // Use the centralized getStory() function for lookup
+  const foundStory = findStoryById(sdlcRoot, storyId);
 
   if (!foundStory) {
     throw new Error(`Story ${storyId} not found`);

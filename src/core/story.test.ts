@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { moveToBlocked, parseStory, sanitizeReasonText, unblockStory } from './story.js';
+import { moveToBlocked, parseStory, sanitizeReasonText, unblockStory, getStory, writeStory } from './story.js';
 import { BLOCKED_DIR } from '../types/index.js';
 
 describe('moveToBlocked', () => {
@@ -305,6 +305,142 @@ describe('sanitizeReasonText', () => {
     const input = '\x1B[1;31mError:\x1B[0m The implementation has issues:\n- Missing error handling\n- No input validation';
     const result = sanitizeReasonText(input);
     expect(result).toBe('Error: The implementation has issues: - Missing error handling - No input validation');
+  });
+});
+
+describe('getStory', () => {
+  let tempDir: string;
+  let sdlcRoot: string;
+
+  beforeEach(() => {
+    // Create temporary directory for tests
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-'));
+    sdlcRoot = path.join(tempDir, '.ai-sdlc');
+    fs.mkdirSync(sdlcRoot, { recursive: true });
+  });
+
+  afterEach(() => {
+    // Clean up temporary directory
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  function createTestStory(storyId: string, status: string = 'backlog'): string {
+    const storiesFolder = path.join(sdlcRoot, 'stories');
+    fs.mkdirSync(storiesFolder, { recursive: true });
+
+    const storyFolder = path.join(storiesFolder, storyId);
+    fs.mkdirSync(storyFolder, { recursive: true });
+
+    const filePath = path.join(storyFolder, 'story.md');
+
+    const content = `---
+id: ${storyId}
+title: Test Story ${storyId}
+slug: test-story-${storyId}
+priority: 10
+status: ${status}
+type: feature
+created: '2024-01-01'
+labels: []
+research_complete: false
+plan_complete: false
+implementation_complete: false
+reviews_complete: false
+---
+
+# Test Story ${storyId}
+
+Test content`;
+
+    fs.writeFileSync(filePath, content);
+    return filePath;
+  }
+
+  it('should return story when ID exists in new structure', () => {
+    // getStory imported at top of file
+    const storyId = 'S-0001';
+    const storyPath = createTestStory(storyId);
+
+    const story = getStory(sdlcRoot, storyId);
+
+    expect(story).toBeDefined();
+    expect(story.frontmatter.id).toBe(storyId);
+    expect(story.path).toBe(storyPath);
+  });
+
+  it('should throw descriptive error when story ID does not exist', () => {
+    // getStory imported at top of file
+    const nonexistentId = 'S-9999';
+
+    expect(() => {
+      getStory(sdlcRoot, nonexistentId);
+    }).toThrow(`Story not found: ${nonexistentId}`);
+
+    // Check that error message includes helpful information
+    try {
+      getStory(sdlcRoot, nonexistentId);
+    } catch (error: any) {
+      expect(error.message).toContain('Searched in:');
+      expect(error.message).toContain('stories/S-9999');
+      expect(error.message).toContain('may have been deleted or the ID is incorrect');
+    }
+  });
+
+  it('should find story after status changes (simulated move)', () => {
+    // getStory imported at top of file
+    const storyId = 'S-0001';
+    createTestStory(storyId, 'backlog');
+
+    // First lookup - story in backlog
+    const story1 = getStory(sdlcRoot, storyId);
+    expect(story1.frontmatter.status).toBe('backlog');
+    expect(story1.frontmatter.id).toBe(storyId);
+
+    // Simulate status change by updating frontmatter
+    story1.frontmatter.status = 'in-progress';
+    // writeStory imported at top of file
+    writeStory(story1);
+
+    // Second lookup - should still find the story
+    const story2 = getStory(sdlcRoot, storyId);
+    expect(story2.frontmatter.status).toBe('in-progress');
+    expect(story2.frontmatter.id).toBe(storyId);
+    expect(story2.path).toBe(story1.path); // Same path (folder-per-story)
+  });
+
+  it('should handle malformed story file gracefully', () => {
+    // getStory imported at top of file
+    const storyId = 'S-0001';
+    const storiesFolder = path.join(sdlcRoot, 'stories');
+    fs.mkdirSync(storiesFolder, { recursive: true });
+
+    const storyFolder = path.join(storiesFolder, storyId);
+    fs.mkdirSync(storyFolder, { recursive: true });
+
+    const filePath = path.join(storyFolder, 'story.md');
+    // Write invalid YAML frontmatter
+    fs.writeFileSync(filePath, '---\ninvalid: yaml: structure:\n---\nContent');
+
+    // Should throw error mentioning parse failure
+    expect(() => {
+      getStory(sdlcRoot, storyId);
+    }).toThrow();
+  });
+
+  it('should return story with correct path and metadata', () => {
+    // getStory imported at top of file
+    const storyId = 'S-0123';
+    const storyPath = createTestStory(storyId, 'in-progress');
+
+    const story = getStory(sdlcRoot, storyId);
+
+    expect(story.frontmatter.id).toBe(storyId);
+    expect(story.frontmatter.status).toBe('in-progress');
+    expect(story.frontmatter.title).toBe('Test Story S-0123');
+    expect(story.path).toBe(storyPath);
+    expect(story.content).toContain('Test content');
   });
 });
 

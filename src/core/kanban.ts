@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
 import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder, ReviewDecision, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, StoryStatus } from '../types/index.js';
-import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt, moveToBlocked, getEffectiveMaxRetries, sanitizeReasonText } from './story.js';
+import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt, moveToBlocked, getEffectiveMaxRetries, sanitizeReasonText, findStoryById } from './story.js';
 import { loadConfig } from './config.js';
 import { determineTargetPhase } from '../agents/rework.js';
 
@@ -119,49 +119,8 @@ export function getAllStories(sdlcRoot: string): Map<KanbanFolder, Story[]> {
   return stories;
 }
 
-/**
- * Find a story by ID using O(1) direct path lookup
- * Falls back to searching old folder structure for backwards compatibility
- */
-export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
-  // O(1) direct path construction for new architecture
-  const storyPath = path.join(sdlcRoot, STORIES_FOLDER, storyId, STORY_FILENAME);
-
-  if (fs.existsSync(storyPath)) {
-    try {
-      return parseStory(storyPath);
-    } catch (err) {
-      // Story file exists but is malformed, fall through to search
-    }
-  }
-
-  // Fallback: search old folder structure for backwards compatibility
-  // Search kanban folders first
-  for (const folder of KANBAN_FOLDERS) {
-    const stories = getStoriesInFolder(sdlcRoot, folder);
-    const found = stories.find(s => s.frontmatter.id === storyId);
-    if (found) return found;
-  }
-
-  // Also search blocked folder
-  const blockedFolder = path.join(sdlcRoot, BLOCKED_DIR);
-  if (fs.existsSync(blockedFolder)) {
-    const blockedFiles = fs.readdirSync(blockedFolder).filter(f => f.endsWith('.md'));
-    for (const file of blockedFiles) {
-      const filePath = path.join(blockedFolder, file);
-      try {
-        const story = parseStory(filePath);
-        if (story.frontmatter.id === storyId) {
-          return story;
-        }
-      } catch (err) {
-        continue;
-      }
-    }
-  }
-
-  return null;
-}
+// findStoryById has been moved to story.ts and is now imported above
+// This consolidates story lookup logic in one place (DRY principle)
 
 /**
  * Find a story by slug across all folders

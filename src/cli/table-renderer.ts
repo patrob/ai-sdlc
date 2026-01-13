@@ -10,8 +10,11 @@ import {
   getColumnWidths,
   sanitizeInput,
   ColumnWidths,
+  getKanbanColumnWidth,
+  padColumnToHeight,
 } from './formatting.js';
 import { getStoryFlags, formatStatus } from './story-utils.js';
+import stringWidth from 'string-width';
 
 /**
  * Create table configuration with themed colors
@@ -188,4 +191,149 @@ export function renderStories(stories: Story[], themedChalk: ThemeColors): strin
   }
 
   return renderStoryTable(stories, themedChalk);
+}
+
+/**
+ * Column definition for kanban board
+ */
+export interface KanbanColumn {
+  name: string;
+  stories: Story[];
+  color: any; // Chalk function
+}
+
+/**
+ * Determine if kanban layout should be used based on terminal width
+ *
+ * @param terminalWidth - Current terminal width (optional, uses process.stdout.columns)
+ * @returns true if terminal is wide enough for kanban layout (>= 80 cols)
+ */
+export function shouldUseKanbanLayout(terminalWidth?: number): boolean {
+  const width = terminalWidth ?? getTerminalWidth();
+  const MIN_KANBAN_WIDTH = 80;
+  return width >= MIN_KANBAN_WIDTH;
+}
+
+/**
+ * Format a single story entry for kanban column display
+ * Shows story ID, title, and flags in a compact format
+ *
+ * @param story - Story to format (or null for empty slot)
+ * @param columnWidth - Width allocated to the column
+ * @param themedChalk - Themed chalk instance for coloring
+ * @returns Formatted story entry string
+ */
+export function formatKanbanStoryEntry(
+  story: Story | null,
+  columnWidth: number,
+  themedChalk: ThemeColors
+): string {
+  if (!story) {
+    return '';
+  }
+
+  try {
+    // Sanitize inputs
+    const id = sanitizeInput(story.frontmatter.id || '(no ID)');
+    const title = sanitizeInput(story.frontmatter.title || '(No title)');
+    const flags = getStoryFlags(story, themedChalk);
+
+    // Format: "story-id | Title [FLAGS]"
+    const divider = themedChalk.dim(' │ ');
+    let content = `${id}${divider}${title}`;
+
+    // Add flags if present
+    if (flags) {
+      content += ` ${flags}`;
+    }
+
+    // Truncate to fit column width
+    const truncated = truncateText(content, columnWidth);
+
+    return truncated;
+  } catch (error) {
+    return themedChalk.error('(error)');
+  }
+}
+
+/**
+ * Pad a string to a specific width with spaces
+ * Handles Unicode characters correctly
+ *
+ * @param text - Text to pad
+ * @param width - Target width
+ * @returns Padded string
+ */
+function padToWidth(text: string, width: number): string {
+  const currentWidth = stringWidth(text);
+  if (currentWidth >= width) {
+    return text;
+  }
+  const padding = ' '.repeat(width - currentWidth);
+  return text + padding;
+}
+
+/**
+ * Render kanban board with columns side-by-side
+ *
+ * @param columns - Array of column definitions with stories
+ * @param themedChalk - Themed chalk instance for coloring
+ * @returns Formatted kanban board string
+ */
+export function renderKanbanBoard(
+  columns: KanbanColumn[],
+  themedChalk: ThemeColors
+): string {
+  if (columns.length === 0) {
+    return themedChalk.dim('  (no columns)');
+  }
+
+  try {
+    const termWidth = getTerminalWidth();
+    const colWidth = getKanbanColumnWidth(termWidth, columns.length);
+    const separator = '│';
+
+    const lines: string[] = [];
+
+    // Build header row with column names and counts
+    const headerParts = columns.map(col => {
+      const count = col.stories.length;
+      const header = `${col.name} (${count})`;
+      const coloredHeader = themedChalk.bold(col.color(header));
+      return padToWidth(coloredHeader, colWidth);
+    });
+    lines.push(headerParts.join(separator));
+
+    // Build separator row
+    const separatorParts = columns.map(() => '─'.repeat(colWidth));
+    lines.push(themedChalk.dim(separatorParts.join('┼')));
+
+    // Get maximum column height
+    const maxHeight = Math.max(...columns.map(col => col.stories.length), 1);
+
+    // Build story rows
+    for (let rowIndex = 0; rowIndex < maxHeight; rowIndex++) {
+      const rowParts = columns.map(col => {
+        const story = col.stories[rowIndex] || null;
+
+        if (!story) {
+          // Empty slot or placeholder for first row of empty column
+          if (rowIndex === 0 && col.stories.length === 0) {
+            const emptyText = themedChalk.dim('(empty)');
+            return padToWidth(emptyText, colWidth);
+          }
+          return padToWidth('', colWidth);
+        }
+
+        const entry = formatKanbanStoryEntry(story, colWidth, themedChalk);
+        return padToWidth(entry, colWidth);
+      });
+
+      lines.push(rowParts.join(separator));
+    }
+
+    return lines.join('\n');
+  } catch (error) {
+    return themedChalk.error('Error rendering kanban board. Please check data format.');
+  }
 }

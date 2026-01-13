@@ -11,6 +11,8 @@ import {
   formatSummaryStatus,
   formatElapsedTime,
   formatCompactStoryCompletion,
+  getKanbanColumnWidth,
+  padColumnToHeight,
 } from './formatting.js';
 
 describe('formatting utilities', () => {
@@ -549,6 +551,106 @@ describe('formatting utilities', () => {
         const result2 = formatCompactStoryCompletion('story-2', 999, 5000);
         expect(result1).toContain('1 actions');
         expect(result2).toContain('999 actions');
+      });
+    });
+  });
+
+  describe('kanban layout utilities', () => {
+    describe('getKanbanColumnWidth', () => {
+      it('should calculate width for 4 columns on 120-col terminal', () => {
+        const width = getKanbanColumnWidth(120, 4);
+        // Formula: (termWidth - borders - padding) / numCols
+        // borders = (4 - 1) * 1 = 3
+        // padding = 4 * 2 = 8
+        // available = 120 - 3 - 8 = 109
+        // width per column = floor(109 / 4) = 27
+        expect(width).toBe(27);
+      });
+
+      it('should calculate width for 4 columns on 80-col terminal', () => {
+        const width = getKanbanColumnWidth(80, 4);
+        // Formula: (80 - 3 - 8) / 4 = 69 / 4 = 17.25 -> floor = 17
+        expect(width).toBe(17);
+      });
+
+      it('should handle 2 columns', () => {
+        const width = getKanbanColumnWidth(100, 2);
+        // borders = (2 - 1) * 1 = 1
+        // padding = 2 * 2 = 4
+        // available = 100 - 1 - 4 = 95
+        // width per column = floor(95 / 2) = 47
+        expect(width).toBe(47);
+      });
+
+      it('should handle single column', () => {
+        const width = getKanbanColumnWidth(80, 1);
+        // borders = 0, padding = 2
+        // available = 80 - 0 - 2 = 78
+        expect(width).toBe(78);
+      });
+
+      it('should return positive width even for very narrow terminals', () => {
+        const width = getKanbanColumnWidth(40, 4);
+        expect(width).toBeGreaterThan(0);
+      });
+
+      it('should allocate more width per column on wider terminals', () => {
+        const width80 = getKanbanColumnWidth(80, 4);
+        const width120 = getKanbanColumnWidth(120, 4);
+        const width200 = getKanbanColumnWidth(200, 4);
+        expect(width120).toBeGreaterThan(width80);
+        expect(width200).toBeGreaterThan(width120);
+      });
+    });
+
+    describe('padColumnToHeight', () => {
+      it('should not pad array already at max height', () => {
+        const items = ['item1', 'item2', 'item3'];
+        const result = padColumnToHeight(items, 3);
+        expect(result).toEqual(['item1', 'item2', 'item3']);
+      });
+
+      it('should pad array shorter than max height', () => {
+        const items = ['item1'];
+        const result = padColumnToHeight(items, 3);
+        expect(result).toHaveLength(3);
+        expect(result[0]).toBe('item1');
+        expect(result[1]).toBe('');
+        expect(result[2]).toBe('');
+      });
+
+      it('should pad empty array to max height', () => {
+        const items: string[] = [];
+        const result = padColumnToHeight(items, 3);
+        expect(result).toHaveLength(3);
+        expect(result).toEqual(['', '', '']);
+      });
+
+      it('should handle maxHeight of 0', () => {
+        const items = ['item1'];
+        const result = padColumnToHeight(items, 0);
+        expect(result).toEqual(['item1']);
+      });
+
+      it('should not truncate array longer than max height', () => {
+        const items = ['item1', 'item2', 'item3', 'item4'];
+        const result = padColumnToHeight(items, 2);
+        expect(result).toHaveLength(4);
+        expect(result).toEqual(['item1', 'item2', 'item3', 'item4']);
+      });
+
+      it('should create new array (not mutate original)', () => {
+        const items = ['item1'];
+        const result = padColumnToHeight(items, 3);
+        expect(items).toHaveLength(1);
+        expect(result).toHaveLength(3);
+        expect(items).not.toBe(result);
+      });
+
+      it('should handle maxHeight of 1', () => {
+        const items: string[] = [];
+        const result = padColumnToHeight(items, 1);
+        expect(result).toEqual(['']);
       });
     });
   });

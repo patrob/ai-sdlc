@@ -281,3 +281,43 @@ export function formatCompactStoryCompletion(storyId: string, actionsCount: numb
   const truncatedId = truncateText(storyId, 30);
   return `✓ ${truncatedId} [${actionsCount} actions · ${formatElapsedTime(elapsedMs)}]`;
 }
+
+/**
+ * Calculate width per column for kanban board layout
+ * Takes into account terminal width, number of columns, borders, and padding
+ *
+ * @param termWidth - Terminal width in columns
+ * @param numCols - Number of kanban columns to display
+ * @returns Width allocated to each column
+ */
+export function getKanbanColumnWidth(termWidth: number, numCols: number): number {
+  const BORDER_WIDTH = 1;  // '│' separator between columns
+  const PADDING = 2;       // 1 char padding on each side of content
+
+  const borders = (numCols - 1) * BORDER_WIDTH;
+  const totalPadding = numCols * PADDING;
+  const availableWidth = termWidth - borders - totalPadding;
+
+  return Math.floor(availableWidth / numCols);
+}
+
+/**
+ * Pad an array to a specified height with empty strings
+ * Used to align kanban columns of uneven heights
+ *
+ * @param items - Array of items to pad
+ * @param maxHeight - Target height for the column
+ * @returns New array padded to maxHeight (or original length if longer)
+ */
+export function padColumnToHeight(items: string[], maxHeight: number): string[] {
+  if (items.length >= maxHeight) {
+    return [...items]; // Return copy without truncating
+  }
+
+  const padded = [...items];
+  while (padded.length < maxHeight) {
+    padded.push('');
+  }
+
+  return padded;
+}

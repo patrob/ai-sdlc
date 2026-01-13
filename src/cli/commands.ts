@@ -14,7 +14,7 @@ import {
   calculateStoryHash,
   hasWorkflowState,
 } from '../core/workflow-state.js';
-import { renderStories } from './table-renderer.js';
+import { renderStories, renderKanbanBoard, shouldUseKanbanLayout, KanbanColumn } from './table-renderer.js';
 import { getStoryFlags as getStoryFlagsUtil, formatStatus as formatStatusUtil } from './story-utils.js';
 
 /**
@@ -70,8 +70,8 @@ export async function status(options?: { active?: boolean }): Promise<void> {
   console.log(c.bold('═══ AI SDLC Board ═══'));
   console.log();
 
-  // Show each column with new table format
-  const columns: { name: string; folder: KanbanFolder; color: any }[] = [
+  // Define columns with their data
+  const columnDefs: { name: string; folder: KanbanFolder; color: any }[] = [
     { name: 'BACKLOG', folder: 'backlog', color: c.backlog },
     { name: 'READY', folder: 'ready', color: c.ready },
     { name: 'IN-PROGRESS', folder: 'in-progress', color: c.inProgress },
@@ -79,26 +79,48 @@ export async function status(options?: { active?: boolean }): Promise<void> {
   ];
 
   // Filter columns if --active flag is set
-  let displayColumns = columns;
+  let displayColumns = columnDefs;
   let doneCount = 0;
 
   if (options?.active) {
     doneCount = stats['done'];
-    displayColumns = columns.filter(col => col.folder !== 'done');
+    displayColumns = columnDefs.filter(col => col.folder !== 'done');
   }
 
-  for (const col of displayColumns) {
-    const count = stats[col.folder];
-    console.log(c.bold(col.color(`${col.name} (${count})`)));
+  // Check if we should use kanban layout
+  if (shouldUseKanbanLayout()) {
+    // Prepare kanban columns with stories
+    const kanbanColumns: KanbanColumn[] = displayColumns.map(col => {
+      const stories = col.folder === 'backlog' ? assessment.backlogItems
+        : col.folder === 'ready' ? assessment.readyItems
+        : col.folder === 'in-progress' ? assessment.inProgressItems
+        : assessment.doneItems;
 
-    const stories = col.folder === 'backlog' ? assessment.backlogItems
-      : col.folder === 'ready' ? assessment.readyItems
-      : col.folder === 'in-progress' ? assessment.inProgressItems
-      : assessment.doneItems;
+      return {
+        name: col.name,
+        stories,
+        color: col.color,
+      };
+    });
 
-    // Use new table renderer
-    console.log(renderStories(stories, c));
+    // Render kanban board
+    console.log(renderKanbanBoard(kanbanColumns, c));
     console.log();
+  } else {
+    // Fall back to vertical layout for narrow terminals
+    for (const col of displayColumns) {
+      const count = stats[col.folder];
+      console.log(c.bold(col.color(`${col.name} (${count})`)));
+
+      const stories = col.folder === 'backlog' ? assessment.backlogItems
+        : col.folder === 'ready' ? assessment.readyItems
+        : col.folder === 'in-progress' ? assessment.inProgressItems
+        : assessment.doneItems;
+
+      // Use existing table/compact renderer
+      console.log(renderStories(stories, c));
+      console.log();
+    }
   }
 
   // Show summary line when done is filtered and there are done stories

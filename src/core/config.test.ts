@@ -166,3 +166,119 @@ describe('config - TDD configuration', () => {
     });
   });
 });
+
+describe('config - Review configuration defaults', () => {
+  describe('Review config defaults', () => {
+    it('should have reviewConfig.maxRetries set to 3 by default', () => {
+      expect(DEFAULT_CONFIG.reviewConfig.maxRetries).toBe(3);
+    });
+
+    it('should have reviewConfig.maxRetriesUpperBound set to 10 by default', () => {
+      expect(DEFAULT_CONFIG.reviewConfig.maxRetriesUpperBound).toBe(10);
+    });
+
+    it('should have reviewConfig.autoCompleteOnApproval set to true by default', () => {
+      expect(DEFAULT_CONFIG.reviewConfig.autoCompleteOnApproval).toBe(true);
+    });
+
+    it('should have reviewConfig.autoRestartOnRejection set to true by default', () => {
+      expect(DEFAULT_CONFIG.reviewConfig.autoRestartOnRejection).toBe(true);
+    });
+  });
+
+  describe('Daemon config defaults', () => {
+    it('should have daemon.pollingInterval set to 5000 ms by default', () => {
+      expect(DEFAULT_DAEMON_CONFIG.pollingInterval).toBe(5000);
+    });
+
+    it('should have daemon.enabled set to false by default', () => {
+      expect(DEFAULT_DAEMON_CONFIG.enabled).toBe(false);
+    });
+
+    it('should have daemon configuration in DEFAULT_CONFIG', () => {
+      expect(DEFAULT_CONFIG.daemon).toBeDefined();
+      expect(DEFAULT_CONFIG.daemon?.pollingInterval).toBe(5000);
+    });
+  });
+
+  describe('Review config with user overrides', () => {
+    const tempDir = '.test-review-config';
+
+    beforeEach(() => {
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir);
+      }
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        const configFile = path.join(tempDir, '.ai-sdlc.json');
+        if (fs.existsSync(configFile)) {
+          fs.unlinkSync(configFile);
+        }
+        fs.rmdirSync(tempDir);
+      }
+    });
+
+    it('should load default review config when no config file exists', () => {
+      const config = loadConfig(tempDir);
+      expect(config.reviewConfig.maxRetries).toBe(3);
+      expect(config.reviewConfig.maxRetriesUpperBound).toBe(10);
+      expect(config.reviewConfig.autoCompleteOnApproval).toBe(true);
+      expect(config.reviewConfig.autoRestartOnRejection).toBe(true);
+    });
+
+    it('should use user-provided maxRetries value when specified', () => {
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
+      const userConfig = {
+        reviewConfig: {
+          maxRetries: 5,
+        },
+      };
+      fs.writeFileSync(configPath, JSON.stringify(userConfig));
+
+      const config = loadConfig(tempDir);
+      expect(config.reviewConfig.maxRetries).toBe(5);
+      // Other defaults should still apply
+      expect(config.reviewConfig.maxRetriesUpperBound).toBe(10);
+      expect(config.reviewConfig.autoCompleteOnApproval).toBe(true);
+      expect(config.reviewConfig.autoRestartOnRejection).toBe(true);
+    });
+
+    it('should use user-provided maxRetriesUpperBound value when specified', () => {
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
+      const userConfig = {
+        reviewConfig: {
+          maxRetriesUpperBound: 20,
+        },
+      };
+      fs.writeFileSync(configPath, JSON.stringify(userConfig));
+
+      const config = loadConfig(tempDir);
+      expect(config.reviewConfig.maxRetriesUpperBound).toBe(20);
+      // Other defaults should still apply
+      expect(config.reviewConfig.maxRetries).toBe(3);
+      expect(config.reviewConfig.autoCompleteOnApproval).toBe(true);
+      expect(config.reviewConfig.autoRestartOnRejection).toBe(true);
+    });
+
+    it('should allow user to override multiple review config values', () => {
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
+      const userConfig = {
+        reviewConfig: {
+          maxRetries: 7,
+          maxRetriesUpperBound: 15,
+          autoCompleteOnApproval: false,
+          autoRestartOnRejection: false,
+        },
+      };
+      fs.writeFileSync(configPath, JSON.stringify(userConfig));
+
+      const config = loadConfig(tempDir);
+      expect(config.reviewConfig.maxRetries).toBe(7);
+      expect(config.reviewConfig.maxRetriesUpperBound).toBe(15);
+      expect(config.reviewConfig.autoCompleteOnApproval).toBe(false);
+      expect(config.reviewConfig.autoRestartOnRejection).toBe(false);
+    });
+  });
+});

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { createStory, moveStory, parseStory, writeStory } from '../../src/core/story.js';
-import { assessState } from '../../src/core/kanban.js';
+import { createStory, moveStory, parseStory, writeStory, unblockStory } from '../../src/core/story.js';
+import { assessState, findStoryById } from '../../src/core/kanban.js';
 import { BLOCKED_DIR } from '../../src/types/index.js';
 
 describe('Blocked Stories Integration', () => {
@@ -309,5 +309,191 @@ current_iteration: 2
 
     // Clean up the file we created
     fs.unlinkSync(blockedPath);
+  });
+
+  it('should not process stories from blocked folder on daemon watch', () => {
+    // Create a story and manually move it to blocked folder
+    let story = createStory('Blocked Test', sdlcRoot, {
+      type: 'feature',
+      labels: ['test'],
+    });
+
+    // Manually move story to blocked folder
+    const blockedDir = path.join(sdlcRoot, BLOCKED_DIR);
+    fs.mkdirSync(blockedDir, { recursive: true });
+
+    const blockedPath = path.join(blockedDir, `${story.slug}.md`);
+    story.frontmatter.status = 'blocked';
+    story.frontmatter.blocked_reason = 'Manual block for testing';
+    story.frontmatter.blocked_at = new Date().toISOString();
+    story.path = blockedPath;
+    writeStory(story);
+
+    // Verify story is in blocked folder
+    expect(fs.existsSync(blockedPath)).toBe(true);
+
+    // Call assessState - should NOT generate any actions for blocked story
+    const assessment = assessState(sdlcRoot);
+
+    // Verify no actions are recommended for blocked stories
+    const actionsForBlockedStory = assessment.recommendedActions.filter(
+      a => a.storyId === story.frontmatter.id
+    );
+    expect(actionsForBlockedStory).toHaveLength(0);
+  });
+
+  it('should verify daemon watches only backlog, ready, and in-progress', () => {
+    // This test verifies the daemon configuration only includes active workflow folders
+    // The actual watch paths are: backlog/, ready/, in-progress/
+    // The blocked/ folder is explicitly excluded
+
+    // Create stories in each folder to verify which ones would be processed
+    const backlogStory = createStory('Backlog Story', sdlcRoot, { type: 'feature' });
+    const readyStory = createStory('Ready Story', sdlcRoot, { type: 'feature' });
+    moveStory(readyStory, 'ready', sdlcRoot);
+
+    const inProgressStory = createStory('In Progress Story', sdlcRoot, { type: 'feature' });
+    moveStory(inProgressStory, 'in-progress', sdlcRoot);
+
+    // Create a blocked story
+    const blockedDir = path.join(sdlcRoot, BLOCKED_DIR);
+    fs.mkdirSync(blockedDir, { recursive: true });
+    let blockedStory = createStory('Blocked Story', sdlcRoot, { type: 'feature' });
+    const blockedPath = path.join(blockedDir, `${blockedStory.slug}.md`);
+    blockedStory.path = blockedPath;
+    blockedStory.frontmatter.status = 'blocked';
+    blockedStory.frontmatter.blocked_reason = 'Testing';
+    blockedStory.frontmatter.blocked_at = new Date().toISOString();
+    writeStory(blockedStory);
+
+    // Call assessState
+    const assessment = assessState(sdlcRoot);
+
+    // Verify that backlog, ready, and in-progress stories could have actions
+    // (They might not if they're already complete, but the assessment includes them)
+    const backlogItems = assessment.backlogItems;
+    const readyItems = assessment.readyItems;
+    const inProgressItems = assessment.inProgressItems;
+
+    // Blocked folder should never have items in the assessment
+    // because assessState only scans KANBAN_FOLDERS (backlog, ready, in-progress, done)
+    expect(assessment.recommendedActions).toBeDefined();
+
+    // The important thing: no story from blocked/ should appear in assessment
+    const blockedStoriesInAssessment = assessment.recommendedActions.filter(
+      a => a.storyId === blockedStory.frontmatter.id
+    );
+    expect(blockedStoriesInAssessment).toHaveLength(0);
+  });
+
+  it('should unblock a story and move it to the correct folder', () => {
+    // Step 1: Create story and move to in-progress
+    let story = createStory('Test Feature', sdlcRoot, {
+      type: 'feature',
+      labels: ['test'],
+      max_refinement_attempts: 2,
+    });
+
+    story = moveStory(story, 'in-progress', sdlcRoot);
+    story.frontmatter.plan_complete = true;
+    story.frontmatter.implementation_complete = true;
+    story.frontmatter.refinement_count = 2;
+    writeStory(story);
+
+    // Step 2: Block the story
+    assessState(sdlcRoot);
+
+    // Step 3: Verify story is in blocked folder
+    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR, `${story.slug}.md`);
+    expect(fs.existsSync(blockedPath)).toBe(true);
+
+    const blockedStory = parseStory(blockedPath);
+    expect(blockedStory.frontmatter.status).toBe('blocked');
+    expect(blockedStory.frontmatter.blocked_reason).toBeDefined();
+
+    // Step 4: Unblock the story
+    const unblockedStory = unblockStory(story.frontmatter.id, sdlcRoot);
+
+    // Step 5: Verify story moved to in-progress (implementation_complete = true)
+    expect(unblockedStory.frontmatter.status).toBe('in-progress');
+    expect(unblockedStory.path).toContain('/in-progress/');
+
+    // Step 6: Verify blocking fields are cleared
+    expect(unblockedStory.frontmatter.blocked_reason).toBeUndefined();
+    expect(unblockedStory.frontmatter.blocked_at).toBeUndefined();
+
+    // Step 7: Verify story is no longer in blocked folder
+    expect(fs.existsSync(blockedPath)).toBe(false);
+
+    // Step 8: Verify story can be found by ID in new location
+    const foundStory = findStoryById(sdlcRoot, story.frontmatter.id);
+    expect(foundStory).toBeDefined();
+    expect(foundStory?.path).toContain('/in-progress/');
+  });
+
+  it('should unblock story with resetRetries flag', () => {
+    // Create and block a story
+    let story = createStory('Test Feature', sdlcRoot, {
+      type: 'feature',
+      max_refinement_attempts: 2,
+    });
+
+    story = moveStory(story, 'in-progress', sdlcRoot);
+    story.frontmatter.plan_complete = true;
+    story.frontmatter.retry_count = 5;
+    story.frontmatter.refinement_count = 2;
+    writeStory(story);
+
+    // Block it
+    assessState(sdlcRoot);
+
+    // Unblock with resetRetries
+    const unblockedStory = unblockStory(story.frontmatter.id, sdlcRoot, { resetRetries: true });
+
+    expect(unblockedStory.frontmatter.retry_count).toBe(0);
+    expect(unblockedStory.frontmatter.refinement_count).toBe(0);
+  });
+
+  it('should unblock story to ready when plan is complete but implementation is not', () => {
+    // Create and block a story with plan_complete = true
+    let story = createStory('Test Feature', sdlcRoot);
+
+    story = moveStory(story, 'in-progress', sdlcRoot);
+    story.frontmatter.plan_complete = true;
+    story.frontmatter.implementation_complete = false;
+    story.frontmatter.refinement_count = 2;
+    story.frontmatter.max_refinement_attempts = 2;
+    writeStory(story);
+
+    assessState(sdlcRoot);
+
+    // Unblock
+    const unblockedStory = unblockStory(story.frontmatter.id, sdlcRoot);
+
+    // Should move to ready (plan_complete = true, implementation_complete = false)
+    expect(unblockedStory.frontmatter.status).toBe('ready');
+    expect(unblockedStory.path).toContain('/ready/');
+  });
+
+  it('should unblock story to backlog when no phases are complete', () => {
+    // Create and block a story with all phases incomplete
+    let story = createStory('Test Feature', sdlcRoot);
+
+    story = moveStory(story, 'in-progress', sdlcRoot);
+    story.frontmatter.research_complete = false;
+    story.frontmatter.plan_complete = false;
+    story.frontmatter.implementation_complete = false;
+    story.frontmatter.refinement_count = 2;
+    story.frontmatter.max_refinement_attempts = 2;
+    writeStory(story);
+
+    assessState(sdlcRoot);
+
+    // Unblock
+    const unblockedStory = unblockStory(story.frontmatter.id, sdlcRoot);
+
+    // Should move to backlog (no phases complete)
+    expect(unblockedStory.frontmatter.status).toBe('backlog');
+    expect(unblockedStory.path).toContain('/backlog/');
   });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { moveToBlocked, parseStory, sanitizeReasonText } from './story.js';
+import { moveToBlocked, parseStory, sanitizeReasonText, unblockStory } from './story.js';
 import { BLOCKED_DIR } from '../types/index.js';
 
 describe('moveToBlocked', () => {
@@ -311,5 +311,217 @@ describe('sanitizeReasonText', () => {
     const input = '\x1B[1;31mError:\x1B[0m The implementation has issues:\n- Missing error handling\n- No input validation';
     const result = sanitizeReasonText(input);
     expect(result).toBe('Error: The implementation has issues: - Missing error handling - No input validation');
+  });
+});
+
+describe('unblockStory', () => {
+  let tempDir: string;
+  let sdlcRoot: string;
+
+  beforeEach(() => {
+    // Create temporary directory for tests
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-'));
+    sdlcRoot = path.join(tempDir, '.ai-sdlc');
+    fs.mkdirSync(sdlcRoot, { recursive: true });
+
+    // Create kanban folders
+    fs.mkdirSync(path.join(sdlcRoot, 'backlog'), { recursive: true });
+    fs.mkdirSync(path.join(sdlcRoot, 'ready'), { recursive: true });
+    fs.mkdirSync(path.join(sdlcRoot, 'in-progress'), { recursive: true });
+    fs.mkdirSync(path.join(sdlcRoot, 'done'), { recursive: true });
+  });
+
+  afterEach(() => {
+    // Always restore real timers to prevent test pollution
+    vi.useRealTimers();
+    // Clean up temporary directory
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  function createBlockedStory(slug: string, overrides: any = {}): string {
+    const blockedFolder = path.join(sdlcRoot, BLOCKED_DIR);
+    fs.mkdirSync(blockedFolder, { recursive: true });
+
+    const filename = `${slug}.md`;
+    const filePath = path.join(blockedFolder, filename);
+
+    const frontmatter = {
+      id: slug,
+      title: `Test Story ${slug}`,
+      priority: 1,
+      status: 'blocked',
+      type: 'feature',
+      created: '2024-01-01',
+      labels: [],
+      research_complete: true,
+      plan_complete: true,
+      implementation_complete: false,
+      reviews_complete: false,
+      blocked_reason: 'Max refinement attempts (2/2) reached',
+      blocked_at: new Date().toISOString(),
+      ...overrides,
+    };
+
+    const content = `---
+${Object.entries(frontmatter)
+  .map(([key, value]) => {
+    if (Array.isArray(value)) {
+      return `${key}: [${value.map(v => `'${v}'`).join(', ')}]`;
+    }
+    if (typeof value === 'string') {
+      return `${key}: '${value}'`;
+    }
+    return `${key}: ${value}`;
+  })
+  .join('\n')}
+---
+
+# Test Story ${slug}
+
+Test content`;
+
+    fs.writeFileSync(filePath, content);
+    return filePath;
+  }
+
+  it('should throw error when story not found in blocked folder', () => {
+    expect(() => {
+      unblockStory('nonexistent-id', sdlcRoot);
+    }).toThrow('not found in blocked folder');
+  });
+
+  it('should move blocked story to backlog when no phases complete', () => {
+    createBlockedStory('test-story', {
+      research_complete: false,
+      plan_complete: false,
+      implementation_complete: false,
+    });
+
+    const unblockedStory = unblockStory('test-story', sdlcRoot);
+
+    expect(unblockedStory.frontmatter.status).toBe('backlog');
+    expect(unblockedStory.path).toContain('/backlog/');
+    expect(unblockedStory.frontmatter.blocked_reason).toBeUndefined();
+    expect(unblockedStory.frontmatter.blocked_at).toBeUndefined();
+  });
+
+  it('should move blocked story to ready when research is complete', () => {
+    createBlockedStory('test-story', {
+      research_complete: true,
+      plan_complete: false,
+      implementation_complete: false,
+    });
+
+    const unblockedStory = unblockStory('test-story', sdlcRoot);
+
+    expect(unblockedStory.frontmatter.status).toBe('ready');
+    expect(unblockedStory.path).toContain('/ready/');
+  });
+
+  it('should move blocked story to ready when plan is complete', () => {
+    createBlockedStory('test-story', {
+      research_complete: false,
+      plan_complete: true,
+      implementation_complete: false,
+    });
+
+    const unblockedStory = unblockStory('test-story', sdlcRoot);
+
+    expect(unblockedStory.frontmatter.status).toBe('ready');
+    expect(unblockedStory.path).toContain('/ready/');
+  });
+
+  it('should move blocked story to in-progress when implementation is complete', () => {
+    createBlockedStory('test-story', {
+      research_complete: true,
+      plan_complete: true,
+      implementation_complete: true,
+    });
+
+    const unblockedStory = unblockStory('test-story', sdlcRoot);
+
+    expect(unblockedStory.frontmatter.status).toBe('in-progress');
+    expect(unblockedStory.path).toContain('/in-progress/');
+  });
+
+  it('should clear blocked_reason and blocked_at fields', () => {
+    createBlockedStory('test-story', {
+      blocked_reason: 'Test blocking reason',
+      blocked_at: '2026-01-12T10:00:00.000Z',
+    });
+
+    const unblockedStory = unblockStory('test-story', sdlcRoot);
+
+    expect(unblockedStory.frontmatter.blocked_reason).toBeUndefined();
+    expect(unblockedStory.frontmatter.blocked_at).toBeUndefined();
+  });
+
+  it('should reset retries when resetRetries option is true', () => {
+    createBlockedStory('test-story', {
+      retry_count: 5,
+      refinement_count: 3,
+    });
+
+    const unblockedStory = unblockStory('test-story', sdlcRoot, { resetRetries: true });
+
+    expect(unblockedStory.frontmatter.retry_count).toBe(0);
+    expect(unblockedStory.frontmatter.refinement_count).toBe(0);
+  });
+
+  it('should preserve retry counts when resetRetries is false', () => {
+    createBlockedStory('test-story', {
+      retry_count: 5,
+      refinement_count: 3,
+    });
+
+    const unblockedStory = unblockStory('test-story', sdlcRoot, { resetRetries: false });
+
+    expect(unblockedStory.frontmatter.retry_count).toBe(5);
+    expect(unblockedStory.frontmatter.refinement_count).toBe(3);
+  });
+
+  it('should preserve other frontmatter fields', () => {
+    createBlockedStory('test-story', {
+      title: 'Important Story',
+      labels: ['urgent', 'bug'],
+      estimated_effort: 'large',
+      branch: 'feature/test',
+    });
+
+    const unblockedStory = unblockStory('test-story', sdlcRoot);
+
+    expect(unblockedStory.frontmatter.title).toBe('Important Story');
+    expect(unblockedStory.frontmatter.labels).toEqual(['urgent', 'bug']);
+    expect(unblockedStory.frontmatter.estimated_effort).toBe('large');
+    expect(unblockedStory.frontmatter.branch).toBe('feature/test');
+  });
+
+  it('should preserve story content when unblocking', () => {
+    createBlockedStory('test-story');
+
+    const originalBlocked = parseStory(path.join(sdlcRoot, BLOCKED_DIR, 'test-story.md'));
+    const unblockedStory = unblockStory('test-story', sdlcRoot);
+
+    expect(unblockedStory.content).toBe(originalBlocked.content);
+  });
+
+  it('should update file path and remove old blocked file', () => {
+    createBlockedStory('test-story', {
+      plan_complete: true,
+    });
+
+    const blockedPath = path.join(sdlcRoot, BLOCKED_DIR, 'test-story.md');
+    expect(fs.existsSync(blockedPath)).toBe(true);
+
+    const unblockedStory = unblockStory('test-story', sdlcRoot);
+
+    // Old blocked file should be removed
+    expect(fs.existsSync(blockedPath)).toBe(false);
+
+    // New file should exist in ready folder
+    expect(fs.existsSync(unblockedStory.path)).toBe(true);
+    expect(unblockedStory.path).toContain('/ready/');
   });
 });

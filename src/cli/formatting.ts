@@ -236,3 +236,48 @@ export function sanitizeInput(text: string): string {
 
   return text;
 }
+
+/**
+ * Format daemon summary status line
+ * Shows counts of done, active, queued, and blocked stories
+ *
+ * @param stats - Daemon statistics object with done, active, queued, blocked counts
+ * @returns Formatted status string (e.g., "1 done | 0 active | 2 queued")
+ */
+export function formatSummaryStatus(stats: { done: number; active: number; queued: number; blocked: number }): string {
+  const parts: string[] = [];
+  if (stats.done > 0) parts.push(`${stats.done} done`);
+  if (stats.active > 0) parts.push(`${stats.active} active`);
+  if (stats.queued > 0) parts.push(`${stats.queued} queued`);
+  if (stats.blocked > 0) parts.push(`${stats.blocked} blocked`);
+  return parts.join(' | ') || 'idle';
+}
+
+/**
+ * Format elapsed time for display
+ * Converts milliseconds to human-readable format (e.g., "42s" or "2m 30s")
+ *
+ * @param ms - Elapsed time in milliseconds
+ * @returns Formatted time string
+ */
+export function formatElapsedTime(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}m ${remainingSeconds}s`;
+}
+
+/**
+ * Format compact story completion message
+ * Shows story ID, action count, and elapsed time on a single line
+ *
+ * @param storyId - The story identifier
+ * @param actionsCount - Number of actions completed
+ * @param elapsedMs - Elapsed time in milliseconds
+ * @returns Formatted completion message (e.g., "✓ story-123 [5 actions · 42s]")
+ */
+export function formatCompactStoryCompletion(storyId: string, actionsCount: number, elapsedMs: number): string {
+  const truncatedId = truncateText(storyId, 30);
+  return `✓ ${truncatedId} [${actionsCount} actions · ${formatElapsedTime(elapsedMs)}]`;
+}

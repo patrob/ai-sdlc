@@ -13,14 +13,14 @@ it's the correct story to work on at this time.
 | Order | Story ID | Title | Status | Dependencies |
 |-------|----------|-------|--------|--------------|
 | 1 | daemon-block-max-refinements | Block stories on max refinements | done | None |
-| 2 | daemon-block-max-retries | Block stories on max review retries | backlog | Story 1 |
-| 3 | daemon-exclude-blocked-folder | Exclude blocked/ from daemon watch | backlog | Story 1 |
-| 4 | daemon-unblock-command | Add unblock CLI command | backlog | Story 1 |
-| 5 | daemon-continuous-polling | Daemon runs continuously | backlog | None (parallel-safe) |
-| 6 | daemon-single-story-startup | Pick one story on daemon startup | backlog | None (parallel-safe) |
-| 7 | daemon-nearest-completion-priority | Nearest completion priority | backlog | Story 6 |
-| 8 | daemon-config-defaults | Set sensible config defaults | backlog | None (parallel-safe) |
-| 9 | story-ui-daemon-tui | Redesign daemon terminal UI | backlog | Stories 1-8 |
+| 2 | daemon-block-max-retries | Block stories on max review retries | done | Story 1 |
+| 3 | daemon-exclude-blocked-folder | Exclude blocked/ from daemon watch | done | Story 1 |
+| 4 | daemon-unblock-command | Add unblock CLI command | done | Story 1 |
+| 5 | daemon-continuous-polling | Daemon runs continuously | done | None (parallel-safe) |
+| 6 | daemon-single-story-startup | Pick one story on daemon startup | done | None (parallel-safe) |
+| 7 | daemon-nearest-completion-priority | Nearest completion priority | done | Story 6 |
+| 8 | daemon-config-defaults | Set sensible config defaults | done | None (parallel-safe) |
+| 9 | story-ui-daemon-tui | Redesign daemon terminal UI | done | Stories 1-8 |
 
 ---
 
@@ -42,11 +42,11 @@ When the daemon picks up a story from this endeavor:
 
 Mark stories complete here as they're finished:
 - [x] Story 1: daemon-block-max-refinements
-- [ ] Story 2: daemon-block-max-retries
-- [ ] Story 3: daemon-exclude-blocked-folder
-- [ ] Story 4: daemon-unblock-command
-- [ ] Story 5: daemon-continuous-polling
-- [ ] Story 6: daemon-single-story-startup
-- [ ] Story 7: daemon-nearest-completion-priority
-- [ ] Story 8: daemon-config-defaults
-- [ ] Story 9: story-ui-daemon-tui
+- [x] Story 2: daemon-block-max-retries
+- [x] Story 3: daemon-exclude-blocked-folder
+- [x] Story 4: daemon-unblock-command
+- [x] Story 5: daemon-continuous-polling
+- [x] Story 6: daemon-single-story-startup
+- [x] Story 7: daemon-nearest-completion-priority
+- [x] Story 8: daemon-config-defaults
+- [x] Story 9: story-ui-daemon-tui

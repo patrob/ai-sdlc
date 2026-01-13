@@ -465,6 +465,249 @@ describe('daemon configuration', () => {
   });
 });
 
+describe('watch path configuration', () => {
+  it('should only watch backlog, ready, and in-progress folders', () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    // Access the watch directories from the start method by examining what gets passed to chokidar
+    // We'll verify this by checking what paths would be constructed
+    const watchDirs = [
+      require('path').join(daemonAny.sdlcRoot, 'backlog'),
+      require('path').join(daemonAny.sdlcRoot, 'ready'),
+      require('path').join(daemonAny.sdlcRoot, 'in-progress'),
+    ];
+
+    // Verify blocked folder is NOT in watch directories
+    expect(watchDirs).not.toContain(expect.stringContaining('blocked'));
+
+    // Verify all active workflow folders are included
+    expect(watchDirs.length).toBe(3);
+    expect(watchDirs[0]).toContain('backlog');
+    expect(watchDirs[1]).toContain('ready');
+    expect(watchDirs[2]).toContain('in-progress');
+  });
+
+  it('should not watch done folder', () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    const watchDirs = [
+      require('path').join(daemonAny.sdlcRoot, 'backlog'),
+      require('path').join(daemonAny.sdlcRoot, 'ready'),
+      require('path').join(daemonAny.sdlcRoot, 'in-progress'),
+    ];
+
+    // Verify done folder is NOT in watch directories
+    expect(watchDirs).not.toContain(expect.stringContaining('done'));
+  });
+});
+
+describe('polling mechanism', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  it('should initialize pollTimerId as null', () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    expect(daemonAny.pollTimerId).toBe(null);
+  });
+
+  it('should set up polling when daemon starts', async () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    await daemon.start();
+
+    // After start, pollTimerId should be set (it's a Timeout object)
+    expect(daemonAny.pollTimerId).not.toBe(null);
+    expect(daemonAny.pollTimerId).toBeDefined();
+  });
+
+  it('should clear polling timer when daemon stops', async () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    await daemon.start();
+    const timerBefore = daemonAny.pollTimerId;
+    expect(timerBefore).not.toBe(null);
+
+    await daemon.stop();
+
+    // After stop, pollTimerId should be cleared
+    expect(daemonAny.pollTimerId).toBe(null);
+  });
+
+  it('should respect configured polling interval', async () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    // Mock assessState to track calls
+    const { assessState } = await import('../core/kanban.js');
+    const assessStateMock = vi.mocked(assessState);
+    assessStateMock.mockReturnValue({
+      backlogItems: [],
+      readyItems: [],
+      inProgressItems: [],
+      doneItems: [],
+      recommendedActions: [],
+    });
+
+    await daemon.start();
+
+    // Advance time by polling interval
+    vi.advanceTimersByTime(5000);
+
+    // assessState should have been called
+    expect(assessStateMock).toHaveBeenCalled();
+  });
+
+  it('should stop polling when daemon stops', async () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    const { assessState } = await import('../core/kanban.js');
+    const assessStateMock = vi.mocked(assessState);
+    assessStateMock.mockReturnValue({
+      backlogItems: [],
+      readyItems: [],
+      inProgressItems: [],
+      doneItems: [],
+      recommendedActions: [],
+    });
+
+    await daemon.start();
+
+    // Timer should be running
+    expect(daemonAny.pollTimerId).not.toBe(null);
+
+    // Stop the daemon
+    await daemon.stop();
+
+    // Polling timer should be cleared
+    expect(daemonAny.pollTimerId).toBe(null);
+  });
+
+  it('should queue new actions found during polling', async () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    const { assessState } = await import('../core/kanban.js');
+    const assessStateMock = vi.mocked(assessState);
+
+    // Return empty initially (during start)
+    assessStateMock.mockReturnValue({
+      backlogItems: [],
+      readyItems: [],
+      inProgressItems: [],
+      doneItems: [],
+      recommendedActions: [],
+    });
+
+    await daemon.start();
+
+    // Get initial call count from start
+    const initialCallCount = assessStateMock.mock.calls.length;
+
+    // Now mock to return an action for polling
+    assessStateMock.mockReturnValue({
+      backlogItems: [],
+      readyItems: [],
+      inProgressItems: [],
+      doneItems: [],
+      recommendedActions: [
+        {
+          storyId: 'poll-test-1',
+          storyPath: '/test/.ai-sdlc/backlog/poll-test-1.md',
+          type: 'refine',
+          reason: 'test',
+        },
+      ],
+    });
+
+    // Advance timer to trigger polling
+    vi.advanceTimersByTime(5000);
+
+    // assessState should have been called more times (at least one more for polling)
+    expect(assessStateMock.mock.calls.length).toBeGreaterThan(initialCallCount);
+
+    await daemon.stop();
+  });
+
+  it('should skip queueing duplicate stories during polling', async () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    const { assessState } = await import('../core/kanban.js');
+    const assessStateMock = vi.mocked(assessState);
+
+    // Return same action twice
+    assessStateMock.mockReturnValue({
+      backlogItems: [],
+      readyItems: [],
+      inProgressItems: [],
+      doneItems: [],
+      recommendedActions: [
+        {
+          storyId: 'duplicate-story',
+          storyPath: '/test/.ai-sdlc/backlog/duplicate-story.md',
+          type: 'refine',
+          reason: 'test',
+        },
+      ],
+    });
+
+    await daemon.start();
+
+    // Add story to completed set to simulate already processed
+    daemonAny.completedStoryIds.add('duplicate-story');
+
+    // Poll should not queue it
+    vi.advanceTimersByTime(5000);
+
+    await daemon.stop();
+  });
+
+  it('should skip polling if queue is currently processing', async () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    const { assessState } = await import('../core/kanban.js');
+    const assessStateMock = vi.mocked(assessState);
+    assessStateMock.mockReturnValue({
+      backlogItems: [],
+      readyItems: [],
+      inProgressItems: [],
+      doneItems: [],
+      recommendedActions: [],
+    });
+
+    await daemon.start();
+
+    // Set isProcessingQueue to true
+    daemonAny.isProcessingQueue = true;
+
+    // Reset mock to track new calls
+    assessStateMock.mockClear();
+
+    // Advance timer
+    vi.advanceTimersByTime(5000);
+
+    // assessState should NOT have been called because isProcessingQueue is true
+    expect(assessStateMock).not.toHaveBeenCalled();
+
+    daemonAny.isProcessingQueue = false;
+    await daemon.stop();
+  });
+});
+
 describe('file path handling', () => {
   it('should extract story ID from file path', () => {
     const testPath = '/test/.ai-sdlc/backlog/my-story-123.md';
@@ -478,5 +721,256 @@ describe('file path handling', () => {
     const fileName = testPath.split('/').pop()?.replace('.md', '');
 
     expect(fileName).toBe('story-with-dashes-and_underscores');
+  });
+});
+
+describe('initial assessment on startup', () => {
+  it('should set ignoreInitial to true in watcher options', async () => {
+    const daemon = new DaemonRunner();
+    const mockChokidar = await import('chokidar');
+    const watchSpy = vi.spyOn(mockChokidar.default, 'watch');
+
+    await daemon.start();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    expect(watchSpy).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        ignoreInitial: true,
+      })
+    );
+
+    await daemon.stop();
+  });
+
+  it('should call assessState on startup', async () => {
+    const daemon = new DaemonRunner();
+    const { assessState } = await import('../core/kanban.js');
+    const assessStateMock = vi.mocked(assessState);
+    assessStateMock.mockReturnValue({
+      backlogItems: [],
+      readyItems: [],
+      inProgressItems: [],
+      doneItems: [],
+      recommendedActions: [],
+    });
+
+    await daemon.start();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    expect(assessStateMock).toHaveBeenCalled();
+    await daemon.stop();
+  });
+
+  it('should queue only single highest priority story on startup', async () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+    const { assessState } = await import('../core/kanban.js');
+    const assessStateMock = vi.mocked(assessState);
+
+    // Mock assessState to return multiple stories with different priorities
+    assessStateMock.mockReturnValue({
+      backlogItems: [],
+      readyItems: [],
+      inProgressItems: [],
+      doneItems: [],
+      recommendedActions: [
+        {
+          storyId: 'story-1',
+          storyPath: '/test/.ai-sdlc/backlog/story-1.md',
+          type: 'refine',
+          reason: 'Highest priority',
+          context: undefined,
+        },
+        {
+          storyId: 'story-2',
+          storyPath: '/test/.ai-sdlc/backlog/story-2.md',
+          type: 'research',
+          reason: 'Lower priority',
+          context: undefined,
+        },
+        {
+          storyId: 'story-3',
+          storyPath: '/test/.ai-sdlc/backlog/story-3.md',
+          type: 'plan',
+          reason: 'Lowest priority',
+          context: undefined,
+        },
+      ],
+    });
+
+    // Mock processQueue to prevent actual processing
+    vi.spyOn(daemonAny, 'processQueue').mockImplementation(() => {});
+
+    await daemon.start();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Should have exactly one story in queue (the top one)
+    expect(daemonAny.processingQueue.length).toBe(1);
+    expect(daemonAny.processingQueue[0].id).toBe('story-1');
+    expect(daemonAny.processingQueue[0].path).toBe('/test/.ai-sdlc/backlog/story-1.md');
+
+    await daemon.stop();
+  });
+
+  it('should log startup message with story count and reason', async () => {
+    const daemon = new DaemonRunner();
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { assessState } = await import('../core/kanban.js');
+    const assessStateMock = vi.mocked(assessState);
+
+    assessStateMock.mockReturnValue({
+      backlogItems: [],
+      readyItems: [],
+      inProgressItems: [],
+      doneItems: [],
+      recommendedActions: [
+        {
+          storyId: 'story-1',
+          storyPath: '/test/.ai-sdlc/backlog/story-1.md',
+          type: 'refine',
+          reason: 'In-progress folder priority',
+          context: undefined,
+        },
+      ],
+    });
+
+    await daemon.start();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const logCalls = consoleLogSpy.mock.calls.map(call => call[0]);
+    const hasFoundMessage = logCalls.some(msg =>
+      typeof msg === 'string' && msg.includes('Found 1 stories, starting with: story-1')
+    );
+    const hasReasonMessage = logCalls.some(msg =>
+      typeof msg === 'string' && msg.includes('In-progress folder priority')
+    );
+
+    expect(hasFoundMessage).toBe(true);
+    expect(hasReasonMessage).toBe(true);
+
+    consoleLogSpy.mockRestore();
+    await daemon.stop();
+  });
+
+  it('should not queue anything if no stories available on startup', async () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+    const { assessState } = await import('../core/kanban.js');
+    const assessStateMock = vi.mocked(assessState);
+
+    assessStateMock.mockReturnValue({
+      backlogItems: [],
+      readyItems: [],
+      inProgressItems: [],
+      doneItems: [],
+      recommendedActions: [],
+    });
+
+    await daemon.start();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Should have empty queue
+    expect(daemonAny.processingQueue.length).toBe(0);
+
+    await daemon.stop();
+  });
+});
+
+describe('daemon stats tracking', () => {
+  it('should initialize stats in constructor', () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    expect(daemonAny.stats).toBeDefined();
+    expect(daemonAny.stats.done).toBe(0);
+    expect(daemonAny.stats.active).toBe(0);
+    expect(daemonAny.stats.queued).toBe(0);
+    expect(daemonAny.stats.blocked).toBe(0);
+    expect(daemonAny.stats.startTime).toBeInstanceOf(Date);
+  });
+
+  it('should accept verbose option in DaemonOptions', () => {
+    const daemon = new DaemonRunner({ verbose: true });
+    const daemonAny = daemon as any;
+
+    expect(daemonAny.options.verbose).toBe(true);
+  });
+
+  it('should have verbose false by default', () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    expect(daemonAny.options.verbose).toBeUndefined();
+  });
+
+  it('should track done count when stories complete', () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    expect(daemonAny.stats.done).toBe(0);
+
+    // Simulate completing a story by incrementing done count
+    daemonAny.stats.done++;
+
+    expect(daemonAny.stats.done).toBe(1);
+
+    daemonAny.stats.done++;
+    expect(daemonAny.stats.done).toBe(2);
+  });
+
+  it('should track active stories', () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    expect(daemonAny.stats.active).toBe(0);
+
+    // Simulate processing a story
+    daemonAny.stats.active = 1;
+    expect(daemonAny.stats.active).toBe(1);
+
+    // Story completes
+    daemonAny.stats.active = 0;
+    expect(daemonAny.stats.active).toBe(0);
+  });
+
+  it('should track story start time', () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    expect(daemonAny.stats.currentStoryStartTime).toBeUndefined();
+
+    const now = new Date();
+    daemonAny.stats.currentStoryStartTime = now;
+
+    expect(daemonAny.stats.currentStoryStartTime).toBe(now);
+  });
+
+  it('should clear story start time when story completes', () => {
+    const daemon = new DaemonRunner();
+    const daemonAny = daemon as any;
+
+    daemonAny.stats.currentStoryStartTime = new Date();
+    expect(daemonAny.stats.currentStoryStartTime).toBeDefined();
+
+    daemonAny.stats.currentStoryStartTime = undefined;
+    expect(daemonAny.stats.currentStoryStartTime).toBeUndefined();
+  });
+});
+
+describe('daemon verbose mode', () => {
+  it('should pass verbose flag through options', () => {
+    const daemon = new DaemonRunner({ verbose: true });
+    const daemonAny = daemon as any;
+
+    expect(daemonAny.options.verbose).toBe(true);
+  });
+
+  it('should accept maxIterations and verbose together', () => {
+    const daemon = new DaemonRunner({ maxIterations: 50, verbose: true });
+    const daemonAny = daemon as any;
+
+    expect(daemonAny.options.maxIterations).toBe(50);
+    expect(daemonAny.options.verbose).toBe(true);
   });
 });

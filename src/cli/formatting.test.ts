@@ -8,6 +8,9 @@ import {
   stripAnsiCodes,
   sanitizeInput,
   ColumnWidths,
+  formatSummaryStatus,
+  formatElapsedTime,
+  formatCompactStoryCompletion,
 } from './formatting.js';
 
 describe('formatting utilities', () => {
@@ -426,6 +429,127 @@ describe('formatting utilities', () => {
       const text = 'Hello\u200BWorld'; // Zero-width space
       const result = truncateText(text, 20);
       expect(result).toBeTruthy();
+    });
+  });
+
+  describe('daemon formatting helpers', () => {
+    describe('formatSummaryStatus', () => {
+      it('should return idle when all counters are zero', () => {
+        const stats = { done: 0, active: 0, queued: 0, blocked: 0 };
+        expect(formatSummaryStatus(stats)).toBe('idle');
+      });
+
+      it('should show only done when done > 0 and others are zero', () => {
+        const stats = { done: 5, active: 0, queued: 0, blocked: 0 };
+        expect(formatSummaryStatus(stats)).toBe('5 done');
+      });
+
+      it('should show only active when active > 0 and others are zero', () => {
+        const stats = { done: 0, active: 1, queued: 0, blocked: 0 };
+        expect(formatSummaryStatus(stats)).toBe('1 active');
+      });
+
+      it('should show multiple stats separated by pipes', () => {
+        const stats = { done: 3, active: 1, queued: 2, blocked: 0 };
+        expect(formatSummaryStatus(stats)).toBe('3 done | 1 active | 2 queued');
+      });
+
+      it('should include blocked when blocked > 0', () => {
+        const stats = { done: 2, active: 0, queued: 1, blocked: 1 };
+        expect(formatSummaryStatus(stats)).toBe('2 done | 1 queued | 1 blocked');
+      });
+
+      it('should show all stats when all are greater than zero', () => {
+        const stats = { done: 5, active: 2, queued: 3, blocked: 1 };
+        expect(formatSummaryStatus(stats)).toBe('5 done | 2 active | 3 queued | 1 blocked');
+      });
+    });
+
+    describe('formatElapsedTime', () => {
+      it('should format milliseconds to seconds when less than 60000ms', () => {
+        expect(formatElapsedTime(42000)).toBe('42s');
+      });
+
+      it('should format 0 milliseconds', () => {
+        expect(formatElapsedTime(0)).toBe('0s');
+      });
+
+      it('should format 1 second', () => {
+        expect(formatElapsedTime(1000)).toBe('1s');
+      });
+
+      it('should format time in minutes and seconds when >= 60000ms', () => {
+        expect(formatElapsedTime(150000)).toBe('2m 30s');
+      });
+
+      it('should format exactly 1 minute', () => {
+        expect(formatElapsedTime(60000)).toBe('1m 0s');
+      });
+
+      it('should format exactly 2 minutes', () => {
+        expect(formatElapsedTime(120000)).toBe('2m 0s');
+      });
+
+      it('should format 5 minutes and 45 seconds', () => {
+        expect(formatElapsedTime(345000)).toBe('5m 45s');
+      });
+
+      it('should round down to nearest second', () => {
+        expect(formatElapsedTime(1500)).toBe('1s');
+      });
+
+      it('should handle large time values', () => {
+        expect(formatElapsedTime(3661000)).toBe('61m 1s');
+      });
+    });
+
+    describe('formatCompactStoryCompletion', () => {
+      it('should format story with basic values', () => {
+        const result = formatCompactStoryCompletion('story-123', 5, 42000);
+        expect(result).toContain('✓');
+        expect(result).toContain('story-123');
+        expect(result).toContain('5 actions');
+        expect(result).toContain('42s');
+      });
+
+      it('should include brackets around metrics', () => {
+        const result = formatCompactStoryCompletion('story-456', 3, 90000);
+        expect(result).toMatch(/\[\d+ actions · [\d\w\s]+\]/);
+      });
+
+      it('should truncate long story IDs', () => {
+        const longId = 'very-long-story-identifier-with-many-characters-that-exceeds-thirty-chars';
+        const result = formatCompactStoryCompletion(longId, 2, 5000);
+        expect(result).toContain('...');
+      });
+
+      it('should preserve short story IDs without truncation', () => {
+        const result = formatCompactStoryCompletion('short-id', 1, 1000);
+        expect(result).toContain('short-id');
+        expect(result).not.toContain('short-id...');
+      });
+
+      it('should format zero actions', () => {
+        const result = formatCompactStoryCompletion('story-789', 0, 2000);
+        expect(result).toContain('0 actions');
+      });
+
+      it('should use minute format for longer elapsed times', () => {
+        const result = formatCompactStoryCompletion('story-101', 10, 125000);
+        expect(result).toContain('2m 5s');
+      });
+
+      it('should include dot separator between actions and time', () => {
+        const result = formatCompactStoryCompletion('story-202', 4, 30000);
+        expect(result).toContain(' · ');
+      });
+
+      it('should format multiple action counts correctly', () => {
+        const result1 = formatCompactStoryCompletion('story-1', 1, 5000);
+        const result2 = formatCompactStoryCompletion('story-2', 999, 5000);
+        expect(result1).toContain('1 actions');
+        expect(result2).toContain('999 actions');
+      });
     });
   });
 });

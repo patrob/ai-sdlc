@@ -3,7 +3,7 @@ import ora from 'ora';
 import fs from 'fs';
 import { getSdlcRoot, loadConfig, initConfig } from '../core/config.js';
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoryById } from '../core/kanban.js';
-import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries } from '../core/story.js';
+import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory } from '../core/story.js';
 import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
 import {
@@ -1390,4 +1390,41 @@ function isEmptySection(content: string): boolean {
   }
 
   return false;
+}
+
+/**
+ * Unblock a story from the blocked folder and move it back to the workflow
+ */
+export function unblock(storyId: string, options?: { resetRetries?: boolean }): void {
+  const spinner = ora('Unblocking story...').start();
+  const config = loadConfig();
+  const c = getThemedChalk(config);
+
+  try {
+    const sdlcRoot = getSdlcRoot();
+
+    if (!kanbanExists(sdlcRoot)) {
+      spinner.fail('ai-sdlc not initialized. Run `ai-sdlc init` first.');
+      return;
+    }
+
+    // Unblock the story (using renamed import to avoid naming conflict)
+    const unblockedStory = unblockStory(storyId, sdlcRoot, options);
+
+    // Determine destination folder from updated path
+    const destinationFolder = unblockedStory.path.match(/\/([^/]+)\/[^/]+\.md$/)?.[1] || 'unknown';
+
+    spinner.succeed(c.success(`Unblocked story ${storyId}, moved to ${destinationFolder}/`));
+
+    if (options?.resetRetries) {
+      console.log(c.dim('  Reset retry_count and refinement_count to 0'));
+    }
+
+    console.log(c.dim(`  Path: ${unblockedStory.path}`));
+  } catch (error) {
+    spinner.fail('Failed to unblock story');
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(c.error(`  ${message}`));
+    process.exit(1);
+  }
 }

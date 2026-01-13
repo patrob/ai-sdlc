@@ -222,10 +222,9 @@ Implementation content.
     // Act
     const result = assessState(sdlcRoot);
 
-    // Assert
+    // Assert - error is now logged as a single sanitized string
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/Failed to move story test-story-5 to blocked:/),
-      expect.any(Error)
+      expect.stringMatching(/Failed to move story test-story-5 to blocked: File system error/)
     );
 
     // Should have a fallback high-priority review action
@@ -297,5 +296,156 @@ Implementation content.
     // Verify exact format: "Max review retries (10/10) reached - last failure: ..."
     expect(reason).toMatch(/^Max review retries \(\d+\/\d+\) reached - last failure: /);
     expect(reason).toContain('(10/10)');
+  });
+
+  // Security tests - bounds checking
+  // Note: YAML parsing rejects ANSI escape codes and control characters, so we test
+  // bounds checking which can occur from any frontmatter source. The sanitization of
+  // ANSI/control chars is tested in story.test.ts with the sanitizeReasonText function.
+  describe('security - input sanitization', () => {
+    it('should sanitize markdown special characters in review feedback', () => {
+      // Arrange - feedback with markdown injection characters
+      // Note: backticks, pipes, and > are valid in YAML and could be injected
+      const maliciousFeedback = 'Code: rm -rf and table chars';
+      createStoryWithRetries('test-markdown', 3, 3, maliciousFeedback);
+      createConfigFile(3);
+
+      // Act
+      assessState(sdlcRoot);
+
+      // Assert - the content should be preserved (YAML-safe chars are kept)
+      expect(moveToBlockedSpy).toHaveBeenCalledTimes(1);
+      const call = moveToBlockedSpy.mock.calls[0];
+      const reason = call[1] as string;
+
+      expect(reason).toContain('Code');
+      expect(reason).toContain('rm -rf');
+    });
+
+    it('should clamp negative retry_count values to 0', () => {
+      // Arrange - create story with negative retry count
+      const inProgressPath = path.join(sdlcRoot, 'in-progress');
+      fs.mkdirSync(inProgressPath, { recursive: true });
+
+      const filename = '01-negative-retry.md';
+      const filePath = path.join(inProgressPath, filename);
+
+      const content = `---
+id: negative-retry
+title: Story With Negative Retry
+priority: 1
+status: in-progress
+type: feature
+created: '2024-01-01'
+updated: '2024-01-15'
+labels: []
+research_complete: true
+plan_complete: true
+implementation_complete: true
+reviews_complete: false
+retry_count: -5
+max_retries: 3
+---
+
+# Story With Negative Retry
+
+Content.
+`;
+
+      fs.writeFileSync(filePath, content, 'utf-8');
+      createConfigFile(3);
+
+      // Act
+      assessState(sdlcRoot);
+
+      // Assert - story should NOT be blocked because -5 < 3
+      expect(moveToBlockedSpy).not.toHaveBeenCalled();
+    });
+
+    it('should clamp extremely large retry_count values to 999', () => {
+      // Arrange - create story with huge retry count
+      const inProgressPath = path.join(sdlcRoot, 'in-progress');
+      fs.mkdirSync(inProgressPath, { recursive: true });
+
+      const filename = '01-huge-retry.md';
+      const filePath = path.join(inProgressPath, filename);
+
+      const content = `---
+id: huge-retry
+title: Story With Huge Retry
+priority: 1
+status: in-progress
+type: feature
+created: '2024-01-01'
+updated: '2024-01-15'
+labels: []
+research_complete: true
+plan_complete: true
+implementation_complete: true
+reviews_complete: false
+retry_count: 999999
+max_retries: 5
+---
+
+# Story With Huge Retry
+
+Content.
+`;
+
+      fs.writeFileSync(filePath, content, 'utf-8');
+      createConfigFile(5);
+
+      // Act
+      assessState(sdlcRoot);
+
+      // Assert - should be blocked (999 >= 5) with capped value shown
+      expect(moveToBlockedSpy).toHaveBeenCalledTimes(1);
+      const call = moveToBlockedSpy.mock.calls[0];
+      const reason = call[1] as string;
+
+      // Should show capped value of 999, not 999999
+      expect(reason).toContain('(999/');
+      expect(reason).not.toContain('999999');
+    });
+
+    it('should handle NaN retry_count as 0', () => {
+      // Arrange - create story with NaN-producing retry count
+      const inProgressPath = path.join(sdlcRoot, 'in-progress');
+      fs.mkdirSync(inProgressPath, { recursive: true });
+
+      const filename = '01-nan-retry.md';
+      const filePath = path.join(inProgressPath, filename);
+
+      const content = `---
+id: nan-retry
+title: Story With NaN Retry
+priority: 1
+status: in-progress
+type: feature
+created: '2024-01-01'
+updated: '2024-01-15'
+labels: []
+research_complete: true
+plan_complete: true
+implementation_complete: true
+reviews_complete: false
+retry_count: 'not-a-number'
+max_retries: 3
+---
+
+# Story With NaN Retry
+
+Content.
+`;
+
+      fs.writeFileSync(filePath, content, 'utf-8');
+      createConfigFile(3);
+
+      // Act
+      assessState(sdlcRoot);
+
+      // Assert - story should NOT be blocked because NaN -> 0 < 3
+      expect(moveToBlockedSpy).not.toHaveBeenCalled();
+    });
   });
 });

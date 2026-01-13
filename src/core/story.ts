@@ -110,9 +110,9 @@ export function moveToBlocked(storyPath: string, reason: string): void {
     newPath = path.join(blockedFolder, filename);
   }
 
-  // Update frontmatter
+  // Update frontmatter (sanitize reason at storage point for defense in depth)
   story.frontmatter.status = 'blocked';
-  story.frontmatter.blocked_reason = reason;
+  story.frontmatter.blocked_reason = sanitizeReasonText(reason);
   story.frontmatter.blocked_at = new Date().toISOString();
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
 
@@ -474,4 +474,38 @@ export function snapshotMaxRetries(story: Story, config: Config): Story {
     writeStory(story);
   }
   return story;
+}
+
+/**
+ * Sanitize user-controlled text for safe display and storage.
+ * Removes ANSI escape sequences, control characters, and potential injection vectors.
+ * Truncates to 200 characters maximum.
+ */
+export function sanitizeReasonText(text: string): string {
+  if (!text) return '';
+
+  let sanitized = text
+    // Remove ANSI CSI sequences (colors, cursor movement) - e.g., \x1B[31m
+    .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
+    // Remove OSC sequences (hyperlinks, window titles) - terminated by BEL (\x07) or ST (\x1B\\)
+    .replace(/\x1B\][^\x07]*\x07/g, '')
+    .replace(/\x1B\][^\x1B]*\x1B\\/g, '')
+    // Remove any remaining standalone escape characters
+    .replace(/\x1B/g, '')
+    // Replace newlines and tabs with spaces
+    .replace(/[\n\r\t]/g, ' ')
+    // Remove potential markdown injection characters
+    .replace(/[`|>]/g, '')
+    // Remove remaining control characters (0x00-0x1F except newline/tab already handled, and 0x7F-0x9F)
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+
+  // Normalize Unicode to prevent homograph attacks
+  sanitized = sanitized.normalize('NFC');
+
+  // Truncate to prevent storage bloat
+  if (sanitized.length > 200) {
+    sanitized = sanitized.substring(0, 197) + '...';
+  }
+
+  return sanitized.trim();
 }

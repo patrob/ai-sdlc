@@ -6,6 +6,7 @@ import { status } from '../../src/cli/commands.js';
 import { getSdlcRoot } from '../../src/core/config.js';
 import { initializeKanban } from '../../src/core/kanban.js';
 import { createStory } from '../../src/core/story.js';
+import { STORIES_FOLDER } from '../../src/types/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,10 +57,13 @@ describe('Status Command - Active Flag Integration', () => {
       createStory('Backlog Story', sdlcRoot);
 
       // Create a done story manually
+      const storyId = 'done-1';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const doneStory = `---
 id: done-1
 title: Done Story
-priority: 1
+slug: done-story
+priority: 10
 status: done
 type: feature
 created: 2024-01-01
@@ -72,7 +76,7 @@ reviews_complete: true
 
 # Done Story
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'done', 'done-story.md'), doneStory);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), doneStory);
 
       // Call status without --active flag
       await status();
@@ -89,10 +93,13 @@ reviews_complete: true
       const sdlcRoot = getSdlcRoot();
 
       // Create a done story
+      const storyId = 'done-1';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const doneStory = `---
 id: done-1
 title: Done Story
-priority: 1
+slug: done-story
+priority: 10
 status: done
 type: feature
 created: 2024-01-01
@@ -105,7 +112,7 @@ reviews_complete: true
 
 # Done Story
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'done', 'done-story.md'), doneStory);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), doneStory);
 
       // Call status without --active flag
       await status();
@@ -123,10 +130,13 @@ reviews_complete: true
       // Create stories in each folder
       createStory('Backlog Story', sdlcRoot);
 
+      const storyId = 'done-1';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const doneStory = `---
 id: done-1
 title: Done Story
-priority: 1
+slug: done-story
+priority: 10
 status: done
 type: feature
 created: 2024-01-01
@@ -139,7 +149,7 @@ reviews_complete: true
 
 # Done Story
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'done', 'done-story.md'), doneStory);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), doneStory);
 
       // Call status with --active flag
       await status({ active: true });
@@ -157,10 +167,13 @@ reviews_complete: true
 
       // Create 3 done stories
       for (let i = 1; i <= 3; i++) {
+        const storyId = `done-${i}`;
+        fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
         const doneStory = `---
 id: done-${i}
 title: Done Story ${i}
-priority: ${i}
+slug: done-story-${i}
+priority: ${i * 10}
 status: done
 type: feature
 created: 2024-01-01
@@ -173,7 +186,7 @@ reviews_complete: true
 
 # Done Story ${i}
 `;
-        fs.writeFileSync(path.join(sdlcRoot, 'done', `done-story-${i}.md`), doneStory);
+        fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), doneStory);
       }
 
       // Call status with --active flag
@@ -220,10 +233,13 @@ reviews_complete: true
 
       // Create 150 done stories
       for (let i = 1; i <= 150; i++) {
+        const storyId = `done-${i}`;
+        fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
         const doneStory = `---
 id: done-${i}
 title: Done Story ${i}
-priority: ${i}
+slug: done-story-${i}
+priority: ${i * 10}
 status: done
 type: feature
 created: 2024-01-01
@@ -236,7 +252,7 @@ reviews_complete: true
 
 # Done Story ${i}
 `;
-        fs.writeFileSync(path.join(sdlcRoot, 'done', `done-story-${i}.md`), doneStory);
+        fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), doneStory);
       }
 
       // Call status with --active flag
@@ -253,10 +269,13 @@ reviews_complete: true
 
       // Create only done stories (no active work)
       for (let i = 1; i <= 5; i++) {
+        const storyId = `done-${i}`;
+        fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
         const doneStory = `---
 id: done-${i}
 title: Done Story ${i}
-priority: ${i}
+slug: done-story-${i}
+priority: ${i * 10}
 status: done
 type: feature
 created: 2024-01-01
@@ -269,7 +288,7 @@ reviews_complete: true
 
 # Done Story ${i}
 `;
-        fs.writeFileSync(path.join(sdlcRoot, 'done', `done-story-${i}.md`), doneStory);
+        fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), doneStory);
       }
 
       // Call status with --active flag
@@ -290,10 +309,13 @@ reviews_complete: true
       const sdlcRoot = getSdlcRoot();
 
       // Create a done story
+      const storyId = 'done-1';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const doneStory = `---
 id: done-1
 title: Done Story
-priority: 1
+slug: done-story
+priority: 10
 status: done
 type: feature
 created: 2024-01-01
@@ -306,7 +328,7 @@ reviews_complete: true
 
 # Done Story
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'done', 'done-story.md'), doneStory);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), doneStory);
 
       // Call status with undefined (same as no flag)
       await status(undefined);
@@ -321,10 +343,13 @@ reviews_complete: true
       const sdlcRoot = getSdlcRoot();
 
       // Create a done story
+      const storyId = 'done-1';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const doneStory = `---
 id: done-1
 title: Done Story
-priority: 1
+slug: done-story
+priority: 10
 status: done
 type: feature
 created: 2024-01-01
@@ -337,7 +362,7 @@ reviews_complete: true
 
 # Done Story
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'done', 'done-story.md'), doneStory);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), doneStory);
 
       // Call status with active: false
       await status({ active: false });
@@ -356,10 +381,13 @@ reviews_complete: true
       // Create stories in each folder
       createStory('Backlog Story', sdlcRoot);
 
+      const storyId = 'ready-1';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
       const readyStory = `---
 id: ready-1
 title: Ready Story
-priority: 1
+slug: ready-story
+priority: 10
 status: ready
 type: feature
 created: 2024-01-01
@@ -372,12 +400,15 @@ reviews_complete: false
 
 # Ready Story
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'ready', 'ready-story.md'), readyStory);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), readyStory);
 
+      const doneStoryId = 'done-1';
+      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, doneStoryId), { recursive: true });
       const doneStory = `---
 id: done-1
 title: Done Story
-priority: 1
+slug: done-story
+priority: 20
 status: done
 type: feature
 created: 2024-01-01
@@ -390,7 +421,7 @@ reviews_complete: true
 
 # Done Story
 `;
-      fs.writeFileSync(path.join(sdlcRoot, 'done', 'done-story.md'), doneStory);
+      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, doneStoryId, 'story.md'), doneStory);
 
       // Call status with no parameters (backward compatible)
       await status();

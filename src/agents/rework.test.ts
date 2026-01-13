@@ -17,6 +17,7 @@ describe('Rework Agent', () => {
 
     // Create SDLC folder structure
     fs.mkdirSync(sdlcRoot, { recursive: true });
+    fs.mkdirSync(path.join(sdlcRoot, 'stories'));
     fs.mkdirSync(path.join(sdlcRoot, 'backlog'));
     fs.mkdirSync(path.join(sdlcRoot, 'ready'));
     fs.mkdirSync(path.join(sdlcRoot, 'in-progress'));

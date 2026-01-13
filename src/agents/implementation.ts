@@ -5,6 +5,7 @@ import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
 import { Story, AgentResult, TDDTestCycle, TDDConfig } from '../types/index.js';
 import { AgentOptions } from './research.js';
 import { loadConfig, DEFAULT_TDD_CONFIG } from '../core/config.js';
+import { verifyImplementation } from './verification.js';
 
 // Re-export for convenience
 export type { AgentProgressCallback };
@@ -75,6 +76,13 @@ When implementing:
 6. Do NOT create temporary files, shell scripts, or documentation files - keep all notes in the story file
 7. Follow the Testing Pyramid: prioritize unit tests (colocated with source, e.g., src/foo.test.ts), then integration tests (in tests/integration/)
 8. Do NOT commit changes - that happens in the review phase
+
+CRITICAL RULES ABOUT TESTS:
+- Test updates are PART of implementation, not a separate phase
+- If you change ANY function's behavior, update its tests IMMEDIATELY in the same step
+- If you add new functionality, write tests for it IMMEDIATELY
+- NEVER mark implementation complete if tests are failing
+- Implementation is not done until all tests pass
 
 You have access to tools for reading and writing files, running commands, and searching the codebase.`;
 
@@ -643,7 +651,24 @@ export async function runImplementationAgent(
       changesMade.push(...tddResult.changesMade);
 
       if (tddResult.success) {
-        // Mark implementation as complete
+        changesMade.push('Running verification before marking complete...');
+        const verification = await verifyImplementation(tddResult.story, workingDir);
+
+        updateStoryField(tddResult.story, 'last_test_run', {
+          passed: verification.passed,
+          failures: verification.failures,
+          timestamp: verification.timestamp,
+        });
+
+        if (!verification.passed) {
+          return {
+            success: false,
+            story: parseStory(currentStoryPath),
+            changesMade,
+            error: `Implementation blocked: ${verification.failures} test(s) failing. Fix tests before completing.`,
+          };
+        }
+
         updateStoryField(tddResult.story, 'implementation_complete', true);
         changesMade.push('Marked implementation_complete: true');
 
@@ -712,7 +737,24 @@ ${implementationResult}
     writeStory(updatedStory);
     changesMade.push('Added implementation notes');
 
-    // Mark implementation as complete
+    changesMade.push('Running verification before marking complete...');
+    const verification = await verifyImplementation(updatedStory, workingDir);
+
+    updateStoryField(updatedStory, 'last_test_run', {
+      passed: verification.passed,
+      failures: verification.failures,
+      timestamp: verification.timestamp,
+    });
+
+    if (!verification.passed) {
+      return {
+        success: false,
+        story: parseStory(currentStoryPath),
+        changesMade,
+        error: `Implementation blocked: ${verification.failures} test(s) failing. Fix tests before completing.`,
+      };
+    }
+
     updateStoryField(updatedStory, 'implementation_complete', true);
     changesMade.push('Marked implementation_complete: true');
 

@@ -50,15 +50,18 @@ describe('assessState - max review retries blocking', () => {
     maxRetries: number,
     reviewFeedback: string = 'Security issues found in implementation'
   ): string {
-    const inProgressPath = path.join(sdlcRoot, 'in-progress');
-    fs.mkdirSync(inProgressPath, { recursive: true });
+    const storiesFolder = path.join(sdlcRoot, 'stories');
+    fs.mkdirSync(storiesFolder, { recursive: true });
 
-    const filename = `01-${slug}.md`;
-    const filePath = path.join(inProgressPath, filename);
+    const storyFolder = path.join(storiesFolder, slug);
+    fs.mkdirSync(storyFolder, { recursive: true });
+
+    const filePath = path.join(storyFolder, 'story.md');
 
     const content = `---
 id: ${slug}
 title: Test Story ${slug}
+slug: ${slug}
 priority: 1
 status: in-progress
 type: feature
@@ -154,15 +157,18 @@ Some implementation content here.
 
   it('should use "unknown" when no review history exists', () => {
     // Arrange: Create story without review history
-    const inProgressPath = path.join(sdlcRoot, 'in-progress');
-    fs.mkdirSync(inProgressPath, { recursive: true });
+    const storiesFolder = path.join(sdlcRoot, 'stories');
+    fs.mkdirSync(storiesFolder, { recursive: true });
 
-    const filename = '01-no-review-history.md';
-    const filePath = path.join(inProgressPath, filename);
+    const storyFolder = path.join(storiesFolder, 'no-review-history');
+    fs.mkdirSync(storyFolder, { recursive: true });
+
+    const filePath = path.join(storyFolder, 'story.md');
 
     const content = `---
 id: no-review-history
 title: Story Without Review History
+slug: no-review-history
 priority: 1
 status: in-progress
 type: feature
@@ -324,15 +330,18 @@ Implementation content.
 
     it('should clamp negative retry_count values to 0', () => {
       // Arrange - create story with negative retry count
-      const inProgressPath = path.join(sdlcRoot, 'in-progress');
-      fs.mkdirSync(inProgressPath, { recursive: true });
+      const storiesFolder = path.join(sdlcRoot, 'stories');
+      fs.mkdirSync(storiesFolder, { recursive: true });
 
-      const filename = '01-negative-retry.md';
-      const filePath = path.join(inProgressPath, filename);
+      const storyFolder = path.join(storiesFolder, 'negative-retry');
+      fs.mkdirSync(storyFolder, { recursive: true });
+
+      const filePath = path.join(storyFolder, 'story.md');
 
       const content = `---
 id: negative-retry
 title: Story With Negative Retry
+slug: negative-retry
 priority: 1
 status: in-progress
 type: feature
@@ -364,15 +373,18 @@ Content.
 
     it('should clamp extremely large retry_count values to 999', () => {
       // Arrange - create story with huge retry count
-      const inProgressPath = path.join(sdlcRoot, 'in-progress');
-      fs.mkdirSync(inProgressPath, { recursive: true });
+      const storiesFolder = path.join(sdlcRoot, 'stories');
+      fs.mkdirSync(storiesFolder, { recursive: true });
 
-      const filename = '01-huge-retry.md';
-      const filePath = path.join(inProgressPath, filename);
+      const storyFolder = path.join(storiesFolder, 'huge-retry');
+      fs.mkdirSync(storyFolder, { recursive: true });
+
+      const filePath = path.join(storyFolder, 'story.md');
 
       const content = `---
 id: huge-retry
 title: Story With Huge Retry
+slug: huge-retry
 priority: 1
 status: in-progress
 type: feature
@@ -410,15 +422,18 @@ Content.
 
     it('should handle NaN retry_count as 0', () => {
       // Arrange - create story with NaN-producing retry count
-      const inProgressPath = path.join(sdlcRoot, 'in-progress');
-      fs.mkdirSync(inProgressPath, { recursive: true });
+      const storiesFolder = path.join(sdlcRoot, 'stories');
+      fs.mkdirSync(storiesFolder, { recursive: true });
 
-      const filename = '01-nan-retry.md';
-      const filePath = path.join(inProgressPath, filename);
+      const storyFolder = path.join(storiesFolder, 'nan-retry');
+      fs.mkdirSync(storyFolder, { recursive: true });
+
+      const filePath = path.join(storyFolder, 'story.md');
 
       const content = `---
 id: nan-retry
 title: Story With NaN Retry
+slug: nan-retry
 priority: 1
 status: in-progress
 type: feature

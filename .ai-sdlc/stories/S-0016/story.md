@@ -4,7 +4,7 @@ title: >-
   Review rejection executive summary - Display 1-3 sentence summary of why
   review was rejected in terminal UI
 priority: 3
-status: in-progress
+status: done
 type: feature
 created: '2026-01-10'
 labels:

@@ -14,18 +14,19 @@ import {
   hasChangesOccurred,
   truncateTestOutput,
   buildRetryPrompt,
+  sanitizeTestOutput,
   type TDDPhaseResult,
 } from './implementation.js';
 import { Story, TDDTestCycle } from '../types/index.js';
 import * as storyModule from '../core/story.js';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 
 // Mock child_process module
 vi.mock('child_process', async () => {
   const actual = await vi.importActual<typeof import('child_process')>('child_process');
   return {
     ...actual,
-    execSync: vi.fn(),
+    spawnSync: vi.fn(),
   };
 });
 
@@ -434,12 +435,12 @@ Just a summary, no AC.
   });
 
   describe('TDD cycle commits', () => {
-    const execSyncMock = vi.mocked(execSync);
+    const spawnSyncMock = vi.mocked(spawnSync);
 
     beforeEach(() => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-01-15T10:00:00Z'));
-      execSyncMock.mockReset();
+      spawnSyncMock.mockReset();
     });
 
     afterEach(() => {
@@ -460,8 +461,19 @@ Just a summary, no AC.
       // Mock parseStory to return our mock story
       vi.mocked(storyModule.parseStory).mockReturnValue(story);
 
-      // Mock git status to show changes
-      execSyncMock.mockReturnValue(' M src/file.ts\n' as any);
+      // Mock git operations with spawnSync return shape
+      spawnSyncMock.mockImplementation((cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'status') {
+          return { status: 0, stdout: ' M src/file.ts\n', stderr: '', output: [], pid: 1, signal: null };
+        }
+        if (cmd === 'git' && args?.[0] === 'add') {
+          return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+        }
+        if (cmd === 'git' && args?.[0] === 'commit') {
+          return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+        }
+        return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+      });
 
       // Mock dependencies
       const mockRunAgentQuery = vi.fn()
@@ -488,12 +500,12 @@ Just a summary, no AC.
 
       expect(result.success).toBe(true);
       // Verify commit was called with correct message format
-      const commitCalls = execSyncMock.mock.calls.filter(call =>
-        typeof call[0] === 'string' && call[0].includes('git commit')
+      const commitCalls = spawnSyncMock.mock.calls.filter(call =>
+        call[0] === 'git' && call[1]?.[0] === 'commit'
       );
       expect(commitCalls.length).toBeGreaterThan(0);
-      expect(commitCalls[0]![0]).toContain('feat(test-story):');
-      expect(commitCalls[0]![0]).toContain('TDD cycle 1');
+      expect(commitCalls[0]![1]?.[2]).toContain('feat(test-story):');
+      expect(commitCalls[0]![1]?.[2]).toContain('TDD cycle 1');
     });
 
     it('should skip commit when tests fail', async () => {
@@ -509,8 +521,13 @@ Just a summary, no AC.
       // Mock parseStory to return our mock story
       vi.mocked(storyModule.parseStory).mockReturnValue(story);
 
-      // Mock git status to show changes, but tests fail
-      execSyncMock.mockReturnValue(' M src/file.ts\n' as any);
+      // Mock git status to show changes
+      spawnSyncMock.mockImplementation((cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'status') {
+          return { status: 0, stdout: ' M src/file.ts\n', stderr: '', output: [], pid: 1, signal: null };
+        }
+        return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+      });
 
       const mockRunAgentQuery = vi.fn()
         .mockResolvedValueOnce('Created test file src/test.test.ts') // RED
@@ -537,8 +554,8 @@ Just a summary, no AC.
 
       expect(result.success).toBe(false);
       // Verify no commit was called
-      const commitCalls = execSyncMock.mock.calls.filter(call =>
-        typeof call[0] === 'string' && call[0].includes('git commit')
+      const commitCalls = spawnSyncMock.mock.calls.filter(call =>
+        call[0] === 'git' && call[1]?.[0] === 'commit'
       );
       expect(commitCalls.length).toBe(0);
     });
@@ -557,7 +574,12 @@ Just a summary, no AC.
       vi.mocked(storyModule.parseStory).mockReturnValue(story);
 
       // Mock git status to show NO changes
-      execSyncMock.mockReturnValue('' as any);
+      spawnSyncMock.mockImplementation((cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'status') {
+          return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+        }
+        return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+      });
 
       const mockRunAgentQuery = vi.fn()
         .mockResolvedValueOnce('Created test file src/test.test.ts') // RED
@@ -598,13 +620,21 @@ Just a summary, no AC.
       // Mock parseStory to return our mock story
       vi.mocked(storyModule.parseStory).mockReturnValue(story);
 
-      // Mock git status to show changes, but commit fails
-      execSyncMock
-        .mockReturnValueOnce(' M src/file.ts\n' as any) // git status
-        .mockReturnValueOnce(undefined as any) // git add
-        .mockImplementationOnce(() => {
+      // Track call count to know when to throw
+      let callCount = 0;
+      spawnSyncMock.mockImplementation((cmd, args) => {
+        callCount++;
+        if (cmd === 'git' && args?.[0] === 'status') {
+          return { status: 0, stdout: ' M src/file.ts\n', stderr: '', output: [], pid: 1, signal: null };
+        }
+        if (cmd === 'git' && args?.[0] === 'add') {
+          return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+        }
+        if (cmd === 'git' && args?.[0] === 'commit') {
           throw new Error('git commit failed');
-        }); // git commit fails
+        }
+        return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+      });
 
       const mockRunAgentQuery = vi.fn()
         .mockResolvedValueOnce('Created test file src/test.test.ts') // RED
@@ -635,12 +665,12 @@ Just a summary, no AC.
   });
 
   describe('commitIfAllTestsPass', () => {
-    const execSyncMock = vi.mocked(execSync);
+    const spawnSyncMock = vi.mocked(spawnSync);
 
     beforeEach(() => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-01-15T10:00:00Z'));
-      execSyncMock.mockReset();
+      spawnSyncMock.mockReset();
     });
 
     afterEach(() => {
@@ -653,11 +683,19 @@ Just a summary, no AC.
     });
 
     it('should return { committed: true } when tests pass and changes exist', async () => {
-      // Mock git status to show uncommitted changes
-      execSyncMock
-        .mockReturnValueOnce(' M src/file.ts\n' as any) // git status --porcelain
-        .mockReturnValueOnce(undefined as any) // git add -A
-        .mockReturnValueOnce(undefined as any); // git commit
+      // Mock git operations with spawnSync return shape
+      spawnSyncMock.mockImplementation((cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'status') {
+          return { status: 0, stdout: ' M src/file.ts\n', stderr: '', output: [], pid: 1, signal: null };
+        }
+        if (cmd === 'git' && args?.[0] === 'add') {
+          return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+        }
+        if (cmd === 'git' && args?.[0] === 'commit') {
+          return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+        }
+        return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+      });
 
       // Mock runAllTests to pass
       const mockRunAllTests = vi.fn().mockResolvedValue({
@@ -671,18 +709,23 @@ Just a summary, no AC.
       expect(result.committed).toBe(true);
       expect(result.reason).toBeUndefined();
       expect(mockRunAllTests).toHaveBeenCalledWith('/test/dir', 300000);
-      expect(execSyncMock).toHaveBeenCalledWith('git status --porcelain', { cwd: '/test/dir', encoding: 'utf-8' });
-      expect(execSyncMock).toHaveBeenCalledWith('git add -A', { cwd: '/test/dir', stdio: 'pipe' });
-      expect(execSyncMock).toHaveBeenCalledWith(
-        expect.stringContaining('git commit -m'),
-        expect.objectContaining({ cwd: '/test/dir' })
-      );
+      // Check spawnSync was called with correct args
+      const statusCalls = spawnSyncMock.mock.calls.filter(call => call[0] === 'git' && call[1]?.[0] === 'status');
+      expect(statusCalls.length).toBeGreaterThan(0);
+      const addCalls = spawnSyncMock.mock.calls.filter(call => call[0] === 'git' && call[1]?.[0] === 'add');
+      expect(addCalls.length).toBeGreaterThan(0);
+      const commitCalls = spawnSyncMock.mock.calls.filter(call => call[0] === 'git' && call[1]?.[0] === 'commit');
+      expect(commitCalls.length).toBeGreaterThan(0);
     });
 
     it('should return { committed: false, reason: "tests failed" } when tests fail', async () => {
       // Mock git status to show uncommitted changes
-      execSyncMock
-        .mockReturnValueOnce(' M src/file.ts\n' as any); // git status --porcelain
+      spawnSyncMock.mockImplementation((cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'status') {
+          return { status: 0, stdout: ' M src/file.ts\n', stderr: '', output: [], pid: 1, signal: null };
+        }
+        return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+      });
 
       // Mock runAllTests to fail
       const mockRunAllTests = vi.fn().mockResolvedValue({
@@ -696,31 +739,45 @@ Just a summary, no AC.
       expect(result.committed).toBe(false);
       expect(result.reason).toBe('tests failed');
       expect(mockRunAllTests).toHaveBeenCalledWith('/test/dir', 300000);
-      // Git add and commit should NOT be called
-      expect(execSyncMock).toHaveBeenCalledTimes(1); // Only status check
+      // Git add and commit should NOT be called - only status
+      const addCalls = spawnSyncMock.mock.calls.filter(call => call[0] === 'git' && call[1]?.[0] === 'add');
+      expect(addCalls.length).toBe(0);
+      const commitCalls = spawnSyncMock.mock.calls.filter(call => call[0] === 'git' && call[1]?.[0] === 'commit');
+      expect(commitCalls.length).toBe(0);
     });
 
     it('should return { committed: false, reason: "nothing to commit" } when no changes exist', async () => {
       // Mock git status to show no changes
-      execSyncMock
-        .mockReturnValueOnce('' as any); // git status --porcelain (empty)
+      spawnSyncMock.mockImplementation((cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'status') {
+          return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+        }
+        return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+      });
 
       const result = await commitIfAllTestsPass('/test/dir', 'feat(story): test message', 300000);
 
       expect(result.committed).toBe(false);
       expect(result.reason).toBe('nothing to commit');
-      // runAllTests should NOT be called if there are no changes
-      expect(execSyncMock).toHaveBeenCalledTimes(1); // Only status check
+      // runAllTests should NOT be called if there are no changes - only status check
+      const statusCalls = spawnSyncMock.mock.calls.filter(call => call[0] === 'git' && call[1]?.[0] === 'status');
+      expect(statusCalls.length).toBe(1);
     });
 
     it('should handle git command errors gracefully', async () => {
       // Mock git status to show changes, then git add, then git commit fails
-      execSyncMock
-        .mockReturnValueOnce(' M src/file.ts\n' as any) // git status --porcelain
-        .mockReturnValueOnce(undefined as any) // git add -A
-        .mockImplementationOnce(() => {
+      spawnSyncMock.mockImplementation((cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'status') {
+          return { status: 0, stdout: ' M src/file.ts\n', stderr: '', output: [], pid: 1, signal: null };
+        }
+        if (cmd === 'git' && args?.[0] === 'add') {
+          return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+        }
+        if (cmd === 'git' && args?.[0] === 'commit') {
           throw new Error('git commit failed');
-        }); // git commit fails
+        }
+        return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+      });
 
       // Mock runAllTests to pass
       const mockRunAllTests = vi.fn().mockResolvedValue({
@@ -734,10 +791,18 @@ Just a summary, no AC.
 
     it('should properly escape special characters in commit message', async () => {
       // Mock git operations
-      execSyncMock
-        .mockReturnValueOnce(' M src/file.ts\n' as any) // git status --porcelain
-        .mockReturnValueOnce(undefined as any) // git add -A
-        .mockReturnValueOnce(undefined as any); // git commit
+      spawnSyncMock.mockImplementation((cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'status') {
+          return { status: 0, stdout: ' M src/file.ts\n', stderr: '', output: [], pid: 1, signal: null };
+        }
+        if (cmd === 'git' && args?.[0] === 'add') {
+          return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+        }
+        if (cmd === 'git' && args?.[0] === 'commit') {
+          return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+        }
+        return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+      });
 
       // Mock runAllTests to pass
       const mockRunAllTests = vi.fn().mockResolvedValue({
@@ -750,20 +815,28 @@ Just a summary, no AC.
       await commitIfAllTestsPass('/test/dir', messageWithQuotes, 300000, mockRunAllTests);
 
       // Check that the commit command was called with properly escaped message
-      const commitCall = execSyncMock.mock.calls.find(call =>
-        typeof call[0] === 'string' && call[0].includes('git commit')
+      const commitCall = spawnSyncMock.mock.calls.find(call =>
+        call[0] === 'git' && call[1]?.[0] === 'commit'
       );
       expect(commitCall).toBeDefined();
-      expect(commitCall![0]).toContain("git commit -m '");
-      // Verify the escaping pattern is applied (single quotes wrapped, internal quotes escaped)
+      // The message is in args[2] (commit -m <message>)
+      expect(commitCall![1]?.[2]).toContain("feat(story): add 'quotes'");
     });
 
     it('should call runAllTests with correct parameters', async () => {
       // Mock git status to show changes
-      execSyncMock
-        .mockReturnValueOnce(' M src/file.ts\n' as any) // git status --porcelain
-        .mockReturnValueOnce(undefined as any) // git add -A
-        .mockReturnValueOnce(undefined as any); // git commit
+      spawnSyncMock.mockImplementation((cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'status') {
+          return { status: 0, stdout: ' M src/file.ts\n', stderr: '', output: [], pid: 1, signal: null };
+        }
+        if (cmd === 'git' && args?.[0] === 'add') {
+          return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+        }
+        if (cmd === 'git' && args?.[0] === 'commit') {
+          return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+        }
+        return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+      });
 
       // Mock runAllTests
       const mockRunAllTests = vi.fn().mockResolvedValue({
@@ -782,13 +855,22 @@ Just a summary, no AC.
       const executionOrder: string[] = [];
 
       // Mock git operations and track execution order
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (typeof cmd === 'string') {
-          if (cmd.includes('git status')) executionOrder.push('status');
-          if (cmd.includes('git add')) executionOrder.push('add');
-          if (cmd.includes('git commit')) executionOrder.push('commit');
+      spawnSyncMock.mockImplementation((cmd, args) => {
+        if (cmd === 'git') {
+          if (args?.[0] === 'status') {
+            executionOrder.push('status');
+            return { status: 0, stdout: ' M file.ts\n', stderr: '', output: [], pid: 1, signal: null };
+          }
+          if (args?.[0] === 'add') {
+            executionOrder.push('add');
+            return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+          }
+          if (args?.[0] === 'commit') {
+            executionOrder.push('commit');
+            return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
+          }
         }
-        return cmd.includes('git status') ? ' M file.ts\n' : undefined;
+        return { status: 0, stdout: '', stderr: '', output: [], pid: 1, signal: null };
       });
 
       // Mock runAllTests
@@ -807,15 +889,22 @@ Just a summary, no AC.
   describe('Implementation Retry Utilities', () => {
     describe('captureCurrentDiffHash', () => {
       it('should return SHA256 hash of git diff HEAD', () => {
-        vi.mocked(execSync).mockReturnValue('diff --git a/test.ts b/test.ts\n+new line');
+        vi.mocked(spawnSync).mockReturnValue({
+          status: 0,
+          stdout: 'diff --git a/test.ts b/test.ts\n+new line',
+          stderr: '',
+          output: [],
+          pid: 1,
+          signal: null,
+        });
         const hash = captureCurrentDiffHash('/test/dir');
         expect(hash).toBeDefined();
         expect(hash.length).toBe(64); // SHA256 produces 64 hex chars
-        expect(execSync).toHaveBeenCalledWith('git diff HEAD', expect.objectContaining({ cwd: '/test/dir' }));
+        expect(spawnSync).toHaveBeenCalledWith('git', ['diff', 'HEAD'], expect.objectContaining({ cwd: '/test/dir' }));
       });
 
       it('should return empty string if git command fails', () => {
-        vi.mocked(execSync).mockImplementation(() => {
+        vi.mocked(spawnSync).mockImplementation(() => {
           throw new Error('Not a git repository');
         });
         const hash = captureCurrentDiffHash('/test/dir');
@@ -823,16 +912,38 @@ Just a summary, no AC.
       });
 
       it('should return consistent hash for same diff', () => {
-        vi.mocked(execSync).mockReturnValue('same diff content');
+        vi.mocked(spawnSync).mockReturnValue({
+          status: 0,
+          stdout: 'same diff content',
+          stderr: '',
+          output: [],
+          pid: 1,
+          signal: null,
+        });
         const hash1 = captureCurrentDiffHash('/test/dir');
         const hash2 = captureCurrentDiffHash('/test/dir');
         expect(hash1).toBe(hash2);
       });
 
       it('should return different hash for different diff', () => {
-        vi.mocked(execSync).mockReturnValueOnce('diff content 1');
+        vi.mocked(spawnSync)
+          .mockReturnValueOnce({
+            status: 0,
+            stdout: 'diff content 1',
+            stderr: '',
+            output: [],
+            pid: 1,
+            signal: null,
+          })
+          .mockReturnValueOnce({
+            status: 0,
+            stdout: 'diff content 2',
+            stderr: '',
+            output: [],
+            pid: 1,
+            signal: null,
+          });
         const hash1 = captureCurrentDiffHash('/test/dir');
-        vi.mocked(execSync).mockReturnValueOnce('diff content 2');
         const hash2 = captureCurrentDiffHash('/test/dir');
         expect(hash1).not.toBe(hash2);
       });
@@ -956,6 +1067,72 @@ Just a summary, no AC.
         // Empty after trim, so should not include output sections
         expect(prompt).not.toContain('Test Output:');
         expect(prompt).not.toContain('Build Output:');
+      });
+    });
+  });
+
+  describe('Security Validation', () => {
+    describe('sanitizeTestOutput', () => {
+      it('should remove ANSI SGR sequences (colors)', () => {
+        const input = '\x1B[31mError:\x1B[0m Test failed';
+        const output = sanitizeTestOutput(input);
+        expect(output).toBe('Error: Test failed');
+        expect(output).not.toContain('\x1B');
+      });
+
+      it('should remove ANSI DCS sequences', () => {
+        const input = 'Before\x1BPDCSdata\x1B\\After';
+        const output = sanitizeTestOutput(input);
+        expect(output).toBe('BeforeAfter');
+        expect(output).not.toContain('\x1B');
+      });
+
+      it('should remove ANSI PM sequences', () => {
+        const input = 'Before\x1B^PMdata\x1B\\After';
+        const output = sanitizeTestOutput(input);
+        expect(output).toBe('BeforeAfter');
+        expect(output).not.toContain('\x1B');
+      });
+
+      it('should remove ANSI OSC sequences (BEL terminated)', () => {
+        const input = 'Before\x1B]0;Window Title\x07After';
+        const output = sanitizeTestOutput(input);
+        expect(output).toBe('BeforeAfter');
+        expect(output).not.toContain('\x1B');
+      });
+
+      it('should remove ANSI OSC sequences (ST terminated)', () => {
+        const input = 'Before\x1B]0;Window Title\x1B\\After';
+        const output = sanitizeTestOutput(input);
+        expect(output).toBe('BeforeAfter');
+        expect(output).not.toContain('\x1B');
+      });
+
+      it('should remove control characters except newline, tab, CR', () => {
+        const input = 'Test\x00\x01\x02\n\t\rOK';
+        const output = sanitizeTestOutput(input);
+        expect(output).toBe('Test\n\t\rOK');
+        expect(output).not.toContain('\x00');
+        expect(output).not.toContain('\x01');
+        expect(output).not.toContain('\x02');
+      });
+
+      it('should handle complex ANSI sequences from real test output', () => {
+        const input = '\x1B[32m✓\x1B[0m Test passed\n\x1B[31m✗\x1B[0m Test failed';
+        const output = sanitizeTestOutput(input);
+        expect(output).toBe('✓ Test passed\n✗ Test failed');
+        expect(output).not.toContain('\x1B');
+      });
+
+      it('should handle empty input', () => {
+        const output = sanitizeTestOutput('');
+        expect(output).toBe('');
+      });
+
+      it('should preserve normal text without ANSI codes', () => {
+        const input = 'Normal test output with no escape codes';
+        const output = sanitizeTestOutput(input);
+        expect(output).toBe(input);
       });
     });
   });

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { DEFAULT_CONFIG, loadConfig, DEFAULT_DAEMON_CONFIG, DEFAULT_TIMEOUTS } from './config.js';
+import { DEFAULT_CONFIG, loadConfig, DEFAULT_DAEMON_CONFIG, DEFAULT_TIMEOUTS, validateImplementationConfig } from './config.js';
 import { Config, TDDConfig } from '../types/index.js';
 
 describe('config - TDD configuration', () => {
@@ -279,6 +279,127 @@ describe('config - Review configuration defaults', () => {
       expect(config.reviewConfig.maxRetriesUpperBound).toBe(15);
       expect(config.reviewConfig.autoCompleteOnApproval).toBe(false);
       expect(config.reviewConfig.autoRestartOnRejection).toBe(false);
+    });
+  });
+
+  describe('Implementation config validation', () => {
+    describe('validateImplementationConfig', () => {
+      it('should reject negative maxRetries', () => {
+        const config = validateImplementationConfig({ maxRetries: -1, maxRetriesUpperBound: 10 });
+        expect(config.maxRetries).toBe(0);
+      });
+
+      it('should cap maxRetries at upper bound', () => {
+        const config = validateImplementationConfig({ maxRetries: 15, maxRetriesUpperBound: 10 });
+        expect(config.maxRetries).toBe(10);
+      });
+
+      it('should handle Infinity as no limit', () => {
+        const config = validateImplementationConfig({ maxRetries: Infinity, maxRetriesUpperBound: 10 });
+        expect(config.maxRetries).toBe(Infinity);
+      });
+
+      it('should allow maxRetries of 0 (disables retries)', () => {
+        const config = validateImplementationConfig({ maxRetries: 0, maxRetriesUpperBound: 10 });
+        expect(config.maxRetries).toBe(0);
+      });
+
+      it('should allow maxRetries equal to upper bound', () => {
+        const config = validateImplementationConfig({ maxRetries: 10, maxRetriesUpperBound: 10 });
+        expect(config.maxRetries).toBe(10);
+      });
+
+      it('should preserve valid maxRetries within bounds', () => {
+        const config = validateImplementationConfig({ maxRetries: 5, maxRetriesUpperBound: 10 });
+        expect(config.maxRetries).toBe(5);
+      });
+    });
+
+    describe('loadConfig with AI_SDLC_IMPLEMENTATION_MAX_RETRIES', () => {
+      const tempDir = '.test-implementation-config-env';
+      const originalEnv = process.env.AI_SDLC_IMPLEMENTATION_MAX_RETRIES;
+
+      beforeEach(() => {
+        // Clean env var BEFORE each test for isolation
+        delete process.env.AI_SDLC_IMPLEMENTATION_MAX_RETRIES;
+        // Clean up and recreate temp directory
+        if (fs.existsSync(tempDir)) {
+          const configFile = path.join(tempDir, '.ai-sdlc.json');
+          if (fs.existsSync(configFile)) {
+            fs.unlinkSync(configFile);
+          }
+          fs.rmdirSync(tempDir);
+        }
+        fs.mkdirSync(tempDir);
+        // Write a minimal config to ensure deep merge path (avoids DEFAULT_CONFIG mutation bug)
+        const configFile = path.join(tempDir, '.ai-sdlc.json');
+        fs.writeFileSync(configFile, JSON.stringify({}));
+      });
+
+      afterEach(() => {
+        if (fs.existsSync(tempDir)) {
+          const configFile = path.join(tempDir, '.ai-sdlc.json');
+          if (fs.existsSync(configFile)) {
+            fs.unlinkSync(configFile);
+          }
+          fs.rmdirSync(tempDir);
+        }
+        // Restore original env var
+        if (originalEnv !== undefined) {
+          process.env.AI_SDLC_IMPLEMENTATION_MAX_RETRIES = originalEnv;
+        } else {
+          delete process.env.AI_SDLC_IMPLEMENTATION_MAX_RETRIES;
+        }
+      });
+
+      it('should override config with env var', () => {
+        process.env.AI_SDLC_IMPLEMENTATION_MAX_RETRIES = '5';
+        const config = loadConfig(tempDir);
+        expect(config.implementation.maxRetries).toBe(5);
+      });
+
+      it('should reject negative env var value', () => {
+        process.env.AI_SDLC_IMPLEMENTATION_MAX_RETRIES = '-1';
+        const config = loadConfig(tempDir);
+        expect(config.implementation.maxRetries).toBe(3); // Default
+      });
+
+      it('should cap env var at 10', () => {
+        process.env.AI_SDLC_IMPLEMENTATION_MAX_RETRIES = '15';
+        const config = loadConfig(tempDir);
+        expect(config.implementation.maxRetries).toBeLessThanOrEqual(10);
+      });
+
+      it('should reject non-numeric env var', () => {
+        process.env.AI_SDLC_IMPLEMENTATION_MAX_RETRIES = 'invalid';
+        const config = loadConfig(tempDir);
+        expect(config.implementation.maxRetries).toBe(3); // Default
+      });
+
+      it('should allow zero via env var', () => {
+        process.env.AI_SDLC_IMPLEMENTATION_MAX_RETRIES = '0';
+        const config = loadConfig(tempDir);
+        expect(config.implementation.maxRetries).toBe(0);
+      });
+
+      it('should validate and cap config file maxRetries at upper bound', () => {
+        // Write config file with maxRetries exceeding upper bound
+        const configFile = path.join(tempDir, '.ai-sdlc.json');
+        fs.writeFileSync(
+          configFile,
+          JSON.stringify({
+            implementation: {
+              maxRetries: 15,
+              maxRetriesUpperBound: 10,
+            },
+          })
+        );
+
+        const config = loadConfig(tempDir);
+
+        // Verify validateImplementationConfig was applied and capped at upper bound
+        expect(config.implementation.maxRetries).toBe(10);
+      });
     });
   });
 });

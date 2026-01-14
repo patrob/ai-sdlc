@@ -564,15 +564,25 @@ export function getImplementationRetryCount(story: Story): number {
 
 /**
  * Get the effective maximum implementation retries for a story (story-specific or config default)
+ * Story-specific overrides are capped at the upper bound to prevent resource exhaustion
  */
 export function getEffectiveMaxImplementationRetries(story: Story, config: Config): number {
-  return story.frontmatter.max_implementation_retries !== undefined
-    ? story.frontmatter.max_implementation_retries
-    : config.implementation.maxRetries;
+  const storyMax = story.frontmatter.max_implementation_retries;
+  const configMax = config.implementation.maxRetries;
+  const upperBound = config.implementation.maxRetriesUpperBound;
+
+  if (storyMax !== undefined) {
+    // Cap story override at upper bound
+    return Math.min(storyMax, upperBound);
+  }
+
+  return configMax;
 }
 
 /**
- * Check if a story has reached its maximum implementation retry limit
+ * Check if a story has reached its maximum implementation retry limit.
+ * maxRetries represents the number of RETRY attempts allowed after the initial attempt.
+ * So with maxRetries=1, you get 1 initial attempt + 1 retry = 2 total attempts.
  */
 export function isAtMaxImplementationRetries(story: Story, config: Config): boolean {
   const currentRetryCount = getImplementationRetryCount(story);
@@ -583,7 +593,10 @@ export function isAtMaxImplementationRetries(story: Story, config: Config): bool
     return false;
   }
 
-  return currentRetryCount >= maxRetries;
+  // Use > instead of >= because maxRetries is the number of retries allowed,
+  // not the total number of attempts. With maxRetries=1, we allow 1 retry
+  // (so 2 total attempts before being considered "at max").
+  return currentRetryCount > maxRetries;
 }
 
 /**

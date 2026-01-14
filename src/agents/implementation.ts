@@ -1,4 +1,4 @@
-import { execSync, spawn } from 'child_process';
+import { execSync, spawn, spawnSync } from 'child_process';
 import path from 'path';
 import {
   parseStory,
@@ -8,6 +8,7 @@ import {
   resetImplementationRetryCount,
   incrementImplementationRetryCount,
   isAtMaxImplementationRetries,
+  getEffectiveMaxImplementationRetries,
 } from '../core/story.js';
 import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
 import { Story, AgentResult, TDDTestCycle, TDDConfig } from '../types/index.js';
@@ -232,13 +233,18 @@ export async function commitIfAllTestsPass(
   testRunner: typeof runAllTests = runAllTests
 ): Promise<{ committed: boolean; reason?: string }> {
   try {
-    // Check for uncommitted changes
-    const status = execSync('git status --porcelain', {
+    // Security: Validate working directory before use
+    validateWorkingDir(workingDir);
+
+    // Check for uncommitted changes using spawn with shell: false
+    const statusResult = spawnSync('git', ['status', '--porcelain'], {
       cwd: workingDir,
-      encoding: 'utf-8'
+      encoding: 'utf-8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    if (!status.trim()) {
+    if (statusResult.status !== 0 || !statusResult.stdout || !(statusResult.stdout as string).trim()) {
       return { committed: false, reason: 'nothing to commit' };
     }
 
@@ -248,12 +254,26 @@ export async function commitIfAllTestsPass(
       return { committed: false, reason: 'tests failed' };
     }
 
-    // Commit changes
-    execSync('git add -A', { cwd: workingDir, stdio: 'pipe' });
-    execSync(`git commit -m ${escapeShellArg(message)}`, {
+    // Commit changes using spawn with shell: false
+    const addResult = spawnSync('git', ['add', '-A'], {
       cwd: workingDir,
-      stdio: 'pipe'
+      shell: false,
+      stdio: 'pipe',
     });
+
+    if (addResult.status !== 0) {
+      throw new Error(`git add failed: ${addResult.stderr}`);
+    }
+
+    const commitResult = spawnSync('git', ['commit', '-m', message], {
+      cwd: workingDir,
+      shell: false,
+      stdio: 'pipe',
+    });
+
+    if (commitResult.status !== 0) {
+      throw new Error(`git commit failed: ${commitResult.stderr}`);
+    }
 
     return { committed: true };
   } catch (error) {
@@ -666,6 +686,247 @@ export async function runTDDImplementation(
 }
 
 /**
+ * Options for the retry loop
+ */
+export interface RetryAttemptOptions {
+  story: Story;
+  storyPath: string;
+  workingDir: string;
+  maxRetries: number;
+  reworkContext?: string;
+  onProgress?: AgentProgressCallback;
+}
+
+/**
+ * Result from a single retry attempt
+ */
+interface AttemptHistoryEntry {
+  attempt: number;
+  testFailures: number;
+  buildFailures: number;
+  testSnippet: string;
+  buildSnippet: string;
+}
+
+/**
+ * Attempt implementation with retry logic
+ *
+ * Runs the implementation loop, retrying on test failures up to maxRetries times.
+ * Includes no-change detection to exit early if the agent makes no progress.
+ *
+ * @param options Retry attempt options
+ * @param changesMade Array to track changes (mutated in place)
+ * @returns AgentResult with success/failure status
+ */
+export async function attemptImplementationWithRetries(
+  options: RetryAttemptOptions,
+  changesMade: string[]
+): Promise<AgentResult> {
+  const { story, storyPath, workingDir, maxRetries, reworkContext, onProgress } = options;
+
+  let attemptNumber = 0;
+  let lastVerification: { passed: boolean; failures: number; testsOutput: string; buildOutput: string; timestamp: string } | null = null;
+  let lastDiffHash = ''; // Initialize to empty string, will capture after first failure
+  const attemptHistory: AttemptHistoryEntry[] = [];
+
+  while (attemptNumber <= maxRetries) {
+    attemptNumber++;
+
+    let prompt = `Implement this story based on the plan:
+
+Title: ${story.frontmatter.title}
+
+Story content:
+${story.content}`;
+
+    if (reworkContext) {
+      prompt += `
+
+---
+${reworkContext}
+---
+
+IMPORTANT: This is a refinement iteration. The previous implementation did not pass review.
+You MUST fix all the issues listed above. Pay special attention to blocker and critical
+severity issues - these must be resolved. Review the specific feedback and make targeted fixes.`;
+    }
+
+    // Add retry context if this is a retry attempt
+    if (attemptNumber > 1 && lastVerification) {
+      prompt += '\n\n' + buildRetryPrompt(
+        lastVerification.testsOutput,
+        lastVerification.buildOutput,
+        attemptNumber,
+        maxRetries
+      );
+    } else {
+      prompt += `
+
+Execute the implementation plan. For each task:
+1. Read relevant existing files
+2. Make necessary code changes
+3. Write tests if applicable
+4. Verify the changes work
+
+Use the available tools to read files, write code, and run commands as needed.`;
+    }
+
+    // Send progress callback for all attempts (not just retries)
+    if (onProgress) {
+      if (attemptNumber === 1) {
+        onProgress({ type: 'assistant_message', content: `Starting implementation attempt 1/${maxRetries + 1}...` });
+      } else {
+        onProgress({ type: 'assistant_message', content: `Analyzing test failures, retrying implementation (${attemptNumber - 1}/${maxRetries})...` });
+      }
+    }
+
+    const implementationResult = await runAgentQuery({
+      prompt,
+      systemPrompt: IMPLEMENTATION_SYSTEM_PROMPT,
+      workingDirectory: workingDir,
+      onProgress,
+    });
+
+    // Add implementation notes to the story
+    const notePrefix = attemptNumber > 1 ? `Implementation Notes - Retry ${attemptNumber - 1}` : 'Implementation Notes';
+    const implementationNotes = `
+### ${notePrefix} (${new Date().toISOString().split('T')[0]})
+
+${implementationResult}
+`;
+
+    // Append to story content
+    const updatedStory = parseStory(storyPath);
+    updatedStory.content += '\n\n' + implementationNotes;
+    writeStory(updatedStory);
+    changesMade.push(attemptNumber > 1 ? `Added retry ${attemptNumber - 1} notes` : 'Added implementation notes');
+
+    changesMade.push('Running verification before marking complete...');
+    const verification = await verifyImplementation(updatedStory, workingDir);
+
+    updateStoryField(updatedStory, 'last_test_run', {
+      passed: verification.passed,
+      failures: verification.failures,
+      timestamp: verification.timestamp,
+    });
+
+    if (verification.passed) {
+      // Success! Reset retry count and return success
+      resetImplementationRetryCount(updatedStory);
+      changesMade.push('Verification passed - implementation successful');
+
+      // Send success progress callback
+      if (onProgress) {
+        onProgress({ type: 'assistant_message', content: `Implementation succeeded on attempt ${attemptNumber}` });
+      }
+
+      return {
+        success: true,
+        story: parseStory(storyPath),
+        changesMade,
+      };
+    }
+
+    // Verification failed - check for retry conditions
+    lastVerification = verification;
+
+    // Capture current diff hash for no-change detection
+    const currentDiffHash = captureCurrentDiffHash(workingDir);
+
+    // Track retry attempt
+    incrementImplementationRetryCount(updatedStory);
+
+    // Extract first 100 chars of test and build output for history
+    const testSnippet = verification.testsOutput.substring(0, 100).replace(/\n/g, ' ');
+    const buildSnippet = verification.buildOutput.substring(0, 100).replace(/\n/g, ' ');
+
+    // Determine if there are build failures (build output contains error indicators)
+    const hasBuildErrors = verification.buildOutput &&
+      (verification.buildOutput.includes('error') ||
+       verification.buildOutput.includes('Error') ||
+       verification.buildOutput.includes('failed'));
+    const buildFailures = hasBuildErrors ? 1 : 0;
+
+    // Record this attempt in history with both test and build failures
+    attemptHistory.push({
+      attempt: attemptNumber,
+      testFailures: verification.failures,
+      buildFailures,
+      testSnippet,
+      buildSnippet,
+    });
+
+    // Add structured retry entry to changes array
+    if (attemptNumber > 1) {
+      changesMade.push(`Implementation retry ${attemptNumber - 1}/${maxRetries}: ${verification.failures} test(s) failing`);
+    } else {
+      changesMade.push(`Attempt ${attemptNumber}: ${verification.failures} test(s) failing`);
+    }
+
+    // Check for no-change scenario (agent made no progress)
+    // Only check after first failure (attemptNumber > 1)
+    // Check this BEFORE max retries to fail fast on identical changes
+    if (attemptNumber > 1 && lastDiffHash && lastDiffHash === currentDiffHash) {
+      return {
+        success: false,
+        story: parseStory(storyPath),
+        changesMade,
+        error: `Implementation blocked: No progress detected on retry attempt ${attemptNumber - 1}. Agent made identical changes. Stopping retries early.\n\nLast test output:\n${truncateTestOutput(verification.testsOutput, 1000)}`,
+      };
+    }
+
+    // Check if we've reached max retries
+    if (attemptHistory.length > maxRetries) {
+      const attemptSummary = attemptHistory
+        .map((a) => {
+          const parts = [];
+          if (a.testFailures > 0) {
+            parts.push(`${a.testFailures} test(s)`);
+          }
+          if (a.buildFailures > 0) {
+            parts.push(`${a.buildFailures} build error(s)`);
+          }
+          const errors = parts.length > 0 ? parts.join(', ') : 'verification failed';
+
+          const snippets = [];
+          if (a.testSnippet && a.testSnippet.trim()) {
+            snippets.push(`[test: ${a.testSnippet}]`);
+          }
+          if (a.buildSnippet && a.buildSnippet.trim()) {
+            snippets.push(`[build: ${a.buildSnippet}]`);
+          }
+          const snippetText = snippets.length > 0 ? ` - ${snippets.join(' ')}` : '';
+
+          return `  Attempt ${a.attempt}: ${errors}${snippetText}`;
+        })
+        .join('\n');
+
+      return {
+        success: false,
+        story: parseStory(storyPath),
+        changesMade,
+        error: `Implementation blocked after ${attemptNumber} attempts:\n${attemptSummary}\n\nLast test output:\n${truncateTestOutput(verification.testsOutput, 5000)}`,
+      };
+    }
+
+    lastDiffHash = currentDiffHash;
+
+    // Continue to next retry attempt - send progress update
+    if (onProgress) {
+      onProgress({ type: 'assistant_message', content: `Retry ${attemptNumber} failed: ${verification.failures} test(s) failing, attempting retry ${attemptNumber + 1}...` });
+    }
+  }
+
+  // If we exit the loop without returning, all retries exhausted (shouldn't normally reach here)
+  return {
+    success: false,
+    story: parseStory(storyPath),
+    changesMade,
+    error: 'Implementation failed: All retry attempts exhausted without resolution.',
+  };
+}
+
+/**
  * Implementation Agent
  *
  * Executes the implementation plan, creating code changes and tests.
@@ -681,29 +942,54 @@ export async function runImplementationAgent(
   const workingDir = path.dirname(sdlcRoot);
 
   try {
+    // Security: Validate working directory before git operations
+    validateWorkingDir(workingDir);
+
     // Create a feature branch for this story
     const branchName = `ai-sdlc/${story.slug}`;
 
+    // Security: Validate branch name before use
+    validateBranchName(branchName);
+
     try {
-      // Check if we're in a git repo
-      execSync('git rev-parse --git-dir', { cwd: workingDir, stdio: 'pipe' });
+      // Check if we're in a git repo using spawn with shell: false
+      const revParseResult = spawnSync('git', ['rev-parse', '--git-dir'], {
+        cwd: workingDir,
+        shell: false,
+        stdio: 'pipe',
+      });
 
-      // Create and checkout branch (or checkout if exists)
-      try {
-        execSync(`git checkout -b ${branchName}`, { cwd: workingDir, stdio: 'pipe' });
-        changesMade.push(`Created branch: ${branchName}`);
-      } catch {
-        // Branch might already exist
-        try {
-          execSync(`git checkout ${branchName}`, { cwd: workingDir, stdio: 'pipe' });
-          changesMade.push(`Checked out existing branch: ${branchName}`);
-        } catch {
-          // Not a git repo or other error, continue without branching
+      if (revParseResult.status !== 0) {
+        changesMade.push('No git repo detected, skipping branch creation');
+      } else {
+        // Create and checkout branch (or checkout if exists) using spawn with shell: false
+        const checkoutNewResult = spawnSync('git', ['checkout', '-b', branchName], {
+          cwd: workingDir,
+          shell: false,
+          stdio: 'pipe',
+        });
+
+        if (checkoutNewResult.status === 0) {
+          changesMade.push(`Created branch: ${branchName}`);
+        } else {
+          // Branch might already exist, try to checkout
+          const checkoutResult = spawnSync('git', ['checkout', branchName], {
+            cwd: workingDir,
+            shell: false,
+            stdio: 'pipe',
+          });
+
+          if (checkoutResult.status === 0) {
+            changesMade.push(`Checked out existing branch: ${branchName}`);
+          } else {
+            // Not a git repo or other error, continue without branching
+            changesMade.push('Failed to create or checkout branch, continuing without branching');
+          }
         }
-      }
 
-      // Update story with branch info
-      updateStoryField(story, 'branch', branchName);
+        // Update story with branch info
+        updateStoryField(story, 'branch', branchName);
+      }
     } catch {
       // Not a git repo, continue without branching
       changesMade.push('No git repo detected, skipping branch creation');
@@ -777,138 +1063,25 @@ export async function runImplementationAgent(
     }
 
     // Standard implementation (non-TDD mode) with retry logic
-    const maxRetries = config.implementation.maxRetries;
-    let attemptNumber = 0;
-    let lastVerification: any = null;
-    let lastDiffHash = '';
-    const attemptHistory: Array<{ attempt: number; error: string }> = [];
+    // Use per-story override if set, otherwise config default (capped at upper bound)
+    const maxRetries = getEffectiveMaxImplementationRetries(story, config);
 
-    while (attemptNumber <= maxRetries) {
-      attemptNumber++;
-
-      let prompt = `Implement this story based on the plan:
-
-Title: ${story.frontmatter.title}
-
-Story content:
-${story.content}`;
-
-      if (options.reworkContext) {
-        prompt += `
-
----
-${options.reworkContext}
----
-
-IMPORTANT: This is a refinement iteration. The previous implementation did not pass review.
-You MUST fix all the issues listed above. Pay special attention to blocker and critical
-severity issues - these must be resolved. Review the specific feedback and make targeted fixes.`;
-      }
-
-      // Add retry context if this is a retry attempt
-      if (attemptNumber > 1 && lastVerification) {
-        prompt += '\n\n' + buildRetryPrompt(
-          lastVerification.testsOutput,
-          lastVerification.buildOutput,
-          attemptNumber,
-          maxRetries
-        );
-      } else {
-        prompt += `
-
-Execute the implementation plan. For each task:
-1. Read relevant existing files
-2. Make necessary code changes
-3. Write tests if applicable
-4. Verify the changes work
-
-Use the available tools to read files, write code, and run commands as needed.`;
-      }
-
-      if (options.onProgress && attemptNumber > 1) {
-        options.onProgress({ type: 'assistant_message', content: `Implementation retry ${attemptNumber - 1}/${maxRetries}...` });
-      }
-
-      const implementationResult = await runAgentQuery({
-        prompt,
-        systemPrompt: IMPLEMENTATION_SYSTEM_PROMPT,
-        workingDirectory: workingDir,
+    // Use extracted retry function for better testability
+    const retryResult = await attemptImplementationWithRetries(
+      {
+        story,
+        storyPath: currentStoryPath,
+        workingDir,
+        maxRetries,
+        reworkContext: options.reworkContext,
         onProgress: options.onProgress,
-      });
+      },
+      changesMade
+    );
 
-      // Add implementation notes to the story
-      const notePrefix = attemptNumber > 1 ? `Implementation Notes - Retry ${attemptNumber - 1}` : 'Implementation Notes';
-      const implementationNotes = `
-### ${notePrefix} (${new Date().toISOString().split('T')[0]})
-
-${implementationResult}
-`;
-
-      // Append to story content
-      const updatedStory = parseStory(currentStoryPath);
-      updatedStory.content += '\n\n' + implementationNotes;
-      writeStory(updatedStory);
-      changesMade.push(attemptNumber > 1 ? `Added retry ${attemptNumber - 1} notes` : 'Added implementation notes');
-
-      changesMade.push('Running verification before marking complete...');
-      const verification = await verifyImplementation(updatedStory, workingDir);
-
-      updateStoryField(updatedStory, 'last_test_run', {
-        passed: verification.passed,
-        failures: verification.failures,
-        timestamp: verification.timestamp,
-      });
-
-      if (verification.passed) {
-        // Success! Reset retry count and break out of loop
-        resetImplementationRetryCount(updatedStory);
-        changesMade.push('Verification passed - implementation successful');
-        break;
-      }
-
-      // Verification failed - check for retry conditions
-      lastVerification = verification;
-
-      // Capture current diff hash for no-change detection
-      const currentDiffHash = captureCurrentDiffHash(workingDir);
-
-      // Track retry attempt
-      incrementImplementationRetryCount(updatedStory);
-
-      // Record this attempt in history
-      attemptHistory.push({
-        attempt: attemptNumber,
-        error: `${verification.failures} test(s) failing`,
-      });
-      changesMade.push(`Attempt ${attemptNumber}: ${verification.failures} test(s) failing`);
-
-      // Check if we've reached max retries
-      if (isAtMaxImplementationRetries(updatedStory, config)) {
-        const attemptSummary = attemptHistory.map(a => `  Attempt ${a.attempt}: ${a.error}`).join('\n');
-        return {
-          success: false,
-          story: parseStory(currentStoryPath),
-          changesMade,
-          error: `Implementation blocked after ${attemptNumber} attempts:\n${attemptSummary}\n\nLast test output:\n${truncateTestOutput(verification.testsOutput, 1000)}`,
-        };
-      }
-
-      // Check for no-change scenario (agent made no progress)
-      if (attemptNumber > 1 && lastDiffHash === currentDiffHash) {
-        return {
-          success: false,
-          story: parseStory(currentStoryPath),
-          changesMade,
-          error: `Implementation blocked: No progress detected between retry attempts. Agent made identical changes.\n\nLast test output:\n${truncateTestOutput(verification.testsOutput, 1000)}`,
-        };
-      }
-
-      lastDiffHash = currentDiffHash;
-
-      // Continue to next retry attempt
-      if (options.onProgress) {
-        options.onProgress({ type: 'assistant_message', content: `Implementation failed, retrying (${attemptNumber}/${maxRetries + 1})...` });
-      }
+    // If retry loop failed, return the failure result
+    if (!retryResult.success) {
+      return retryResult;
     }
 
     // If we get here, verification passed
@@ -950,16 +1123,61 @@ ${implementationResult}
 }
 
 /**
+ * Validate working directory path for safety
+ * @param workingDir The working directory path to validate
+ * @throws Error if path contains shell metacharacters or traversal attempts
+ */
+function validateWorkingDir(workingDir: string): void {
+  // Check for shell metacharacters that could be used in command injection
+  if (/[;&|`$()<>]/.test(workingDir)) {
+    throw new Error('Invalid working directory: contains shell metacharacters');
+  }
+
+  // Prevent path traversal attempts
+  const normalizedPath = path.normalize(workingDir);
+  if (normalizedPath.includes('..')) {
+    throw new Error('Invalid working directory: path traversal attempt detected');
+  }
+}
+
+/**
+ * Validate branch name for safety
+ * @param branchName The branch name to validate
+ * @throws Error if branch name contains invalid characters
+ */
+function validateBranchName(branchName: string): void {
+  // Git branch names must match safe pattern (alphanumeric, dash, slash, underscore)
+  if (!/^[a-zA-Z0-9_/-]+$/.test(branchName)) {
+    throw new Error('Invalid branch name: contains unsafe characters');
+  }
+}
+
+/**
  * Capture the current git diff hash for no-change detection
  * @param workingDir The working directory
  * @returns SHA256 hash of git diff HEAD
  */
 export function captureCurrentDiffHash(workingDir: string): string {
   try {
-    const diff = execSync('git diff HEAD', { cwd: workingDir, encoding: 'utf-8', stdio: 'pipe' });
-    return createHash('sha256').update(diff).digest('hex');
+    // Security: Validate working directory before use
+    validateWorkingDir(workingDir);
+
+    // Use spawnSync with shell: false to prevent command injection
+    const result = spawnSync('git', ['diff', 'HEAD'], {
+      cwd: workingDir,
+      shell: false,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (result.status === 0 && result.stdout) {
+      return createHash('sha256').update(result.stdout as string).digest('hex');
+    }
+
+    // Git command failed, return empty hash
+    return '';
   } catch (error) {
-    // If git command fails, return empty hash
+    // If validation fails or git command fails, return empty hash
     return '';
   }
 }
@@ -975,18 +1193,48 @@ export function hasChangesOccurred(previousHash: string, currentHash: string): b
 }
 
 /**
+ * Sanitize test output to remove ANSI escape sequences and potential injection patterns
+ * @param output Test output string
+ * @returns Sanitized output
+ */
+export function sanitizeTestOutput(output: string): string {
+  if (!output) return '';
+
+  let sanitized = output
+    // Remove ANSI CSI sequences (SGR parameters - colors, styles)
+    .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
+    // Remove ANSI DCS sequences (Device Control String)
+    .replace(/\x1BP[^\x1B]*\x1B\\/g, '')
+    // Remove ANSI PM sequences (Privacy Message)
+    .replace(/\x1B\^[^\x1B]*\x1B\\/g, '')
+    // Remove ANSI OSC sequences (Operating System Command) - terminated by BEL or ST
+    .replace(/\x1B\][^\x07\x1B]*(\x07|\x1B\\)/g, '')
+    // Remove any remaining standalone escape characters
+    .replace(/\x1B/g, '')
+    // Remove other control characters except newline, tab, carriage return
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+
+  return sanitized;
+}
+
+/**
  * Truncate test output to prevent overwhelming the LLM
  * @param output Test output string
  * @param maxLength Maximum length (default 5000 chars)
- * @returns Truncated output with notice if truncated
+ * @returns Truncated and sanitized output with notice if truncated
  */
 export function truncateTestOutput(output: string, maxLength: number = 5000): string {
-  if (!output || output.length <= maxLength) {
-    return output;
+  if (!output) return '';
+
+  // First sanitize to remove ANSI and control characters
+  const sanitized = sanitizeTestOutput(output);
+
+  if (sanitized.length <= maxLength) {
+    return sanitized;
   }
 
-  const truncated = output.substring(0, maxLength);
-  return truncated + `\n\n[Output truncated. Showing first ${maxLength} characters of ${output.length} total.]`;
+  const truncated = sanitized.substring(0, maxLength);
+  return truncated + `\n\n[Output truncated. Showing first ${maxLength} characters of ${sanitized.length} total.]`;
 }
 
 /**

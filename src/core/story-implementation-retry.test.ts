@@ -103,7 +103,7 @@ describe('story implementation retry functions', () => {
       expect(getEffectiveMaxImplementationRetries(story, mockConfig)).toBe(0);
     });
 
-    it('should respect maxRetriesUpperBound cap', () => {
+    it('should cap story override at maxRetriesUpperBound', () => {
       const story = {
         ...mockStory,
         frontmatter: {
@@ -111,8 +111,8 @@ describe('story implementation retry functions', () => {
           max_implementation_retries: 15, // Exceeds upper bound
         },
       };
-      // The function should return the story value, capping is done in config validation
-      expect(getEffectiveMaxImplementationRetries(story, mockConfig)).toBe(15);
+      // The function should cap at upper bound (10)
+      expect(getEffectiveMaxImplementationRetries(story, mockConfig)).toBe(10);
     });
   });
 
@@ -132,12 +132,26 @@ describe('story implementation retry functions', () => {
       expect(isAtMaxImplementationRetries(story, mockConfig)).toBe(false);
     });
 
-    it('should return true when implementation_retry_count equals max', () => {
+    it('should return false when implementation_retry_count equals max (one more retry allowed)', () => {
+      // With maxRetries=3, count=3 means you've failed 3 times but can still retry once more
+      // (maxRetries is the number of retries allowed, so 3 retries = 4 total attempts)
       const story = {
         ...mockStory,
         frontmatter: {
           ...mockStory.frontmatter,
           implementation_retry_count: 3,
+        },
+      };
+      expect(isAtMaxImplementationRetries(story, mockConfig)).toBe(false);
+    });
+
+    it('should return true when implementation_retry_count exceeds max by 1', () => {
+      // With maxRetries=3, count=4 means you've exhausted all retries (1 initial + 3 retries)
+      const story = {
+        ...mockStory,
+        frontmatter: {
+          ...mockStory.frontmatter,
+          implementation_retry_count: 4,
         },
       };
       expect(isAtMaxImplementationRetries(story, mockConfig)).toBe(true);
@@ -184,7 +198,9 @@ describe('story implementation retry functions', () => {
       expect(isAtMaxImplementationRetries(story, configWithInfinityRetries)).toBe(false);
     });
 
-    it('should handle max of 0 correctly', () => {
+    it('should handle max of 0 correctly - count=0 returns false', () => {
+      // With maxRetries=0, you get 1 initial attempt but no retries
+      // count=0 means you haven't failed yet, so not at max
       const configWithZeroRetries: Config = {
         ...mockConfig,
         implementation: {
@@ -197,6 +213,25 @@ describe('story implementation retry functions', () => {
         frontmatter: {
           ...mockStory.frontmatter,
           implementation_retry_count: 0,
+        },
+      };
+      expect(isAtMaxImplementationRetries(story, configWithZeroRetries)).toBe(false);
+    });
+
+    it('should handle max of 0 correctly - count=1 returns true', () => {
+      // With maxRetries=0, after first failure (count=1), you're at max
+      const configWithZeroRetries: Config = {
+        ...mockConfig,
+        implementation: {
+          maxRetries: 0,
+          maxRetriesUpperBound: 10,
+        },
+      };
+      const story = {
+        ...mockStory,
+        frontmatter: {
+          ...mockStory.frontmatter,
+          implementation_retry_count: 1,
         },
       };
       expect(isAtMaxImplementationRetries(story, configWithZeroRetries)).toBe(true);

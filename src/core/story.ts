@@ -556,6 +556,58 @@ export function snapshotMaxRetries(story: Story, config: Config): Story {
 }
 
 /**
+ * Get the current implementation retry count for a story
+ */
+export function getImplementationRetryCount(story: Story): number {
+  return story.frontmatter.implementation_retry_count || 0;
+}
+
+/**
+ * Get the effective maximum implementation retries for a story (story-specific or config default)
+ */
+export function getEffectiveMaxImplementationRetries(story: Story, config: Config): number {
+  return story.frontmatter.max_implementation_retries !== undefined
+    ? story.frontmatter.max_implementation_retries
+    : config.implementation.maxRetries;
+}
+
+/**
+ * Check if a story has reached its maximum implementation retry limit
+ */
+export function isAtMaxImplementationRetries(story: Story, config: Config): boolean {
+  const currentRetryCount = getImplementationRetryCount(story);
+  const maxRetries = getEffectiveMaxImplementationRetries(story, config);
+
+  // Infinity means no limit
+  if (!Number.isFinite(maxRetries)) {
+    return false;
+  }
+
+  return currentRetryCount >= maxRetries;
+}
+
+/**
+ * Reset implementation retry count to 0
+ */
+export function resetImplementationRetryCount(story: Story): Story {
+  story.frontmatter.implementation_retry_count = 0;
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+  writeStory(story);
+  return story;
+}
+
+/**
+ * Increment the implementation retry count for a story
+ */
+export function incrementImplementationRetryCount(story: Story): Story {
+  const currentCount = story.frontmatter.implementation_retry_count || 0;
+  story.frontmatter.implementation_retry_count = currentCount + 1;
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+  writeStory(story);
+  return story;
+}
+
+/**
  * Sanitize user-controlled text for safe display and storage.
  * Removes ANSI escape sequences, control characters, and potential injection vectors.
  * Truncates to 200 characters maximum.

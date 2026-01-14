@@ -1,11 +1,20 @@
 import { execSync, spawn } from 'child_process';
 import path from 'path';
-import { parseStory, writeStory, updateStoryStatus, updateStoryField } from '../core/story.js';
+import {
+  parseStory,
+  writeStory,
+  updateStoryStatus,
+  updateStoryField,
+  resetImplementationRetryCount,
+  incrementImplementationRetryCount,
+  isAtMaxImplementationRetries,
+} from '../core/story.js';
 import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
 import { Story, AgentResult, TDDTestCycle, TDDConfig } from '../types/index.js';
 import { AgentOptions } from './research.js';
 import { loadConfig, DEFAULT_TDD_CONFIG } from '../core/config.js';
 import { verifyImplementation } from './verification.js';
+import { createHash } from 'crypto';
 
 // Re-export for convenience
 export type { AgentProgressCallback };
@@ -723,7 +732,8 @@ export async function runImplementationAgent(
       changesMade.push(...tddResult.changesMade);
 
       if (tddResult.success) {
-        changesMade.push('Running verification before marking complete...');
+        // TDD completed all cycles - now verify with retry support
+        changesMade.push('Running final verification...');
         const verification = await verifyImplementation(tddResult.story, workingDir);
 
         updateStoryField(tddResult.story, 'last_test_run', {
@@ -733,13 +743,20 @@ export async function runImplementationAgent(
         });
 
         if (!verification.passed) {
+          // TDD final verification failed - this is unexpected since TDD should ensure all tests pass
+          // Reset retry count since this is the first failure at this stage
+          resetImplementationRetryCount(tddResult.story);
+
           return {
             success: false,
             story: parseStory(currentStoryPath),
             changesMade,
-            error: `Implementation blocked: ${verification.failures} test(s) failing. Fix tests before completing.`,
+            error: `TDD implementation blocked: ${verification.failures} test(s) failing after completing all cycles.\nThis is unexpected - TDD cycles should ensure all tests pass.\n\nTest output:\n${truncateTestOutput(verification.testsOutput, 1000)}`,
           };
         }
+
+        // Success - reset retry count
+        resetImplementationRetryCount(tddResult.story);
 
         updateStoryField(tddResult.story, 'implementation_complete', true);
         changesMade.push('Marked implementation_complete: true');
@@ -759,16 +776,25 @@ export async function runImplementationAgent(
       }
     }
 
-    // Standard implementation (non-TDD mode)
-    let prompt = `Implement this story based on the plan:
+    // Standard implementation (non-TDD mode) with retry logic
+    const maxRetries = config.implementation.maxRetries;
+    let attemptNumber = 0;
+    let lastVerification: any = null;
+    let lastDiffHash = '';
+    const attemptHistory: Array<{ attempt: number; error: string }> = [];
+
+    while (attemptNumber <= maxRetries) {
+      attemptNumber++;
+
+      let prompt = `Implement this story based on the plan:
 
 Title: ${story.frontmatter.title}
 
 Story content:
 ${story.content}`;
 
-    if (options.reworkContext) {
-      prompt += `
+      if (options.reworkContext) {
+        prompt += `
 
 ---
 ${options.reworkContext}
@@ -777,9 +803,18 @@ ${options.reworkContext}
 IMPORTANT: This is a refinement iteration. The previous implementation did not pass review.
 You MUST fix all the issues listed above. Pay special attention to blocker and critical
 severity issues - these must be resolved. Review the specific feedback and make targeted fixes.`;
-    }
+      }
 
-    prompt += `
+      // Add retry context if this is a retry attempt
+      if (attemptNumber > 1 && lastVerification) {
+        prompt += '\n\n' + buildRetryPrompt(
+          lastVerification.testsOutput,
+          lastVerification.buildOutput,
+          attemptNumber,
+          maxRetries
+        );
+      } else {
+        prompt += `
 
 Execute the implementation plan. For each task:
 1. Read relevant existing files
@@ -788,44 +823,96 @@ Execute the implementation plan. For each task:
 4. Verify the changes work
 
 Use the available tools to read files, write code, and run commands as needed.`;
+      }
 
-    const implementationResult = await runAgentQuery({
-      prompt,
-      systemPrompt: IMPLEMENTATION_SYSTEM_PROMPT,
-      workingDirectory: workingDir,
-      onProgress: options.onProgress,
-    });
+      if (options.onProgress && attemptNumber > 1) {
+        options.onProgress({ type: 'assistant_message', content: `Implementation retry ${attemptNumber - 1}/${maxRetries}...` });
+      }
 
-    // Add implementation notes to the story
-    const implementationNotes = `
-### Implementation Notes (${new Date().toISOString().split('T')[0]})
+      const implementationResult = await runAgentQuery({
+        prompt,
+        systemPrompt: IMPLEMENTATION_SYSTEM_PROMPT,
+        workingDirectory: workingDir,
+        onProgress: options.onProgress,
+      });
+
+      // Add implementation notes to the story
+      const notePrefix = attemptNumber > 1 ? `Implementation Notes - Retry ${attemptNumber - 1}` : 'Implementation Notes';
+      const implementationNotes = `
+### ${notePrefix} (${new Date().toISOString().split('T')[0]})
 
 ${implementationResult}
 `;
 
-    // Append to story content
-    const updatedStory = parseStory(currentStoryPath);
-    updatedStory.content += '\n\n' + implementationNotes;
-    writeStory(updatedStory);
-    changesMade.push('Added implementation notes');
+      // Append to story content
+      const updatedStory = parseStory(currentStoryPath);
+      updatedStory.content += '\n\n' + implementationNotes;
+      writeStory(updatedStory);
+      changesMade.push(attemptNumber > 1 ? `Added retry ${attemptNumber - 1} notes` : 'Added implementation notes');
 
-    changesMade.push('Running verification before marking complete...');
-    const verification = await verifyImplementation(updatedStory, workingDir);
+      changesMade.push('Running verification before marking complete...');
+      const verification = await verifyImplementation(updatedStory, workingDir);
 
-    updateStoryField(updatedStory, 'last_test_run', {
-      passed: verification.passed,
-      failures: verification.failures,
-      timestamp: verification.timestamp,
-    });
+      updateStoryField(updatedStory, 'last_test_run', {
+        passed: verification.passed,
+        failures: verification.failures,
+        timestamp: verification.timestamp,
+      });
 
-    if (!verification.passed) {
-      return {
-        success: false,
-        story: parseStory(currentStoryPath),
-        changesMade,
-        error: `Implementation blocked: ${verification.failures} test(s) failing. Fix tests before completing.`,
-      };
+      if (verification.passed) {
+        // Success! Reset retry count and break out of loop
+        resetImplementationRetryCount(updatedStory);
+        changesMade.push('Verification passed - implementation successful');
+        break;
+      }
+
+      // Verification failed - check for retry conditions
+      lastVerification = verification;
+
+      // Capture current diff hash for no-change detection
+      const currentDiffHash = captureCurrentDiffHash(workingDir);
+
+      // Track retry attempt
+      incrementImplementationRetryCount(updatedStory);
+
+      // Record this attempt in history
+      attemptHistory.push({
+        attempt: attemptNumber,
+        error: `${verification.failures} test(s) failing`,
+      });
+      changesMade.push(`Attempt ${attemptNumber}: ${verification.failures} test(s) failing`);
+
+      // Check if we've reached max retries
+      if (isAtMaxImplementationRetries(updatedStory, config)) {
+        const attemptSummary = attemptHistory.map(a => `  Attempt ${a.attempt}: ${a.error}`).join('\n');
+        return {
+          success: false,
+          story: parseStory(currentStoryPath),
+          changesMade,
+          error: `Implementation blocked after ${attemptNumber} attempts:\n${attemptSummary}\n\nLast test output:\n${truncateTestOutput(verification.testsOutput, 1000)}`,
+        };
+      }
+
+      // Check for no-change scenario (agent made no progress)
+      if (attemptNumber > 1 && lastDiffHash === currentDiffHash) {
+        return {
+          success: false,
+          story: parseStory(currentStoryPath),
+          changesMade,
+          error: `Implementation blocked: No progress detected between retry attempts. Agent made identical changes.\n\nLast test output:\n${truncateTestOutput(verification.testsOutput, 1000)}`,
+        };
+      }
+
+      lastDiffHash = currentDiffHash;
+
+      // Continue to next retry attempt
+      if (options.onProgress) {
+        options.onProgress({ type: 'assistant_message', content: `Implementation failed, retrying (${attemptNumber}/${maxRetries + 1})...` });
+      }
     }
+
+    // If we get here, verification passed
+    const updatedStory = parseStory(currentStoryPath);
 
     // Commit changes after successful standard implementation
     try {
@@ -860,4 +947,96 @@ ${implementationResult}
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+/**
+ * Capture the current git diff hash for no-change detection
+ * @param workingDir The working directory
+ * @returns SHA256 hash of git diff HEAD
+ */
+export function captureCurrentDiffHash(workingDir: string): string {
+  try {
+    const diff = execSync('git diff HEAD', { cwd: workingDir, encoding: 'utf-8', stdio: 'pipe' });
+    return createHash('sha256').update(diff).digest('hex');
+  } catch (error) {
+    // If git command fails, return empty hash
+    return '';
+  }
+}
+
+/**
+ * Check if changes have occurred since last diff hash
+ * @param previousHash Previous diff hash
+ * @param currentHash Current diff hash
+ * @returns True if changes occurred (hashes are different)
+ */
+export function hasChangesOccurred(previousHash: string, currentHash: string): boolean {
+  return previousHash !== currentHash;
+}
+
+/**
+ * Truncate test output to prevent overwhelming the LLM
+ * @param output Test output string
+ * @param maxLength Maximum length (default 5000 chars)
+ * @returns Truncated output with notice if truncated
+ */
+export function truncateTestOutput(output: string, maxLength: number = 5000): string {
+  if (!output || output.length <= maxLength) {
+    return output;
+  }
+
+  const truncated = output.substring(0, maxLength);
+  return truncated + `\n\n[Output truncated. Showing first ${maxLength} characters of ${output.length} total.]`;
+}
+
+/**
+ * Build retry prompt for implementation agent
+ * @param testOutput Test failure output
+ * @param attemptNumber Current attempt number (1-indexed)
+ * @param maxRetries Maximum number of retries
+ * @returns Prompt string for retry attempt
+ */
+export function buildRetryPrompt(
+  testOutput: string,
+  buildOutput: string,
+  attemptNumber: number,
+  maxRetries: number
+): string {
+  const truncatedTestOutput = truncateTestOutput(testOutput);
+  const truncatedBuildOutput = truncateTestOutput(buildOutput);
+
+  let prompt = `CRITICAL: Tests are failing. You attempted implementation but verification failed.
+
+This is retry attempt ${attemptNumber} of ${maxRetries}. Previous attempts failed with similar errors.
+
+`;
+
+  if (buildOutput && buildOutput.trim().length > 0) {
+    prompt += `Build Output:
+\`\`\`
+${truncatedBuildOutput}
+\`\`\`
+
+`;
+  }
+
+  if (testOutput && testOutput.trim().length > 0) {
+    prompt += `Test Output:
+\`\`\`
+${truncatedTestOutput}
+\`\`\`
+
+`;
+  }
+
+  prompt += `Your task:
+1. ANALYZE the test/build output above - what is actually failing?
+2. Compare EXPECTED vs ACTUAL results in the errors
+3. Identify the root cause in your implementation code
+4. Fix ONLY the production code (do NOT modify tests unless they're clearly wrong)
+5. Re-run verification
+
+Focus on fixing the specific failures shown above.`;
+
+  return prompt;
 }

@@ -103,6 +103,9 @@ export interface StoryFrontmatter {
   last_restart_reason?: string;
   last_restart_timestamp?: string;
   review_history?: ReviewAttempt[];
+  // Implementation retry tracking
+  implementation_retry_count?: number;
+  max_implementation_retries?: number;
   // Blocked tracking
   blocked_reason?: string;
   blocked_at?: string;
@@ -235,6 +238,16 @@ export interface ReviewConfig {
 }
 
 /**
+ * Implementation retry configuration
+ */
+export interface ImplementationConfig {
+  /** Maximum retry attempts when tests fail. @default 3 */
+  maxRetries: number;
+  /** Hard upper bound for maxRetries. @default 10 */
+  maxRetriesUpperBound: number;
+}
+
+/**
  * Timeout configuration for various operations
  */
 export interface TimeoutConfig {
@@ -271,6 +284,7 @@ export interface Config {
   stageGates: StageGateConfig;
   refinement: RefinementConfig;
   reviewConfig: ReviewConfig;
+  implementation: ImplementationConfig;
   defaultLabels: string[];
   theme: ThemePreference;
   /** Command to run tests (e.g., 'npm test'). If set, runs before review. */

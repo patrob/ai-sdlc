@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, TimeoutConfig, DaemonConfig, TDDConfig } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig } from '../types/index.js';
 
 const CONFIG_FILENAME = '.ai-sdlc.json';
 
@@ -37,6 +37,14 @@ export const DEFAULT_TDD_CONFIG: TDDConfig = {
   requirePassingTestsForComplete: true,
 };
 
+/**
+ * Default implementation configuration
+ */
+export const DEFAULT_IMPLEMENTATION_CONFIG: ImplementationConfig = {
+  maxRetries: 3,
+  maxRetriesUpperBound: 10,
+};
+
 export const DEFAULT_CONFIG: Config = {
   sdlcFolder: '.ai-sdlc',
   stageGates: {
@@ -57,6 +65,7 @@ export const DEFAULT_CONFIG: Config = {
     autoCompleteOnApproval: true,
     autoRestartOnRejection: true,
   },
+  implementation: { ...DEFAULT_IMPLEMENTATION_CONFIG },
   defaultLabels: [],
   theme: 'auto',
   // Test and build commands - auto-detected from package.json if present
@@ -283,6 +292,10 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
           ...DEFAULT_CONFIG.reviewConfig,
           ...userConfig.reviewConfig,
         },
+        implementation: {
+          ...DEFAULT_IMPLEMENTATION_CONFIG,
+          ...userConfig.implementation,
+        },
         timeouts: {
           ...DEFAULT_TIMEOUTS,
           ...userConfig.timeouts,
@@ -323,6 +336,22 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
     }
   }
 
+  if (process.env.AI_SDLC_IMPLEMENTATION_MAX_RETRIES) {
+    const maxRetries = parseInt(process.env.AI_SDLC_IMPLEMENTATION_MAX_RETRIES, 10);
+    // Security: Limit to 0-10 range to prevent resource exhaustion
+    if (!isNaN(maxRetries) && maxRetries >= 0 && maxRetries <= 10) {
+      console.log(`Environment override: implementation.maxRetries set to ${maxRetries}`);
+      config.implementation.maxRetries = maxRetries;
+      // If user sets maxRetries via env, raise upper bound to allow it
+      config.implementation.maxRetriesUpperBound = Math.max(
+        config.implementation.maxRetriesUpperBound,
+        maxRetries
+      );
+    } else {
+      console.warn(`Invalid AI_SDLC_IMPLEMENTATION_MAX_RETRIES value "${process.env.AI_SDLC_IMPLEMENTATION_MAX_RETRIES}" (must be 0-10), ignoring`);
+    }
+  }
+
   if (process.env.AI_SDLC_AUTO_COMPLETE) {
     const value = process.env.AI_SDLC_AUTO_COMPLETE;
     if (value === 'true' || value === 'false') {
@@ -345,6 +374,9 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
 
   // Validate review config
   config.reviewConfig = validateReviewConfig(config.reviewConfig);
+
+  // Validate implementation config
+  config.implementation = validateImplementationConfig(config.implementation);
 
   return config;
 }
@@ -469,6 +501,58 @@ export function updateReviewConfig(
     ...reviewConfig,
   };
   config.reviewConfig = validateReviewConfig(config.reviewConfig);
+  saveConfig(config, workingDir);
+  return config;
+}
+
+/**
+ * Validate implementation configuration
+ */
+export function validateImplementationConfig(implementationConfig: ImplementationConfig): ImplementationConfig {
+  const validated = { ...implementationConfig };
+
+  // Handle Infinity as valid "no limit" value
+  if (validated.maxRetries === Infinity) {
+    return validated;
+  }
+
+  // Ensure maxRetries is within valid bounds
+  if (validated.maxRetries < 0) {
+    console.warn(`Warning: implementation.maxRetries cannot be negative, using 0`);
+    validated.maxRetries = 0;
+  }
+
+  // Only apply upper bound check for finite values
+  if (Number.isFinite(validated.maxRetries) && Number.isFinite(validated.maxRetriesUpperBound)) {
+    if (validated.maxRetries > validated.maxRetriesUpperBound) {
+      console.warn(
+        `Warning: implementation.maxRetries (${validated.maxRetries}) exceeds upper bound (${validated.maxRetriesUpperBound}), capping at ${validated.maxRetriesUpperBound}`
+      );
+      validated.maxRetries = validated.maxRetriesUpperBound;
+    }
+  }
+
+  // Log unusual values
+  if (validated.maxRetries === 0) {
+    console.warn('Warning: implementation.maxRetries is set to 0 - implementation retry is disabled');
+  }
+
+  return validated;
+}
+
+/**
+ * Update implementation configuration
+ */
+export function updateImplementationConfig(
+  implementationConfig: Partial<ImplementationConfig>,
+  workingDir: string = process.cwd()
+): Config {
+  const config = loadConfig(workingDir);
+  config.implementation = {
+    ...config.implementation,
+    ...implementationConfig,
+  };
+  config.implementation = validateImplementationConfig(config.implementation);
   saveConfig(config, workingDir);
   return config;
 }

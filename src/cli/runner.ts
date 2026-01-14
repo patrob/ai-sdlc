@@ -8,9 +8,10 @@ import { runRefinementAgent } from '../agents/refinement.js';
 import { runResearchAgent } from '../agents/research.js';
 import { runPlanningAgent } from '../agents/planning.js';
 import { runImplementationAgent } from '../agents/implementation.js';
-import { runReviewAgent, createPullRequest } from '../agents/review.js';
+import { runReviewAgent, createPullRequest, generateReviewSummary } from '../agents/review.js';
 import { runReworkAgent, packageReworkContext } from '../agents/rework.js';
 import { getThemedChalk } from '../core/theme.js';
+import { getTerminalWidth } from './formatting.js';
 
 export interface RunOptions {
   auto?: boolean;
@@ -283,7 +284,10 @@ export class WorkflowRunner {
         const maxRetries = story.frontmatter.max_retries ?? config.reviewConfig.maxRetries;
         const maxRetriesDisplay = Number.isFinite(maxRetries) ? maxRetries : '∞';
         console.log(c.warning(`\n🔄 Review rejected. Restarting RPIV cycle (attempt ${retryCount}/${maxRetriesDisplay})`));
-        console.log(c.dim(`Reason: ${reviewResult.feedback.substring(0, 200)}...`));
+
+        // Display executive summary
+        const summary = generateReviewSummary(reviewResult.issues, getTerminalWidth());
+        console.log(c.dim(`  Summary: ${summary}`));
 
         resetRPIVCycle(story, reviewResult.feedback);
         console.log(c.info('RPIV cycle reset. Planning phase will restart on next run.'));

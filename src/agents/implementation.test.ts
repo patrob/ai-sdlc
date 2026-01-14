@@ -10,6 +10,10 @@ import {
   checkACCoverage,
   runTDDImplementation,
   commitIfAllTestsPass,
+  captureCurrentDiffHash,
+  hasChangesOccurred,
+  truncateTestOutput,
+  buildRetryPrompt,
   type TDDPhaseResult,
 } from './implementation.js';
 import { Story, TDDTestCycle } from '../types/index.js';
@@ -797,6 +801,162 @@ Just a summary, no AC.
       await commitIfAllTestsPass('/test/dir', 'feat(story): test', 300000, mockRunAllTests);
 
       expect(executionOrder).toEqual(['status', 'add', 'commit']);
+    });
+  });
+
+  describe('Implementation Retry Utilities', () => {
+    describe('captureCurrentDiffHash', () => {
+      it('should return SHA256 hash of git diff HEAD', () => {
+        vi.mocked(execSync).mockReturnValue('diff --git a/test.ts b/test.ts\n+new line');
+        const hash = captureCurrentDiffHash('/test/dir');
+        expect(hash).toBeDefined();
+        expect(hash.length).toBe(64); // SHA256 produces 64 hex chars
+        expect(execSync).toHaveBeenCalledWith('git diff HEAD', expect.objectContaining({ cwd: '/test/dir' }));
+      });
+
+      it('should return empty string if git command fails', () => {
+        vi.mocked(execSync).mockImplementation(() => {
+          throw new Error('Not a git repository');
+        });
+        const hash = captureCurrentDiffHash('/test/dir');
+        expect(hash).toBe('');
+      });
+
+      it('should return consistent hash for same diff', () => {
+        vi.mocked(execSync).mockReturnValue('same diff content');
+        const hash1 = captureCurrentDiffHash('/test/dir');
+        const hash2 = captureCurrentDiffHash('/test/dir');
+        expect(hash1).toBe(hash2);
+      });
+
+      it('should return different hash for different diff', () => {
+        vi.mocked(execSync).mockReturnValueOnce('diff content 1');
+        const hash1 = captureCurrentDiffHash('/test/dir');
+        vi.mocked(execSync).mockReturnValueOnce('diff content 2');
+        const hash2 = captureCurrentDiffHash('/test/dir');
+        expect(hash1).not.toBe(hash2);
+      });
+    });
+
+    describe('hasChangesOccurred', () => {
+      it('should return true when hashes are different', () => {
+        expect(hasChangesOccurred('hash1', 'hash2')).toBe(true);
+      });
+
+      it('should return false when hashes are the same', () => {
+        expect(hasChangesOccurred('hash1', 'hash1')).toBe(false);
+      });
+
+      it('should return true when comparing empty to non-empty', () => {
+        expect(hasChangesOccurred('', 'hash1')).toBe(true);
+      });
+
+      it('should return false when both are empty', () => {
+        expect(hasChangesOccurred('', '')).toBe(false);
+      });
+    });
+
+    describe('truncateTestOutput', () => {
+      it('should not truncate output shorter than maxLength', () => {
+        const output = 'Short output';
+        expect(truncateTestOutput(output)).toBe(output);
+      });
+
+      it('should not truncate output equal to maxLength', () => {
+        const output = 'x'.repeat(5000);
+        expect(truncateTestOutput(output)).toBe(output);
+      });
+
+      it('should truncate output longer than maxLength', () => {
+        const output = 'x'.repeat(6000);
+        const result = truncateTestOutput(output);
+        expect(result.length).toBeLessThan(output.length);
+        expect(result).toContain('Output truncated');
+        expect(result).toContain('Showing first 5000 characters of 6000 total');
+      });
+
+      it('should handle custom maxLength', () => {
+        const output = 'x'.repeat(200);
+        const result = truncateTestOutput(output, 100);
+        expect(result.length).toBeLessThan(output.length);
+        expect(result).toContain('Showing first 100 characters of 200 total');
+      });
+
+      it('should handle empty output', () => {
+        expect(truncateTestOutput('')).toBe('');
+      });
+
+      it('should preserve first 5000 chars of content', () => {
+        const output = 'START' + 'x'.repeat(5000) + 'END';
+        const result = truncateTestOutput(output);
+        expect(result).toContain('START');
+        expect(result).not.toContain('END');
+      });
+    });
+
+    describe('buildRetryPrompt', () => {
+      it('should include test output in prompt', () => {
+        const testOutput = 'Test failed: expected 2 but got 1';
+        const buildOutput = '';
+        const prompt = buildRetryPrompt(testOutput, buildOutput, 1, 3);
+        expect(prompt).toContain('CRITICAL: Tests are failing');
+        expect(prompt).toContain(testOutput);
+        expect(prompt).toContain('Test Output:');
+      });
+
+      it('should include build output in prompt', () => {
+        const testOutput = '';
+        const buildOutput = 'Build error: module not found';
+        const prompt = buildRetryPrompt(testOutput, buildOutput, 1, 3);
+        expect(prompt).toContain('Build Output:');
+        expect(prompt).toContain(buildOutput);
+      });
+
+      it('should include both test and build output', () => {
+        const testOutput = 'Test failed';
+        const buildOutput = 'Build error';
+        const prompt = buildRetryPrompt(testOutput, buildOutput, 2, 3);
+        expect(prompt).toContain('Test Output:');
+        expect(prompt).toContain('Build Output:');
+        expect(prompt).toContain('Test failed');
+        expect(prompt).toContain('Build error');
+      });
+
+      it('should include attempt number and max retries', () => {
+        const prompt = buildRetryPrompt('test output', '', 2, 5);
+        expect(prompt).toContain('retry attempt 2 of 5');
+      });
+
+      it('should include analysis instructions', () => {
+        const prompt = buildRetryPrompt('test output', '', 1, 3);
+        expect(prompt).toContain('ANALYZE the test/build output');
+        expect(prompt).toContain('Compare EXPECTED vs ACTUAL');
+        expect(prompt).toContain('Identify the root cause');
+        expect(prompt).toContain('Fix ONLY the production code');
+      });
+
+      it('should truncate long test output', () => {
+        const longOutput = 'x'.repeat(10000);
+        const prompt = buildRetryPrompt(longOutput, '', 1, 3);
+        expect(prompt.length).toBeLessThan(longOutput.length + 1000); // Prompt + some overhead
+        expect(prompt).toContain('Output truncated');
+      });
+
+      it('should handle empty outputs gracefully', () => {
+        const prompt = buildRetryPrompt('', '', 1, 3);
+        expect(prompt).toContain('CRITICAL: Tests are failing');
+        expect(prompt).not.toContain('Test Output:');
+        expect(prompt).not.toContain('Build Output:');
+      });
+
+      it('should trim whitespace from outputs', () => {
+        const testOutput = '   \n\n   ';
+        const buildOutput = '   \n\n   ';
+        const prompt = buildRetryPrompt(testOutput, buildOutput, 1, 3);
+        // Empty after trim, so should not include output sections
+        expect(prompt).not.toContain('Test Output:');
+        expect(prompt).not.toContain('Build Output:');
+      });
     });
   });
 });

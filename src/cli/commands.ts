@@ -18,6 +18,8 @@ import {
 import { renderStories, renderKanbanBoard, shouldUseKanbanLayout, KanbanColumn } from './table-renderer.js';
 import { getStoryFlags as getStoryFlagsUtil, formatStatus as formatStatusUtil } from './story-utils.js';
 import { migrateToFolderPerStory } from './commands/migrate.js';
+import { generateReviewSummary } from '../agents/review.js';
+import { getTerminalWidth } from './formatting.js';
 
 /**
  * Initialize the .ai-sdlc folder structure
@@ -569,6 +571,10 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
         console.log();
         console.log(c.warning(`⟳ Review rejected with ${reviewResult.issues.length} issue(s) - initiating rework (attempt ${currentRetry}/${maxRetriesDisplay})`));
+
+        // Display executive summary
+        const summary = generateReviewSummary(reviewResult.issues, getTerminalWidth());
+        console.log(c.dim(`  Summary: ${summary}`));
 
         // Reset the RPIV cycle (this increments retry_count and resets flags)
         resetRPIVCycle(story, reviewResult.feedback);

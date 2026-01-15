@@ -111,7 +111,7 @@ const ReviewIssueSchema = z.object({
   // This handles LLM responses that return {"line": null} instead of omitting the field
   file: z.string().nullish().transform(v => v ?? undefined),
   line: z.number().int().positive().nullish().transform(v => v ?? undefined),
-  suggestedFix: z.string().max(2000).nullish().transform(v => v ?? undefined),
+  suggestedFix: z.string().max(5000).nullish().transform(v => v ?? undefined),
 });
 
 const ReviewResponseSchema = z.object({

@@ -15,6 +15,9 @@ plan_complete: false
 implementation_complete: false
 reviews_complete: false
 slug: per-story-workflow-state
+worktree_path: >-
+  /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0033-per-story-workflow-state
+updated: '2026-01-15'
 ---
 # Per-Story Workflow State
 

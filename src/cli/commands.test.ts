@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Story, ActionType, KanbanFolder } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
-import { getPhaseInfo, calculatePhaseProgress, truncateForTerminal, sanitizeStorySlug, status } from './commands.js';
+import { getPhaseInfo, calculatePhaseProgress, truncateForTerminal, sanitizeStorySlug, determineWorktreeMode } from './commands.js';
 
 describe('CLI Commands - Phase Helpers', () => {
   let originalEnv: NodeJS.ProcessEnv;
@@ -577,6 +577,133 @@ describe('Status Command - Active Flag Filtering', () => {
       expect(options1?.active).toBeUndefined();
       expect(options2?.active).toBeUndefined();
       expect(options3?.active).toBe(true);
+    });
+  });
+});
+
+describe('determineWorktreeMode', () => {
+  const createStory = (worktreePath?: string): Story => ({
+    path: '/test/story.md',
+    slug: 'test-story',
+    frontmatter: {
+      id: 'test-1',
+      title: 'Test Story',
+      slug: 'test-story',
+      priority: 1,
+      status: 'in-progress',
+      type: 'feature',
+      created: '2024-01-01',
+      labels: [],
+      research_complete: true,
+      plan_complete: true,
+      implementation_complete: false,
+      reviews_complete: false,
+      worktree_path: worktreePath,
+    },
+    content: '',
+  });
+
+  describe('CLI flag priority (highest)', () => {
+    it('should return false when --no-worktree is explicitly set', () => {
+      const result = determineWorktreeMode(
+        { worktree: false },
+        { enabled: true },
+        createStory('/some/worktree/path')
+      );
+      expect(result).toBe(false);
+    });
+
+    it('should return true when --worktree is explicitly set', () => {
+      const result = determineWorktreeMode(
+        { worktree: true },
+        { enabled: false },
+        null
+      );
+      expect(result).toBe(true);
+    });
+
+    it('should respect --no-worktree even when story has worktree_path', () => {
+      const result = determineWorktreeMode(
+        { worktree: false },
+        { enabled: true },
+        createStory('/existing/worktree')
+      );
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('Story frontmatter.worktree_path (second priority)', () => {
+    it('should return true when story has worktree_path and no CLI flag', () => {
+      const result = determineWorktreeMode(
+        {},
+        { enabled: false },
+        createStory('/some/worktree/path')
+      );
+      expect(result).toBe(true);
+    });
+
+    it('should return true when story has worktree_path even if config disabled', () => {
+      const result = determineWorktreeMode(
+        { worktree: undefined },
+        { enabled: false },
+        createStory('/existing/worktree')
+      );
+      expect(result).toBe(true);
+    });
+
+    it('should not trigger on empty worktree_path', () => {
+      const result = determineWorktreeMode(
+        {},
+        { enabled: false },
+        createStory(undefined)
+      );
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('Config default (lowest priority)', () => {
+    it('should return config.enabled when no CLI flag and no worktree_path', () => {
+      expect(determineWorktreeMode({}, { enabled: true }, null)).toBe(true);
+      expect(determineWorktreeMode({}, { enabled: false }, null)).toBe(false);
+    });
+
+    it('should return config.enabled when story has no worktree_path', () => {
+      const result = determineWorktreeMode(
+        {},
+        { enabled: true },
+        createStory(undefined)
+      );
+      expect(result).toBe(true);
+    });
+  });
+
+  describe('Null story handling', () => {
+    it('should work correctly with null story', () => {
+      expect(determineWorktreeMode({}, { enabled: true }, null)).toBe(true);
+      expect(determineWorktreeMode({}, { enabled: false }, null)).toBe(false);
+      expect(determineWorktreeMode({ worktree: true }, { enabled: false }, null)).toBe(true);
+      expect(determineWorktreeMode({ worktree: false }, { enabled: true }, null)).toBe(false);
+    });
+  });
+
+  describe('Priority order verification', () => {
+    it('should follow correct priority: CLI > frontmatter > config', () => {
+      const storyWithWorktree = createStory('/existing/worktree');
+
+      // CLI true wins over everything
+      expect(determineWorktreeMode({ worktree: true }, { enabled: false }, null)).toBe(true);
+      expect(determineWorktreeMode({ worktree: true }, { enabled: false }, storyWithWorktree)).toBe(true);
+
+      // CLI false wins over everything
+      expect(determineWorktreeMode({ worktree: false }, { enabled: true }, storyWithWorktree)).toBe(false);
+
+      // Frontmatter wins over config when no CLI flag
+      expect(determineWorktreeMode({}, { enabled: false }, storyWithWorktree)).toBe(true);
+
+      // Config is used only when no CLI flag and no frontmatter worktree_path
+      const storyNoWorktree = createStory(undefined);
+      expect(determineWorktreeMode({}, { enabled: true }, storyNoWorktree)).toBe(true);
+      expect(determineWorktreeMode({}, { enabled: false }, storyNoWorktree)).toBe(false);
     });
   });
 });

@@ -92,6 +92,7 @@ export interface StoryFrontmatter {
   reviews_complete: boolean;
   pr_url?: string;
   branch?: string;
+  worktree_path?: string;
   last_error?: string;
   // Refinement tracking
   refinement_iterations?: RefinementIteration[];

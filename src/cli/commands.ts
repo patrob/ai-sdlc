@@ -4,7 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import { getSdlcRoot, loadConfig, initConfig } from '../core/config.js';
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug } from '../core/kanban.js';
-import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById } from '../core/story.js';
+import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory } from '../core/story.js';
+import { GitWorktreeService } from '../core/worktree.js';
 import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
 import {
@@ -280,13 +281,13 @@ function displayGitValidationResult(result: GitValidationResult, c: any): void {
 /**
  * Run the workflow (process one action or all)
  */
-export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean }): Promise<void> {
+export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean }): Promise<void> {
   const config = loadConfig();
   // Parse maxIterations from CLI (undefined means use config default which is Infinity)
   const maxIterationsOverride = options.maxIterations !== undefined
     ? parseInt(options.maxIterations, 10)
     : undefined;
-  const sdlcRoot = getSdlcRoot();
+  let sdlcRoot = getSdlcRoot();
   const c = getThemedChalk(config);
 
   // Handle daemon/watch mode
@@ -572,12 +573,77 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     }
   }
 
+  // Handle worktree creation if --worktree flag is set
+  let worktreePath: string | undefined;
+  let originalCwd: string | undefined;
+
+  if (options.worktree && !options.story) {
+    console.log(c.error('Error: --worktree requires --story flag'));
+    return;
+  }
+
+  if (options.worktree && options.story) {
+    const workingDir = path.dirname(sdlcRoot);
+    const worktreeService = new GitWorktreeService(workingDir, sdlcRoot);
+
+    // Validate git state for worktree creation
+    const validation = worktreeService.validateCanCreateWorktree();
+    if (!validation.valid) {
+      console.log(c.error(`Error: ${validation.error}`));
+      return;
+    }
+
+    // Get the target story (already loaded from --story processing above)
+    const targetStory = findStoryById(sdlcRoot, options.story) || findStoryBySlug(sdlcRoot, options.story);
+    if (!targetStory) {
+      console.log(c.error(`Error: Story not found: "${options.story}"`));
+      return;
+    }
+
+    try {
+      // Detect base branch
+      const baseBranch = worktreeService.detectBaseBranch();
+
+      // Create worktree
+      originalCwd = process.cwd();
+      worktreePath = worktreeService.create({
+        storyId: targetStory.frontmatter.id,
+        slug: targetStory.slug,
+        baseBranch,
+      });
+
+      // Update story frontmatter with worktree path
+      const updatedStory = updateStoryField(targetStory, 'worktree_path', worktreePath);
+      await writeStory(updatedStory);
+
+      // Change to worktree directory
+      process.chdir(worktreePath);
+
+      // Recalculate sdlcRoot for the worktree context
+      // Since we've changed cwd to the worktree, getSdlcRoot() will now return the worktree's .ai-sdlc path
+      // This ensures all subsequent agent operations work within the isolated worktree
+      sdlcRoot = getSdlcRoot();
+
+      console.log(c.success(`✓ Created worktree at: ${worktreePath}`));
+      console.log(c.dim(`  Branch: ai-sdlc/${targetStory.frontmatter.id}-${targetStory.slug}`));
+      console.log();
+    } catch (error) {
+      // Restore directory on worktree creation failure
+      if (originalCwd) {
+        process.chdir(originalCwd);
+      }
+      console.log(c.error(`Failed to create worktree: ${error instanceof Error ? error.message : String(error)}`));
+      return;
+    }
+  }
+
   // Process actions with retry support for Full SDLC mode
   let currentActions = [...actionsToProcess];
   let currentActionIndex = 0;
   let retryAttempt = 0;
   const MAX_DISPLAY_RETRIES = 3; // For display purposes
 
+  try {
   while (currentActionIndex < currentActions.length) {
     const action = currentActions[currentActionIndex];
     const totalActions = currentActions.length;
@@ -739,6 +805,12 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
           break;
         }
       }
+    }
+  }
+  } finally {
+    // Restore original working directory if worktree was used
+    if (originalCwd) {
+      process.chdir(originalCwd);
     }
   }
 }

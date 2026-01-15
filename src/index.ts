@@ -81,9 +81,17 @@ program
   .option('--watch', 'Run in daemon mode, continuously processing backlog')
   .option('-v, --verbose', 'Show detailed daemon output (use with --watch)')
   .option('--force', 'Skip git validation checks (use with caution)')
+  .option('--worktree', 'Create isolated git worktree for story execution (requires --story)')
   .action((options) => {
     if (!options.dryRun && !options.watch) {
       checkApiKey();
+    }
+    // Validate --worktree requires --story
+    if (options.worktree && !options.story) {
+      const config = loadConfig();
+      const c = getThemedChalk(config);
+      console.log(c.error('Error: --worktree requires --story flag'));
+      process.exit(1);
     }
     return run(options);
   });

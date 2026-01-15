@@ -244,7 +244,7 @@ describe('Worktree Workflow Integration', () => {
 
     // Should log error about uncommitted changes
     expect(logSpy).toHaveBeenCalledWith(
-      expect.stringContaining('uncommitted changes')
+      expect.stringContaining('Uncommitted changes')
     );
   });
 

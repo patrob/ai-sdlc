@@ -257,6 +257,25 @@ function requiresGitValidation(actions: Action[]): boolean {
 }
 
 /**
+ * Determine if worktree mode should be used based on CLI flags, story frontmatter, and config.
+ * Priority order:
+ * 1. CLI --no-worktree flag (explicit disable)
+ * 2. CLI --worktree flag (explicit enable)
+ * 3. Story frontmatter.worktree_path exists (auto-enable for resuming)
+ * 4. Config worktree.enabled (default behavior)
+ */
+export function determineWorktreeMode(
+  options: { worktree?: boolean },
+  worktreeConfig: { enabled: boolean },
+  targetStory: Story | null
+): boolean {
+  if (options.worktree === false) return false;
+  if (options.worktree === true) return true;
+  if (targetStory?.frontmatter.worktree_path) return true;
+  return worktreeConfig.enabled;
+}
+
+/**
  * Display git validation errors and warnings
  */
 function displayGitValidationResult(result: GitValidationResult, c: any): void {
@@ -400,6 +419,9 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
   let assessment = assessState(sdlcRoot);
 
+  // Hoist targetStory to outer scope so it can be reused for worktree checks
+  let targetStory: Story | null = null;
+
   // Filter actions by story if --story flag is provided
   if (options.story) {
     const normalizedInput = options.story.toLowerCase().trim();
@@ -416,7 +438,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     }
 
     // Try to find story by ID first, then by slug (case-insensitive)
-    let targetStory = findStoryById(sdlcRoot, normalizedInput);
+    targetStory = findStoryById(sdlcRoot, normalizedInput);
     if (!targetStory) {
       targetStory = findStoryBySlug(sdlcRoot, normalizedInput);
     }
@@ -558,49 +580,30 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     }
   }
 
-  // Validate git state before processing actions that modify git
-  if (!options.force && requiresGitValidation(actionsToProcess)) {
-    const workingDir = path.dirname(sdlcRoot);
-    const gitValidation = validateGitState(workingDir);
-
-    if (!gitValidation.valid) {
-      displayGitValidationResult(gitValidation, c);
-      return;
-    }
-
-    if (gitValidation.warnings.length > 0) {
-      displayGitValidationResult(gitValidation, c);
-      console.log();
-    }
-  }
-
-  // Handle worktree creation based on flags and config
+  // Handle worktree creation based on flags, config, and story frontmatter
+  // IMPORTANT: This must happen BEFORE git validation because:
+  // 1. Worktree mode allows running from protected branches (main/master)
+  // 2. The worktree will be created on a feature branch
   let worktreePath: string | undefined;
   let originalCwd: string | undefined;
+  let worktreeCreated = false;
 
   // Determine if worktree should be used
-  // Priority: CLI flags > config > default (disabled)
+  // Priority: CLI flags > story frontmatter > config > default (disabled)
   const worktreeConfig = config.worktree ?? DEFAULT_WORKTREE_CONFIG;
-  const shouldUseWorktree = (() => {
-    // Explicit --no-worktree disables worktrees
-    if (options.worktree === false) return false;
-    // Explicit --worktree enables worktrees
-    if (options.worktree === true) return true;
-    // Fall back to config default
-    return worktreeConfig.enabled;
-  })();
+
+  // Reuse targetStory from earlier lookup (DRY - avoids duplicate story lookup)
+  const shouldUseWorktree = determineWorktreeMode(options, worktreeConfig, targetStory);
 
   // Validate that worktree mode requires --story
   if (shouldUseWorktree && !options.story) {
     if (options.worktree === true) {
-      // Explicit --worktree flag without --story is an error
       console.log(c.error('Error: --worktree requires --story flag'));
       return;
     }
-    // Config-enabled worktree without --story just silently skips worktree
   }
 
-  if (shouldUseWorktree && options.story) {
+  if (shouldUseWorktree && options.story && targetStory) {
     const workingDir = path.dirname(sdlcRoot);
 
     // Resolve worktree base path from config
@@ -619,13 +622,6 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     const validation = worktreeService.validateCanCreateWorktree();
     if (!validation.valid) {
       console.log(c.error(`Error: ${validation.error}`));
-      return;
-    }
-
-    // Get the target story (already loaded from --story processing above)
-    const targetStory = findStoryById(sdlcRoot, options.story) || findStoryBySlug(sdlcRoot, options.story);
-    if (!targetStory) {
-      console.log(c.error(`Error: Story not found: "${options.story}"`));
       return;
     }
 
@@ -649,9 +645,8 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       process.chdir(worktreePath);
 
       // Recalculate sdlcRoot for the worktree context
-      // Since we've changed cwd to the worktree, getSdlcRoot() will now return the worktree's .ai-sdlc path
-      // This ensures all subsequent agent operations work within the isolated worktree
       sdlcRoot = getSdlcRoot();
+      worktreeCreated = true;
 
       console.log(c.success(`✓ Created worktree at: ${worktreePath}`));
       console.log(c.dim(`  Branch: ai-sdlc/${targetStory.frontmatter.id}-${targetStory.slug}`));
@@ -663,6 +658,27 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       }
       console.log(c.error(`Failed to create worktree: ${error instanceof Error ? error.message : String(error)}`));
       return;
+    }
+  }
+
+  // Validate git state before processing actions that modify git
+  // Skip protected branch check if worktree mode is active (worktree is on feature branch)
+  if (!options.force && requiresGitValidation(actionsToProcess)) {
+    const workingDir = path.dirname(sdlcRoot);
+    const gitValidationOptions = worktreeCreated ? { skipBranchCheck: true } : {};
+    const gitValidation = validateGitState(workingDir, gitValidationOptions);
+
+    if (!gitValidation.valid) {
+      displayGitValidationResult(gitValidation, c);
+      if (worktreeCreated && originalCwd) {
+        process.chdir(originalCwd);
+      }
+      return;
+    }
+
+    if (gitValidation.warnings.length > 0) {
+      displayGitValidationResult(gitValidation, c);
+      console.log();
     }
   }
 

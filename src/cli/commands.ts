@@ -366,6 +366,17 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
   if (options.story) {
     const normalizedInput = options.story.toLowerCase().trim();
 
+    // SECURITY: Validate story ID format to prevent path traversal and injection
+    // Only allow alphanumeric characters, hyphens, and underscores
+    if (!/^[a-z0-9_-]+$/i.test(normalizedInput)) {
+      console.log(
+        c.error(
+          'Invalid story ID format. Only letters, numbers, hyphens, and underscores are allowed.'
+        )
+      );
+      return;
+    }
+
     // Try to find story by ID first, then by slug (case-insensitive)
     let targetStory = findStoryById(sdlcRoot, normalizedInput);
     if (!targetStory) {

@@ -9,5 +9,9 @@
     "autoMergeOnApproval": false
   },
   "defaultLabels": [],
-  "settingSources": ["project"]
+  "settingSources": ["project"],
+  "worktree": {
+      "enabled": true,
+      "basePath": ".ai-sdlc/worktrees"
+    }
 }

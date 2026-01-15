@@ -67,7 +67,7 @@ export async function status(options?: { active?: boolean }): Promise<void> {
     return;
   }
 
-  const assessment = assessState(sdlcRoot);
+  const assessment = await assessState(sdlcRoot);
   const stats = getBoardStats(sdlcRoot);
 
   console.log();
@@ -158,7 +158,7 @@ export async function add(title: string): Promise<void> {
       return;
     }
 
-    const story = createStory(title, sdlcRoot);
+    const story = await createStory(title, sdlcRoot);
 
     spinner.succeed(c.success(`Created: ${story.path}`));
     console.log(c.dim(`  ID: ${story.frontmatter.id}`));
@@ -451,7 +451,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     workflowId = generateWorkflowId();
   }
 
-  let assessment = assessState(sdlcRoot);
+  let assessment = await assessState(sdlcRoot);
 
   // Hoist targetStory to outer scope so it can be reused for worktree checks
   let targetStory: Story | null = null;
@@ -674,7 +674,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       });
 
       // Update story frontmatter with worktree path
-      const updatedStory = updateStoryField(targetStory, 'worktree_path', worktreePath);
+      const updatedStory = await updateStoryField(targetStory, 'worktree_path', worktreePath);
       await writeStory(updatedStory);
 
       // Change to worktree directory
@@ -788,7 +788,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
         console.log(c.dim(`  Summary: ${summary}`));
 
         // Reset the RPIV cycle (this increments retry_count and resets flags)
-        resetRPIVCycle(story, reviewResult.feedback);
+        await resetRPIVCycle(story, reviewResult.feedback);
 
         // Log what's being reset
         console.log(c.dim(`  → Reset plan_complete, implementation_complete, reviews_complete`));
@@ -880,7 +880,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
         }
       } else {
         // Normal auto mode: re-assess state
-        const newAssessment = assessState(sdlcRoot);
+        const newAssessment = await assessState(sdlcRoot);
         if (newAssessment.recommendedActions.length === 0) {
           console.log(c.success('\n✓ All actions completed!'));
           // Using action.storyId - available from action loop context
@@ -1041,7 +1041,7 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
         // Update story status to done (no file move in new architecture)
         const { updateStoryStatus } = await import('../core/story.js');
         const storyToMove = parseStory(action.storyPath);
-        const updatedStory = updateStoryStatus(storyToMove, 'done');
+        const updatedStory = await updateStoryStatus(storyToMove, 'done');
         result = {
           success: true,
           story: updatedStory,
@@ -1631,7 +1631,7 @@ function isEmptySection(content: string): boolean {
 /**
  * Unblock a story from the blocked folder and move it back to the workflow
  */
-export function unblock(storyId: string, options?: { resetRetries?: boolean }): void {
+export async function unblock(storyId: string, options?: { resetRetries?: boolean }): Promise<void> {
   const spinner = ora('Unblocking story...').start();
   const config = loadConfig();
   const c = getThemedChalk(config);
@@ -1645,7 +1645,7 @@ export function unblock(storyId: string, options?: { resetRetries?: boolean }): 
     }
 
     // Unblock the story (using renamed import to avoid naming conflict)
-    const unblockedStory = unblockStory(storyId, sdlcRoot, options);
+    const unblockedStory = await unblockStory(storyId, sdlcRoot, options);
 
     // Determine destination folder from updated path
     const destinationFolder = unblockedStory.path.match(/\/([^/]+)\/[^/]+\.md$/)?.[1] || 'unknown';
@@ -1812,7 +1812,7 @@ async function handleWorktreeCleanup(
   // Check if worktree exists
   if (!fs.existsSync(worktreePath)) {
     console.log(c.warning(`  Note: Worktree path no longer exists: ${worktreePath}`));
-    const updated = updateStoryField(story, 'worktree_path', undefined);
+    const updated = await updateStoryField(story, 'worktree_path', undefined);
     await writeStory(updated);
     console.log(c.dim('  Cleared worktree_path from frontmatter'));
     return;
@@ -1845,13 +1845,13 @@ async function handleWorktreeCleanup(
     const service = new GitWorktreeService(workingDir, resolvedBasePath);
     service.remove(worktreePath);
 
-    const updated = updateStoryField(story, 'worktree_path', undefined);
+    const updated = await updateStoryField(story, 'worktree_path', undefined);
     await writeStory(updated);
     console.log(c.success('  ✓ Worktree removed'));
   } catch (error) {
     console.log(c.warning(`  Failed to remove worktree: ${error instanceof Error ? error.message : String(error)}`));
     // Clear frontmatter anyway (user may have manually deleted)
-    const updated = updateStoryField(story, 'worktree_path', undefined);
+    const updated = await updateStoryField(story, 'worktree_path', undefined);
     await writeStory(updated);
   }
 }
@@ -1985,9 +1985,9 @@ export async function addWorktree(storyId: string): Promise<void> {
     });
 
     // Update story frontmatter
-    const updatedStory = updateStoryField(story, 'worktree_path', worktreePath);
+    const updatedStory = await updateStoryField(story, 'worktree_path', worktreePath);
     const branchName = service.getBranchName(story.frontmatter.id, story.slug);
-    const storyWithBranch = updateStoryField(updatedStory, 'branch', branchName);
+    const storyWithBranch = await updateStoryField(updatedStory, 'branch', branchName);
     await writeStory(storyWithBranch);
 
     spinner.succeed(c.success(`Created worktree for ${story.frontmatter.id}`));
@@ -2066,7 +2066,7 @@ export async function removeWorktree(storyId: string, options?: { force?: boolea
     service.remove(worktreePath);
 
     // Clear worktree_path from frontmatter
-    const updatedStory = updateStoryField(story, 'worktree_path', undefined);
+    const updatedStory = await updateStoryField(story, 'worktree_path', undefined);
     await writeStory(updatedStory);
 
     spinner.succeed(c.success(`Removed worktree for ${story.frontmatter.id}`));

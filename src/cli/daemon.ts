@@ -88,7 +88,7 @@ export class DaemonRunner {
 
       // Only poll if not currently processing
       if (!this.isProcessingQueue) {
-        const assessment = assessState(this.sdlcRoot);
+        const assessment = await assessState(this.sdlcRoot);
         if (assessment.recommendedActions.length > 0) {
           const topAction = assessment.recommendedActions[0];
           // Queue if not already queued/active/completed
@@ -160,7 +160,7 @@ export class DaemonRunner {
       console.log();
 
       // Initial assessment - pick single highest priority story
-      const initialAssessment = assessState(this.sdlcRoot);
+      const initialAssessment = await assessState(this.sdlcRoot);
       if (initialAssessment.recommendedActions.length > 0) {
         const topAction = initialAssessment.recommendedActions[0];
         console.log(c.info(`Found ${initialAssessment.recommendedActions.length} stories, starting with: ${topAction.storyId}`));
@@ -309,7 +309,7 @@ export class DaemonRunner {
 
         while (iterationCount < maxIterations && !this.isShuttingDown) {
           // Re-assess state to get current actions
-          const assessment = assessState(this.sdlcRoot);
+          const assessment = await assessState(this.sdlcRoot);
 
           // Find action for this story by ID (path changes as story moves folders)
           const storyAction = assessment.recommendedActions.find(

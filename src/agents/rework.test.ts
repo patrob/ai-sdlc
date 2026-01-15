@@ -57,7 +57,7 @@ describe('Rework Agent', () => {
   });
 
   it('should record refinement attempt on first rework', async () => {
-    const story = createStory('Test Story', sdlcRoot, {
+    const story = await createStory('Test Story', sdlcRoot, {
       type: 'feature',
     });
 
@@ -95,7 +95,7 @@ describe('Rework Agent', () => {
   });
 
   it('should reset implementation_complete flag for implement rework', async () => {
-    const story = createStory('Test Story', sdlcRoot);
+    const story = await createStory('Test Story', sdlcRoot);
     story.frontmatter.implementation_complete = true;
 
     const reviewFeedback: ReviewResult = {
@@ -121,7 +121,7 @@ describe('Rework Agent', () => {
   });
 
   it('should reset plan_complete flag for plan rework', async () => {
-    const story = createStory('Test Story', sdlcRoot);
+    const story = await createStory('Test Story', sdlcRoot);
     story.frontmatter.plan_complete = true;
     story.frontmatter.implementation_complete = true;
 
@@ -148,7 +148,7 @@ describe('Rework Agent', () => {
   });
 
   it('should trigger circuit breaker after max iterations', async () => {
-    const story = createStory('Test Story', sdlcRoot);
+    const story = await createStory('Test Story', sdlcRoot);
 
     // Set refinement count to max
     story.frontmatter.refinement_count = 3;
@@ -157,7 +157,7 @@ describe('Rework Agent', () => {
       { iteration: 2, agentType: 'implement', startedAt: new Date().toISOString(), result: 'failed' },
       { iteration: 3, agentType: 'implement', startedAt: new Date().toISOString(), result: 'failed' },
     ];
-    writeStory(story); // Persist to disk so runReworkAgent reads the updated state
+    await writeStory(story); // Persist to disk so runReworkAgent reads the updated state
 
     const reviewFeedback: ReviewResult = {
       success: true,
@@ -183,7 +183,7 @@ describe('Rework Agent', () => {
   });
 
   it('should append refinement notes to story content', async () => {
-    const story = createStory('Test Story', sdlcRoot);
+    const story = await createStory('Test Story', sdlcRoot);
 
     const reviewFeedback: ReviewResult = {
       success: true,
@@ -215,7 +215,7 @@ describe('Rework Agent', () => {
   });
 
   it('should clear previous error on successful rework', async () => {
-    const story = createStory('Test Story', sdlcRoot);
+    const story = await createStory('Test Story', sdlcRoot);
     story.frontmatter.last_error = 'Some previous error';
 
     const reviewFeedback: ReviewResult = {

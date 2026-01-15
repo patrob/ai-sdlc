@@ -80,10 +80,10 @@ Format your response as markdown that will replace the story content.`;
     story.frontmatter.updated = new Date().toISOString().split('T')[0];
 
     // Write the story
-    writeStory(story);
+    await writeStory(story);
 
     // Update status to ready
-    const movedStory = updateStoryStatus(story, 'ready');
+    const movedStory = await updateStoryStatus(story, 'ready');
     changesMade.push('Updated status to ready');
 
     return {

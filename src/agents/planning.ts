@@ -146,11 +146,11 @@ export async function runPlanningAgent(
     });
 
     // Append plan to the story
-    appendToSection(story, 'Implementation Plan', planContent);
+    await appendToSection(story, 'Implementation Plan', planContent);
     changesMade.push('Added implementation plan');
 
     // Mark plan as complete
-    updateStoryField(story, 'plan_complete', true);
+    await updateStoryField(story, 'plan_complete', true);
     changesMade.push('Marked plan_complete: true');
 
     return {

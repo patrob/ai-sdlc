@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
-import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, DEFAULT_PRIORITY_GAP } from '../types/index.js';
+import * as properLockfile from 'proper-lockfile';
+import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, DEFAULT_PRIORITY_GAP, LockOptions } from '../types/index.js';
 
 /**
  * Parse a story markdown file into a Story object
@@ -43,21 +44,91 @@ export function parseStory(filePath: string): Story {
 }
 
 /**
- * Write a story back to disk
+ * Write a story back to disk with file locking for atomic updates.
+ *
+ * This function acquires an exclusive lock before writing to prevent race conditions
+ * from concurrent processes. The lock is always released, even if an error occurs.
+ *
+ * **IMPORTANT:** Do not nest locks on the same file to avoid deadlock. Batch multiple
+ * updates into a single writeStory() call instead.
+ *
+ * @param story - Story object to write
+ * @param options - Lock options (timeout, retries, stale threshold)
+ * @throws Error if file is locked by another process or filesystem is read-only
+ *
+ * @example
+ * ```typescript
+ * // Good: Batch updates
+ * story.frontmatter.status = 'in-progress';
+ * story.frontmatter.priority = 1;
+ * await writeStory(story);
+ *
+ * // Bad: Nested locks (potential deadlock)
+ * await writeStory(story); // holds lock
+ * await writeStory(story); // tries to acquire same lock = deadlock
+ * ```
  */
-export function writeStory(story: Story): void {
+export async function writeStory(story: Story, options?: LockOptions): Promise<void> {
   const content = matter.stringify(story.content, story.frontmatter);
-  fs.writeFileSync(story.path, content);
+
+  // For new files (file doesn't exist yet), write directly without locking
+  // No race condition possible when creating a new file
+  if (!fs.existsSync(story.path)) {
+    fs.writeFileSync(story.path, content);
+    return;
+  }
+
+  // For existing files, use locking to prevent concurrent write corruption
+  const timeout = options?.lockTimeout ?? 5000;
+  const retries = options?.retries ?? 3;
+  const stale = options?.stale ?? timeout;
+
+  // Acquire lock with retry logic and exponential backoff
+  let release;
+  try {
+    release = await properLockfile.lock(story.path, {
+      retries: {
+        retries,
+        minTimeout: 100,
+        maxTimeout: 1000,
+      },
+      stale,
+    });
+  } catch (error: any) {
+    // Handle lock-specific errors with actionable messages
+    if (error.code === 'ELOCKED') {
+      throw new Error(
+        `Story ${story.frontmatter.id || story.path} is locked by another process. ` +
+        `Please retry in a moment or check for hung processes.`
+      );
+    }
+    if (error.code === 'EACCES' || error.code === 'EPERM') {
+      throw new Error(
+        `Cannot create lock file: filesystem is read-only or insufficient permissions. ` +
+        `Ensure ${path.dirname(story.path)} is writable.`
+      );
+    }
+    // ESTALE is handled automatically by proper-lockfile (stale lock removed)
+    throw error;
+  }
+
+  try {
+    // Critical section: write story to disk
+    fs.writeFileSync(story.path, content);
+  } finally {
+    // Always release lock, even on error
+    await release();
+  }
 }
 
 /**
  * Update story status in frontmatter without moving files
  * This is the preferred method in the new folder-per-story architecture
  */
-export function updateStoryStatus(story: Story, newStatus: StoryStatus): Story {
+export async function updateStoryStatus(story: Story, newStatus: StoryStatus): Promise<Story> {
   story.frontmatter.status = newStatus;
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
-  writeStory(story);
+  await writeStory(story);
   return story;
 }
 
@@ -65,7 +136,7 @@ export function updateStoryStatus(story: Story, newStatus: StoryStatus): Story {
  * Move a story to a different kanban folder
  * @deprecated Use updateStoryStatus() instead. Will be removed in v2.0
  */
-export function moveStory(story: Story, toFolder: string, sdlcRoot: string): Story {
+export async function moveStory(story: Story, toFolder: string, sdlcRoot: string): Promise<Story> {
   console.warn('moveStory() is deprecated. Use updateStoryStatus() instead. Will be removed in v2.0');
 
   const targetFolder = path.join(sdlcRoot, toFolder);
@@ -91,7 +162,7 @@ export function moveStory(story: Story, toFolder: string, sdlcRoot: string): Sto
   // Write to new location
   const oldPath = story.path;
   story.path = newPath;
-  writeStory(story);
+  await writeStory(story);
 
   // Remove old file
   if (fs.existsSync(oldPath) && oldPath !== newPath) {
@@ -108,7 +179,7 @@ export function moveStory(story: Story, toFolder: string, sdlcRoot: string): Sto
  * @param storyPath - Absolute path to the story file
  * @param reason - Reason for blocking (e.g., "Max refinement attempts (2/2) reached")
  */
-export function moveToBlocked(storyPath: string, reason: string): void {
+export async function moveToBlocked(storyPath: string, reason: string): Promise<void> {
   // Security: Validate path BEFORE any file I/O operations
   const resolvedPath = path.resolve(storyPath);
   const storyDir = path.dirname(resolvedPath);
@@ -134,7 +205,7 @@ export function moveToBlocked(storyPath: string, reason: string): void {
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
 
   // Write back to same location
-  writeStory(story);
+  await writeStory(story);
 }
 
 /**
@@ -196,11 +267,11 @@ export function slugify(title: string): string {
  * Creates stories/{id}/story.md with slug and priority in frontmatter.
  * Priority uses gaps (10, 20, 30...) for easy insertion without renumbering.
  */
-export function createStory(
+export async function createStory(
   title: string,
   sdlcRoot: string,
   options: Partial<StoryFrontmatter> = {}
-): Story {
+): Promise<Story> {
   const storiesFolder = path.join(sdlcRoot, STORIES_FOLDER);
 
   // Validate parent stories/ directory exists
@@ -293,7 +364,7 @@ export function createStory(
     content,
   };
 
-  writeStory(story);
+  await writeStory(story);
 
   // Return story with canonical path for consistency
   const canonicalPath = fs.realpathSync(filePath);
@@ -303,21 +374,21 @@ export function createStory(
 /**
  * Update story frontmatter field
  */
-export function updateStoryField<K extends keyof StoryFrontmatter>(
+export async function updateStoryField<K extends keyof StoryFrontmatter>(
   story: Story,
   field: K,
   value: StoryFrontmatter[K]
-): Story {
+): Promise<Story> {
   story.frontmatter[field] = value;
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
-  writeStory(story);
+  await writeStory(story);
   return story;
 }
 
 /**
  * Append content to a section in the story
  */
-export function appendToSection(story: Story, section: string, content: string): Story {
+export async function appendToSection(story: Story, section: string, content: string): Promise<Story> {
   const sectionHeader = `## ${section}`;
   const sectionIndex = story.content.indexOf(sectionHeader);
 
@@ -342,18 +413,18 @@ export function appendToSection(story: Story, section: string, content: string):
   }
 
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
-  writeStory(story);
+  await writeStory(story);
   return story;
 }
 
 /**
  * Record a refinement attempt in the story's frontmatter
  */
-export function recordRefinementAttempt(
+export async function recordRefinementAttempt(
   story: Story,
   agentType: string,
   reviewFeedback: string
-): Story {
+): Promise<Story> {
   // Initialize refinement tracking if not present
   if (!story.frontmatter.refinement_iterations) {
     story.frontmatter.refinement_iterations = [];
@@ -373,7 +444,7 @@ export function recordRefinementAttempt(
   story.frontmatter.refinement_count = iteration;
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
 
-  writeStory(story);
+  await writeStory(story);
   return story;
 }
 
@@ -397,10 +468,10 @@ export function canRetryRefinement(story: Story, maxAttempts: number): boolean {
 /**
  * Reset phase completion flags for rework
  */
-export function resetPhaseCompletion(
+export async function resetPhaseCompletion(
   story: Story,
   phase: 'research' | 'plan' | 'implement'
-): Story {
+): Promise<Story> {
   switch (phase) {
     case 'research':
       story.frontmatter.research_complete = false;
@@ -414,7 +485,7 @@ export function resetPhaseCompletion(
   }
 
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
-  writeStory(story);
+  await writeStory(story);
   return story;
 }
 
@@ -435,13 +506,13 @@ export function getLatestReviewFeedback(story: Story): string | null {
 /**
  * Append refinement feedback to the story content
  */
-export function appendRefinementNote(
+export async function appendRefinementNote(
   story: Story,
   iteration: number,
   feedback: string
-): Story {
+): Promise<Story> {
   const refinementNote = `### Refinement Iteration ${iteration}\n\n${feedback}`;
-  return appendToSection(story, 'Review Notes', refinementNote);
+  return await appendToSection(story, 'Review Notes', refinementNote);
 }
 
 /**
@@ -473,19 +544,19 @@ export function isAtMaxRetries(story: Story, config: Config, maxIterationsOverri
 /**
  * Increment the retry count for a story
  */
-export function incrementRetryCount(story: Story): Story {
+export async function incrementRetryCount(story: Story): Promise<Story> {
   const currentCount = story.frontmatter.retry_count || 0;
   story.frontmatter.retry_count = currentCount + 1;
   story.frontmatter.last_restart_timestamp = new Date().toISOString();
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
-  writeStory(story);
+  await writeStory(story);
   return story;
 }
 
 /**
  * Reset RPIV cycle for a story (keep research, reset plan/implementation/reviews)
  */
-export function resetRPIVCycle(story: Story, reason: string): Story {
+export async function resetRPIVCycle(story: Story, reason: string): Promise<Story> {
   // Keep research_complete as true, reset other flags
   story.frontmatter.plan_complete = false;
   story.frontmatter.implementation_complete = false;
@@ -498,14 +569,14 @@ export function resetRPIVCycle(story: Story, reason: string): Story {
   const currentCount = story.frontmatter.retry_count || 0;
   story.frontmatter.retry_count = currentCount + 1;
 
-  writeStory(story);
+  await writeStory(story);
   return story;
 }
 
 /**
  * Append a review attempt to the story's review history
  */
-export function appendReviewHistory(story: Story, attempt: ReviewAttempt): Story {
+export async function appendReviewHistory(story: Story, attempt: ReviewAttempt): Promise<Story> {
   if (!story.frontmatter.review_history) {
     story.frontmatter.review_history = [];
   }
@@ -519,7 +590,7 @@ export function appendReviewHistory(story: Story, attempt: ReviewAttempt): Story
   }
 
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
-  writeStory(story);
+  await writeStory(story);
   return story;
 }
 
@@ -536,24 +607,24 @@ export function getLatestReviewAttempt(story: Story): ReviewAttempt | null {
 /**
  * Mark a story as complete (all workflow flags set to true)
  */
-export function markStoryComplete(story: Story): Story {
+export async function markStoryComplete(story: Story): Promise<Story> {
   story.frontmatter.research_complete = true;
   story.frontmatter.plan_complete = true;
   story.frontmatter.implementation_complete = true;
   story.frontmatter.reviews_complete = true;
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
-  writeStory(story);
+  await writeStory(story);
   return story;
 }
 
 /**
  * Snapshot max_retries from config to story frontmatter (for mid-cycle config change protection)
  */
-export function snapshotMaxRetries(story: Story, config: Config): Story {
+export async function snapshotMaxRetries(story: Story, config: Config): Promise<Story> {
   if (story.frontmatter.max_retries === undefined) {
     story.frontmatter.max_retries = config.reviewConfig.maxRetries;
     story.frontmatter.updated = new Date().toISOString().split('T')[0];
-    writeStory(story);
+    await writeStory(story);
   }
   return story;
 }
@@ -605,21 +676,21 @@ export function isAtMaxImplementationRetries(story: Story, config: Config): bool
 /**
  * Reset implementation retry count to 0
  */
-export function resetImplementationRetryCount(story: Story): Story {
+export async function resetImplementationRetryCount(story: Story): Promise<Story> {
   story.frontmatter.implementation_retry_count = 0;
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
-  writeStory(story);
+  await writeStory(story);
   return story;
 }
 
 /**
  * Increment the implementation retry count for a story
  */
-export function incrementImplementationRetryCount(story: Story): Story {
+export async function incrementImplementationRetryCount(story: Story): Promise<Story> {
   const currentCount = story.frontmatter.implementation_retry_count || 0;
   story.frontmatter.implementation_retry_count = currentCount + 1;
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
-  writeStory(story);
+  await writeStory(story);
   return story;
 }
 
@@ -833,11 +904,11 @@ export function getStory(sdlcRoot: string, storyId: string): Story {
  * @param options - Optional configuration { resetRetries?: boolean }
  * @returns The unblocked story
  */
-export function unblockStory(
+export async function unblockStory(
   storyId: string,
   sdlcRoot: string,
   options?: { resetRetries?: boolean }
-): Story {
+): Promise<Story> {
   // Use the centralized getStory() function for lookup
   const foundStory = findStoryById(sdlcRoot, storyId);
 
@@ -877,7 +948,7 @@ export function unblockStory(
   foundStory.frontmatter.updated = new Date().toISOString().split('T')[0];
 
   // Write back to same location
-  writeStory(foundStory);
+  await writeStory(foundStory);
 
   return foundStory;
 }

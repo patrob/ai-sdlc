@@ -291,6 +291,18 @@ export interface WorktreeConfig {
 }
 
 /**
+ * File locking options for atomic story updates
+ */
+export interface LockOptions {
+  /** Lock timeout in milliseconds. @default 5000 */
+  lockTimeout?: number;
+  /** Number of retry attempts. @default 3 */
+  retries?: number;
+  /** Stale lock threshold in milliseconds. @default matches lockTimeout */
+  stale?: number;
+}
+
+/**
  * Information about a git worktree managed by ai-sdlc
  */
 export interface WorktreeInfo {

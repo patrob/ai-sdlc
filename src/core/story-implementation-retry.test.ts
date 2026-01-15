@@ -9,14 +9,20 @@ import {
 } from './story.js';
 import { Story, Config } from '../types/index.js';
 import { DEFAULT_CONFIG } from './config.js';
+import * as properLockfile from 'proper-lockfile';
 
 // Mock fs to prevent actual file writes
 vi.mock('fs');
+
+// Mock proper-lockfile to prevent actual file locking
+vi.mock('proper-lockfile');
 
 beforeEach(() => {
   vi.resetAllMocks();
   // Mock writeFileSync to do nothing (functions modify story in memory and write to disk)
   vi.mocked(fs.writeFileSync).mockImplementation(() => {});
+  // Mock proper-lockfile lock to return a release function
+  vi.mocked(properLockfile.lock).mockResolvedValue(async () => {});
 });
 
 describe('story implementation retry functions', () => {
@@ -239,7 +245,7 @@ describe('story implementation retry functions', () => {
   });
 
   describe('resetImplementationRetryCount', () => {
-    it('should set implementation_retry_count to 0', () => {
+    it('should set implementation_retry_count to 0', async () => {
       const story = {
         ...mockStory,
         frontmatter: {
@@ -247,37 +253,37 @@ describe('story implementation retry functions', () => {
           implementation_retry_count: 5,
         },
       };
-      const result = resetImplementationRetryCount(story);
+      const result = await resetImplementationRetryCount(story);
       expect(result.frontmatter.implementation_retry_count).toBe(0);
     });
 
-    it('should handle undefined implementation_retry_count', () => {
+    it('should handle undefined implementation_retry_count', async () => {
       const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
-      const result = resetImplementationRetryCount(story);
+      const result = await resetImplementationRetryCount(story);
       expect(result.frontmatter.implementation_retry_count).toBe(0);
     });
 
-    it('should update the updated timestamp', () => {
+    it('should update the updated timestamp', async () => {
       const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
-      const result = resetImplementationRetryCount(story);
+      const result = await resetImplementationRetryCount(story);
       expect(result.frontmatter.updated).toBeDefined();
     });
 
-    it('should call writeStory (writeFileSync)', () => {
+    it('should call writeStory (writeFileSync)', async () => {
       const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
-      resetImplementationRetryCount(story);
+      await resetImplementationRetryCount(story);
       expect(fs.writeFileSync).toHaveBeenCalled();
     });
   });
 
   describe('incrementImplementationRetryCount', () => {
-    it('should increment from undefined to 1', () => {
+    it('should increment from undefined to 1', async () => {
       const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
-      const result = incrementImplementationRetryCount(story);
+      const result = await incrementImplementationRetryCount(story);
       expect(result.frontmatter.implementation_retry_count).toBe(1);
     });
 
-    it('should increment existing count', () => {
+    it('should increment existing count', async () => {
       const story = {
         ...mockStory,
         frontmatter: {
@@ -285,11 +291,11 @@ describe('story implementation retry functions', () => {
           implementation_retry_count: 2,
         },
       };
-      const result = incrementImplementationRetryCount(story);
+      const result = await incrementImplementationRetryCount(story);
       expect(result.frontmatter.implementation_retry_count).toBe(3);
     });
 
-    it('should increment from 0', () => {
+    it('should increment from 0', async () => {
       const story = {
         ...mockStory,
         frontmatter: {
@@ -297,19 +303,19 @@ describe('story implementation retry functions', () => {
           implementation_retry_count: 0,
         },
       };
-      const result = incrementImplementationRetryCount(story);
+      const result = await incrementImplementationRetryCount(story);
       expect(result.frontmatter.implementation_retry_count).toBe(1);
     });
 
-    it('should update the updated timestamp', () => {
+    it('should update the updated timestamp', async () => {
       const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
-      const result = incrementImplementationRetryCount(story);
+      const result = await incrementImplementationRetryCount(story);
       expect(result.frontmatter.updated).toBeDefined();
     });
 
-    it('should call writeStory (writeFileSync)', () => {
+    it('should call writeStory (writeFileSync)', async () => {
       const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
-      incrementImplementationRetryCount(story);
+      await incrementImplementationRetryCount(story);
       expect(fs.writeFileSync).toHaveBeenCalled();
     });
   });

@@ -21,6 +21,9 @@ Thumbs.db
 # Workflow state files
 .ai-sdlc/.workflow-state*.json
 
+# Lock files (proper-lockfile)
+*.lock
+
 # Logs
 *.log
 npm-debug.log*

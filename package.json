@@ -56,12 +56,14 @@
     "glob": "^11.0.0",
     "gray-matter": "^4.0.3",
     "ora": "^8.0.0",
+    "proper-lockfile": "^4.1.2",
     "string-width": "^8.1.0",
     "write-file-atomic": "^5.0.1"
   },
   "devDependencies": {
     "@types/chokidar": "^2.1.7",
     "@types/node": "^20.0.0",
+    "@types/proper-lockfile": "^4.1.4",
     "@types/write-file-atomic": "^4.0.3",
     "tsx": "^4.0.0",
     "typescript": "^5.3.0",

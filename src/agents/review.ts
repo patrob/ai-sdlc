@@ -691,7 +691,7 @@ export async function runReviewAgent(
 
   try {
     // Snapshot max_retries from config (protects against mid-cycle config changes)
-    snapshotMaxRetries(story, config);
+    await snapshotMaxRetries(story, config);
 
     // Check if story has reached max retries
     if (isAtMaxRetries(story, config)) {
@@ -700,7 +700,7 @@ export async function runReviewAgent(
       const maxRetriesDisplay = Number.isFinite(maxRetries) ? maxRetries : '∞';
       const errorMsg = `Story has reached maximum retry limit (${retryCount}/${maxRetriesDisplay}). Manual intervention required.`;
 
-      updateStoryField(story, 'last_error', errorMsg);
+      await updateStoryField(story, 'last_error', errorMsg);
       changesMade.push(errorMsg);
 
       return {
@@ -848,7 +848,7 @@ ${passed ? '✅ **PASSED** - All reviews approved' : '❌ **FAILED** - Issues mu
 `;
 
     // Append reviews to story
-    appendToSection(story, 'Review Notes', reviewNotes);
+    await appendToSection(story, 'Review Notes', reviewNotes);
     changesMade.push('Added code review notes');
     changesMade.push('Added security review notes');
     changesMade.push('Added product owner review notes');
@@ -869,11 +869,11 @@ ${passed ? '✅ **PASSED** - All reviews approved' : '❌ **FAILED** - Issues mu
     };
 
     // Append to review history
-    appendReviewHistory(story, reviewAttempt);
+    await appendReviewHistory(story, reviewAttempt);
     changesMade.push('Recorded review attempt in history');
 
     if (passed) {
-      updateStoryField(story, 'reviews_complete', true);
+      await updateStoryField(story, 'reviews_complete', true);
       changesMade.push('Marked reviews_complete: true');
     } else {
       changesMade.push(`Reviews failed with ${allIssues.length} issue(s) - rework required`);
@@ -988,7 +988,7 @@ export async function createPullRequest(
       changesMade.push('GitHub CLI not available - PR creation skipped');
 
       // Still update to done for MVP
-      story = updateStoryStatus(story, 'done');
+      story = await updateStoryStatus(story, 'done');
       changesMade.push('Updated status to done');
 
       return {
@@ -1045,7 +1045,7 @@ ${story.content.substring(0, 1000)}...
       );
 
       const prUrl = prOutput.trim();
-      updateStoryField(story, 'pr_url', prUrl);
+      await updateStoryField(story, 'pr_url', prUrl);
       changesMade.push(`Created PR: ${prUrl}`);
     } catch (error) {
       const sanitizedError = sanitizeErrorMessage(
@@ -1056,7 +1056,7 @@ ${story.content.substring(0, 1000)}...
     }
 
     // Update status to done
-    story = updateStoryStatus(story, 'done');
+    story = await updateStoryStatus(story, 'done');
     changesMade.push('Updated status to done');
 
     return {

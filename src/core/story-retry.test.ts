@@ -8,14 +8,20 @@ import {
 } from './story.js';
 import { Story, Config, ReviewAttempt, ReviewDecision, ReviewSeverity } from '../types/index.js';
 import { DEFAULT_CONFIG } from './config.js';
+import * as properLockfile from 'proper-lockfile';
 
 // Mock fs to prevent actual file writes
 vi.mock('fs');
+
+// Mock proper-lockfile to prevent actual file locking
+vi.mock('proper-lockfile');
 
 beforeEach(() => {
   vi.resetAllMocks();
   // Mock writeFileSync to do nothing (functions modify story in memory and write to disk)
   vi.mocked(fs.writeFileSync).mockImplementation(() => {});
+  // Mock proper-lockfile lock to return a release function
+  vi.mocked(properLockfile.lock).mockResolvedValue(async () => {});
 });
 
 describe('story retry functions', () => {
@@ -128,9 +134,9 @@ describe('story retry functions', () => {
   });
 
   describe('resetRPIVCycle', () => {
-    it('should reset workflow flags except research', () => {
+    it('should reset workflow flags except research', async () => {
       const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
-      const result = resetRPIVCycle(story, 'Test rejection reason');
+      const result = await resetRPIVCycle(story, 'Test rejection reason');
 
       expect(result.frontmatter.research_complete).toBe(true);
       expect(result.frontmatter.plan_complete).toBe(false);
@@ -138,7 +144,7 @@ describe('story retry functions', () => {
       expect(result.frontmatter.reviews_complete).toBe(false);
     });
 
-    it('should increment retry_count', () => {
+    it('should increment retry_count', async () => {
       const story = {
         ...mockStory,
         frontmatter: {
@@ -146,21 +152,21 @@ describe('story retry functions', () => {
           retry_count: 1,
         },
       };
-      const result = resetRPIVCycle(story, 'Test rejection reason');
+      const result = await resetRPIVCycle(story, 'Test rejection reason');
 
       expect(result.frontmatter.retry_count).toBe(2);
     });
 
-    it('should initialize retry_count to 1 if undefined', () => {
+    it('should initialize retry_count to 1 if undefined', async () => {
       const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
-      const result = resetRPIVCycle(story, 'Test rejection reason');
+      const result = await resetRPIVCycle(story, 'Test rejection reason');
 
       expect(result.frontmatter.retry_count).toBe(1);
     });
 
-    it('should set last_restart_reason and timestamp', () => {
+    it('should set last_restart_reason and timestamp', async () => {
       const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
-      const result = resetRPIVCycle(story, 'Code quality issues found');
+      const result = await resetRPIVCycle(story, 'Code quality issues found');
 
       expect(result.frontmatter.last_restart_reason).toBe('Code quality issues found');
       expect(result.frontmatter.last_restart_timestamp).toBeDefined();
@@ -168,7 +174,7 @@ describe('story retry functions', () => {
   });
 
   describe('appendReviewHistory', () => {
-    it('should initialize review_history array if not present', () => {
+    it('should initialize review_history array if not present', async () => {
       const story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
       const attempt: ReviewAttempt = {
         timestamp: new Date().toISOString(),
@@ -181,14 +187,14 @@ describe('story retry functions', () => {
         poReviewPassed: false,
       };
 
-      const result = appendReviewHistory(story, attempt);
+      const result = await appendReviewHistory(story, attempt);
 
       expect(result.frontmatter.review_history).toBeDefined();
       expect(result.frontmatter.review_history).toHaveLength(1);
       expect(result.frontmatter.review_history![0]).toEqual(attempt);
     });
 
-    it('should append to existing review_history', () => {
+    it('should append to existing review_history', async () => {
       const existingAttempt: ReviewAttempt = {
         timestamp: '2024-01-01T10:00:00Z',
         decision: ReviewDecision.REJECTED,
@@ -218,14 +224,14 @@ describe('story retry functions', () => {
         poReviewPassed: true,
       };
 
-      const result = appendReviewHistory(story, newAttempt);
+      const result = await appendReviewHistory(story, newAttempt);
 
       expect(result.frontmatter.review_history).toHaveLength(2);
       expect(result.frontmatter.review_history![0]).toEqual(existingAttempt);
       expect(result.frontmatter.review_history![1]).toEqual(newAttempt);
     });
 
-    it('should limit review_history to 10 entries', () => {
+    it('should limit review_history to 10 entries', async () => {
       const attempts: ReviewAttempt[] = Array.from({ length: 12 }, (_, i) => ({
         timestamp: `2024-01-${String(i + 1).padStart(2, '0')}T10:00:00Z`,
         decision: ReviewDecision.REJECTED,
@@ -239,7 +245,7 @@ describe('story retry functions', () => {
 
       let story = { ...mockStory, frontmatter: { ...mockStory.frontmatter } };
       for (const attempt of attempts) {
-        story = appendReviewHistory(story, attempt);
+        story = await appendReviewHistory(story, attempt);
       }
 
       expect(story.frontmatter.review_history).toHaveLength(10);

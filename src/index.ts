@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { init, status, add, run, details, unblock, migrate } from './cli/commands.js';
+import { init, status, add, run, details, unblock, migrate, listWorktrees, addWorktree, removeWorktree } from './cli/commands.js';
 import { hasApiKey } from './core/auth.js';
 import { loadConfig, saveConfig } from './core/config.js';
 import { getThemedChalk } from './core/theme.js';
@@ -82,6 +82,7 @@ program
   .option('-v, --verbose', 'Show detailed daemon output (use with --watch)')
   .option('--force', 'Skip git validation checks (use with caution)')
   .option('--worktree', 'Create isolated git worktree for story execution (requires --story)')
+  .option('--no-worktree', 'Disable worktree even when enabled in config')
   .action((options) => {
     if (!options.dryRun && !options.watch) {
       checkApiKey();
@@ -141,5 +142,22 @@ program
       console.log(c.dim('Available keys: theme'));
     }
   });
+
+// Worktree management commands
+program
+  .command('worktrees')
+  .description('List managed worktrees')
+  .action(listWorktrees);
+
+program
+  .command('worktrees:add <story-id>')
+  .description('Create a worktree for a story')
+  .action(addWorktree);
+
+program
+  .command('worktrees:remove <story-id>')
+  .description('Remove a worktree for a story')
+  .option('--force', 'Skip confirmation prompt')
+  .action((storyId, options) => removeWorktree(storyId, options));
 
 program.parse();

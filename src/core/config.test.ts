@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { DEFAULT_CONFIG, loadConfig, DEFAULT_DAEMON_CONFIG, DEFAULT_TIMEOUTS, validateImplementationConfig } from './config.js';
-import { Config, TDDConfig } from '../types/index.js';
+import { DEFAULT_CONFIG, loadConfig, DEFAULT_DAEMON_CONFIG, DEFAULT_TIMEOUTS, validateImplementationConfig, DEFAULT_WORKTREE_CONFIG, validateWorktreeBasePath, getWorktreeConfig } from './config.js';
+import { Config, TDDConfig, WorktreeConfig } from '../types/index.js';
 
 describe('config - TDD configuration', () => {
   describe('TDD config defaults', () => {
@@ -400,6 +400,225 @@ describe('config - Review configuration defaults', () => {
         // Verify validateImplementationConfig was applied and capped at upper bound
         expect(config.implementation.maxRetries).toBe(10);
       });
+    });
+  });
+});
+
+describe('config - Worktree configuration', () => {
+  describe('Worktree config defaults', () => {
+    it('should have worktree configuration in DEFAULT_CONFIG', () => {
+      expect(DEFAULT_CONFIG.worktree).toBeDefined();
+      expect(DEFAULT_CONFIG.worktree).toHaveProperty('enabled');
+      expect(DEFAULT_CONFIG.worktree).toHaveProperty('basePath');
+    });
+
+    it('should have worktree.enabled set to false by default (opt-in)', () => {
+      expect(DEFAULT_CONFIG.worktree?.enabled).toBe(false);
+    });
+
+    it('should have worktree.basePath set to .ai-sdlc/worktrees by default', () => {
+      expect(DEFAULT_CONFIG.worktree?.basePath).toBe('.ai-sdlc/worktrees');
+    });
+
+    it('should export DEFAULT_WORKTREE_CONFIG constant', () => {
+      expect(DEFAULT_WORKTREE_CONFIG).toBeDefined();
+      expect(DEFAULT_WORKTREE_CONFIG.enabled).toBe(false);
+      expect(DEFAULT_WORKTREE_CONFIG.basePath).toBe('.ai-sdlc/worktrees');
+    });
+  });
+
+  describe('Worktree config validation', () => {
+    const tempDir = '.test-worktree-config';
+
+    beforeEach(() => {
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir);
+      }
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        const configFile = path.join(tempDir, '.ai-sdlc.json');
+        if (fs.existsSync(configFile)) {
+          fs.unlinkSync(configFile);
+        }
+        fs.rmdirSync(tempDir);
+      }
+    });
+
+    it('should load default worktree config when no config file exists', () => {
+      const config = loadConfig(tempDir);
+      expect(config.worktree).toBeDefined();
+      expect(config.worktree?.enabled).toBe(false);
+      expect(config.worktree?.basePath).toBe('.ai-sdlc/worktrees');
+    });
+
+    it('should merge user-provided worktree config with defaults', () => {
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
+      const userConfig = {
+        worktree: {
+          enabled: true,
+        },
+      };
+      fs.writeFileSync(configPath, JSON.stringify(userConfig));
+
+      const config = loadConfig(tempDir);
+      expect(config.worktree?.enabled).toBe(true);
+      // Should keep default for unspecified properties
+      expect(config.worktree?.basePath).toBe('.ai-sdlc/worktrees');
+    });
+
+    it('should validate that worktree.enabled is a boolean', () => {
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
+      const userConfig = {
+        worktree: {
+          enabled: 'true' as any, // Invalid: string instead of boolean
+        },
+      };
+      fs.writeFileSync(configPath, JSON.stringify(userConfig));
+
+      const config = loadConfig(tempDir);
+      // Invalid value should be replaced with default
+      expect(typeof config.worktree?.enabled).toBe('boolean');
+      expect(config.worktree?.enabled).toBe(false);
+    });
+
+    it('should validate that worktree.basePath is a string', () => {
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
+      const userConfig = {
+        worktree: {
+          enabled: true,
+          basePath: 123 as any, // Invalid: number instead of string
+        },
+      };
+      fs.writeFileSync(configPath, JSON.stringify(userConfig));
+
+      const config = loadConfig(tempDir);
+      // Invalid value should be replaced with default
+      expect(typeof config.worktree?.basePath).toBe('string');
+      expect(config.worktree?.basePath).toBe('.ai-sdlc/worktrees');
+    });
+
+    it('should allow custom basePath when valid string', () => {
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
+      const userConfig = {
+        worktree: {
+          enabled: true,
+          basePath: 'custom/worktree/path',
+        },
+      };
+      fs.writeFileSync(configPath, JSON.stringify(userConfig));
+
+      const config = loadConfig(tempDir);
+      expect(config.worktree?.basePath).toBe('custom/worktree/path');
+    });
+
+    it('should allow enabling worktrees via config file', () => {
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
+      const userConfig = {
+        worktree: {
+          enabled: true,
+          basePath: '.ai-sdlc/worktrees',
+        },
+      };
+      fs.writeFileSync(configPath, JSON.stringify(userConfig));
+
+      const config = loadConfig(tempDir);
+      expect(config.worktree?.enabled).toBe(true);
+    });
+  });
+
+  describe('validateWorktreeBasePath', () => {
+    const tempDir = '.test-worktree-path-validation';
+
+    beforeEach(() => {
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmdirSync(tempDir, { recursive: true });
+      }
+    });
+
+    it('should resolve relative paths to project root', () => {
+      // Create parent directory first
+      fs.mkdirSync(path.join(tempDir, '.ai-sdlc'), { recursive: true });
+      const result = validateWorktreeBasePath('.ai-sdlc/worktrees', tempDir);
+      expect(result).toBe(path.resolve(tempDir, '.ai-sdlc/worktrees'));
+    });
+
+    it('should keep absolute paths unchanged', () => {
+      const absolutePath = path.resolve(tempDir, 'custom/worktrees');
+      // Create parent directory to avoid validation error
+      fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+      const result = validateWorktreeBasePath(absolutePath, tempDir);
+      expect(result).toBe(absolutePath);
+    });
+
+    it('should throw error when parent directory does not exist', () => {
+      expect(() => {
+        validateWorktreeBasePath('/non/existent/path/worktrees', tempDir);
+      }).toThrow('Worktree basePath parent directory does not exist');
+    });
+
+    it('should accept path when parent directory exists', () => {
+      // tempDir exists, so .ai-sdlc/worktrees parent (.ai-sdlc which is tempDir's child) needs to exist
+      const parentDir = path.join(tempDir, '.ai-sdlc');
+      fs.mkdirSync(parentDir, { recursive: true });
+
+      const result = validateWorktreeBasePath('.ai-sdlc/worktrees', tempDir);
+      expect(result).toBe(path.resolve(tempDir, '.ai-sdlc/worktrees'));
+    });
+  });
+
+  describe('getWorktreeConfig', () => {
+    const tempDir = '.test-get-worktree-config';
+
+    beforeEach(() => {
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      // Create the .ai-sdlc parent directory for path validation
+      const sdlcDir = path.join(tempDir, '.ai-sdlc');
+      if (!fs.existsSync(sdlcDir)) {
+        fs.mkdirSync(sdlcDir, { recursive: true });
+      }
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmdirSync(tempDir, { recursive: true });
+      }
+    });
+
+    it('should return default config when worktree not set in config', () => {
+      const config: Config = { ...DEFAULT_CONFIG, worktree: undefined };
+      const result = getWorktreeConfig(config, tempDir);
+      expect(result.enabled).toBe(false);
+      expect(result.basePath).toBe(path.resolve(tempDir, '.ai-sdlc/worktrees'));
+    });
+
+    it('should return user config with resolved path', () => {
+      const config: Config = {
+        ...DEFAULT_CONFIG,
+        worktree: { enabled: true, basePath: '.ai-sdlc/worktrees' },
+      };
+      const result = getWorktreeConfig(config, tempDir);
+      expect(result.enabled).toBe(true);
+      expect(result.basePath).toBe(path.resolve(tempDir, '.ai-sdlc/worktrees'));
+    });
+
+    it('should throw error if basePath parent does not exist', () => {
+      const config: Config = {
+        ...DEFAULT_CONFIG,
+        worktree: { enabled: true, basePath: '/nonexistent/path/worktrees' },
+      };
+      expect(() => getWorktreeConfig(config, tempDir)).toThrow(
+        'Worktree basePath parent directory does not exist'
+      );
     });
   });
 });

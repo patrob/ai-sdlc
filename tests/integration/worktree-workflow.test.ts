@@ -59,7 +59,20 @@ describe('Worktree Workflow Integration', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     // Mock fs operations
-    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    // Parent directory must exist for validateWorktreeBasePath(), but worktree path itself should not
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) => {
+      const pathStr = String(p);
+      // Parent directories for worktree basePath should exist
+      // This includes .ai-sdlc and any path that ends before /worktrees/
+      if (pathStr.includes('.ai-sdlc') && !pathStr.includes('worktrees/')) {
+        return true;
+      }
+      // Worktree path should not exist yet (so it can be created)
+      if (pathStr.includes('worktrees/S-0029')) {
+        return false;
+      }
+      return false;
+    });
     vi.spyOn(fs, 'mkdirSync').mockImplementation(() => '');
     vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
     vi.spyOn(fs, 'readFileSync').mockReturnValue('---\nid: S-0029\n---\n# Test');
@@ -276,9 +289,15 @@ describe('Worktree Workflow Integration', () => {
   it('handles worktree path already exists error', async () => {
     const logSpy = vi.spyOn(console, 'log');
 
-    // Mock worktree path as already existing
-    vi.spyOn(fs, 'existsSync').mockImplementation((path) => {
-      if (typeof path === 'string' && path.includes('worktrees/S-0029-test-story')) {
+    // Mock worktree path as already existing (parent dir must also exist for validation)
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) => {
+      const pathStr = String(p);
+      // Parent directories for worktree basePath should exist
+      if (pathStr.includes('.ai-sdlc') && !pathStr.includes('worktrees/')) {
+        return true;
+      }
+      // Worktree path ALREADY EXISTS (this is what we're testing)
+      if (pathStr.includes('worktrees/S-0029-test-story')) {
         return true;
       }
       return false;

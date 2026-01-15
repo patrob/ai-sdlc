@@ -2,17 +2,17 @@
 id: S-0030
 title: Worktree configuration support
 priority: 2
-status: backlog
+status: done
 type: feature
 created: '2026-01-15'
 labels:
   - git
   - worktree
   - configuration
-research_complete: false
-plan_complete: false
-implementation_complete: false
-reviews_complete: false
+research_complete: true
+plan_complete: true
+implementation_complete: true
+reviews_complete: true
 slug: worktree-configuration-support
 depends_on:
   - S-0029
@@ -33,23 +33,23 @@ Add configuration file support so users can make worktrees the default. When ena
 ## Acceptance Criteria
 
 ### Configuration in `.ai-sdlc.json`
-- [ ] `worktree.enabled: boolean` - when true, worktrees are default (default: false)
-- [ ] `worktree.basePath: string` - override default worktree location (default: `.ai-sdlc/worktrees`)
-- [ ] Configuration is optional - missing config uses defaults
+- [x] `worktree.enabled: boolean` - when true, worktrees are default (default: false)
+- [x] `worktree.basePath: string` - override default worktree location (default: `.ai-sdlc/worktrees`)
+- [x] Configuration is optional - missing config uses defaults
 
 ### CLI Flags
-- [ ] `--no-worktree` flag available when config has `worktree.enabled: true`
-- [ ] `--no-worktree` forces branch-based workflow even when config enables worktrees
-- [ ] `--worktree` flag still works (overrides config when `enabled: false`)
+- [x] `--no-worktree` flag available when config has `worktree.enabled: true`
+- [x] `--no-worktree` forces branch-based workflow even when config enables worktrees
+- [x] `--worktree` flag still works (overrides config when `enabled: false`)
 
 ### Validation
-- [ ] Invalid `worktree.basePath` (non-existent parent directory) fails with clear error
-- [ ] Relative `basePath` resolved relative to project root
-- [ ] Config validation runs at startup, not at worktree creation time
+- [x] Invalid `worktree.basePath` (non-existent parent directory) fails with clear error
+- [x] Relative `basePath` resolved relative to project root
+- [x] Config validation runs at startup, not at worktree creation time
 
 ### Config Loading
-- [ ] Extend existing config loading in `src/core/config.ts`
-- [ ] Add `WorktreeConfig` type to `src/types/index.ts`
+- [x] Extend existing config loading in `src/core/config.ts`
+- [x] Add `WorktreeConfig` type to `src/types/index.ts`
 
 ## Technical Approach
 
@@ -88,10 +88,10 @@ export function getWorktreeConfig(config: Config): WorktreeConfig {
 
 ## Definition of Done
 
-- [ ] Config file with `worktree.enabled: true` makes worktrees default
-- [ ] `--no-worktree` overrides config
-- [ ] All tests pass
-- [ ] `make verify` passes
+- [x] Config file with `worktree.enabled: true` makes worktrees default
+- [x] `--no-worktree` overrides config
+- [x] All tests pass
+- [x] `make verify` passes
 
 ---
 

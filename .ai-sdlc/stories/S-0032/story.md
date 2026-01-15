@@ -2,7 +2,7 @@
 id: S-0032
 title: Worktree lifecycle cleanup prompts
 priority: 4
-status: backlog
+status: done
 type: feature
 created: '2026-01-15'
 labels:
@@ -10,10 +10,10 @@ labels:
   - worktree
   - lifecycle
   - ux
-research_complete: false
-plan_complete: false
-implementation_complete: false
-reviews_complete: false
+research_complete: true
+plan_complete: true
+implementation_complete: true
+reviews_complete: true
 slug: worktree-lifecycle-cleanup
 depends_on:
   - S-0029
@@ -35,26 +35,26 @@ When a story with a worktree moves to "done" status, prompt the user to optional
 ## Acceptance Criteria
 
 ### Cleanup Prompt
-- [ ] When story moves to done and has `worktree_path` in frontmatter, prompt user
-- [ ] Prompt shows: worktree path and asks "Remove worktree? [y/N]"
-- [ ] Default is No (preserves worktree if user just presses Enter)
-- [ ] If user confirms (y/Y), remove worktree and clear `worktree_path` from frontmatter
-- [ ] If user declines, worktree remains and `worktree_path` stays in frontmatter
+- [x] When story moves to done and has `worktree_path` in frontmatter, prompt user
+- [x] Prompt shows: worktree path and asks "Remove worktree? [y/N]"
+- [x] Default is No (preserves worktree if user just presses Enter)
+- [x] If user confirms (y/Y), remove worktree and clear `worktree_path` from frontmatter
+- [x] If user declines, worktree remains and `worktree_path` stays in frontmatter
 
 ### Observability
-- [ ] Info log when creating worktree: "Creating worktree at: {path}"
-- [ ] Info log when entering worktree: "Executing in worktree: {path}"
-- [ ] Info log when returning: "Returning to main repository"
-- [ ] Warning if `worktree_path` in frontmatter doesn't exist on disk
+- [x] Info log when creating worktree: "Creating worktree at: {path}"
+- [x] Info log when entering worktree: "Executing in worktree: {path}"
+- [x] Info log when returning: "Returning to main repository"
+- [x] Warning if `worktree_path` in frontmatter doesn't exist on disk
 
 ### Error Handling
-- [ ] If worktree removal fails, log error but don't fail the move-to-done action
-- [ ] If worktree was already manually deleted, just clear frontmatter (no error)
+- [x] If worktree removal fails, log error but don't fail the move-to-done action
+- [x] If worktree was already manually deleted, just clear frontmatter (no error)
 
 ### Integration Points
-- [ ] Hook into `moveToStatus('done', ...)` in kanban service
-- [ ] Only prompt in interactive mode (not in daemon/auto mode)
-- [ ] In non-interactive mode, skip cleanup (worktree remains)
+- [x] Hook into `move_to_done` case in `executeAction()`
+- [x] Only prompt in interactive mode (not in daemon/auto mode)
+- [x] In non-interactive mode, skip cleanup (worktree remains)
 
 ## Technical Approach
 
@@ -103,11 +103,11 @@ async function handleMoveToDone(story: Story): Promise<void> {
 
 ## Definition of Done
 
-- [ ] Moving story to done prompts for worktree cleanup (interactive mode)
-- [ ] Worktree is removed if user confirms
-- [ ] Frontmatter is updated appropriately
-- [ ] All tests pass
-- [ ] `make verify` passes
+- [x] Moving story to done prompts for worktree cleanup (interactive mode)
+- [x] Worktree is removed if user confirms
+- [x] Frontmatter is updated appropriately
+- [x] All tests pass
+- [x] `make verify` passes
 
 ---
 

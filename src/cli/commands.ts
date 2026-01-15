@@ -310,6 +310,16 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
   let sdlcRoot = getSdlcRoot();
   const c = getThemedChalk(config);
 
+  // Migrate global workflow state to story-specific location if needed
+  // Only run when NOT continuing (to avoid interrupting resumed workflows)
+  if (!options.continue) {
+    const { migrateGlobalWorkflowState } = await import('../core/workflow-state.js');
+    const migrationResult = await migrateGlobalWorkflowState(sdlcRoot);
+    if (migrationResult.migrated) {
+      console.log(c.info(migrationResult.message));
+    }
+  }
+
   // Handle daemon/watch mode
   if (options.watch) {
     console.log(c.info('🚀 Starting daemon mode...'));
@@ -353,8 +363,17 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
   let storyContentHash: string | undefined;
 
   if (options.continue) {
-    // Try to load existing state
-    const existingState = await loadWorkflowState(sdlcRoot);
+    // Determine storyId for loading state
+    // If --story is provided, use it; otherwise, try to infer from existing state
+    let resumeStoryId: string | undefined;
+
+    // First try: use --story flag if provided
+    if (options.story) {
+      resumeStoryId = options.story;
+    }
+
+    // Try to load existing state (with or without storyId)
+    const existingState = await loadWorkflowState(sdlcRoot, resumeStoryId);
 
     if (!existingState) {
       console.log(c.error('Error: No checkpoint found.'));
@@ -407,8 +426,23 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
     console.log();
   } else {
+    // Early validation of story ID format before any operations that use it
+    // This prevents sanitizeStoryId from throwing before we can show a nice error
+    if (options.story && !/^[a-z0-9_-]+$/i.test(options.story.toLowerCase().trim())) {
+      console.log(
+        c.error(
+          'Invalid story ID format. Only letters, numbers, hyphens, and underscores are allowed.'
+        )
+      );
+      return;
+    }
+
     // Check if there's an existing state and suggest --continue
-    if (hasWorkflowState(sdlcRoot) && !options.dryRun) {
+    // Check both global and story-specific state
+    const hasGlobalState = hasWorkflowState(sdlcRoot);
+    const hasStoryState = options.story ? hasWorkflowState(sdlcRoot, options.story) : false;
+
+    if ((hasGlobalState || hasStoryState) && !options.dryRun) {
       console.log(c.info('Note: Found previous checkpoint. Use --continue to resume.'));
       console.log();
     }
@@ -524,7 +558,8 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
     // Clear state if workflow is complete
     if (options.continue || hasWorkflowState(sdlcRoot)) {
-      await clearWorkflowState(sdlcRoot);
+      // Using options.story - action not yet created in early exit path
+      await clearWorkflowState(sdlcRoot, options.story);
       console.log(c.dim('Checkpoint cleared.'));
     }
 
@@ -574,7 +609,8 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
     if (actionsToProcess.length === 0) {
       console.log(c.success('All actions from checkpoint already completed!'));
-      await clearWorkflowState(sdlcRoot);
+      // Using options.story - action not yet created in early exit path
+      await clearWorkflowState(sdlcRoot, options.story);
       console.log(c.dim('Checkpoint cleared.'));
       return;
     }
@@ -731,7 +767,8 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
           console.log(c.info('You can:'));
           console.log(c.dim('  1. Fix issues manually and run again'));
           console.log(c.dim('  2. Reset retry count in the story frontmatter'));
-          await clearWorkflowState(sdlcRoot);
+          // Using action.storyId - available from action loop context
+          await clearWorkflowState(sdlcRoot, action.storyId);
           return;
         }
 
@@ -806,7 +843,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
         },
       };
 
-      await saveWorkflowState(state, sdlcRoot);
+      await saveWorkflowState(state, sdlcRoot, action.storyId);
       console.log(c.dim(`  ✓ Progress saved (${completedActions.length} actions completed)`));
     }
 
@@ -830,7 +867,8 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
               console.log(c.dim(`Retry attempts: ${retryAttempt}`));
             }
             console.log(c.dim(`Story is now ready for PR creation.`));
-            await clearWorkflowState(sdlcRoot);
+            // Using action.storyId - available from action loop context
+            await clearWorkflowState(sdlcRoot, action.storyId);
             console.log(c.dim('Checkpoint cleared.'));
           } else {
             // This shouldn't happen if our logic is correct, but handle it
@@ -845,7 +883,8 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
         const newAssessment = assessState(sdlcRoot);
         if (newAssessment.recommendedActions.length === 0) {
           console.log(c.success('\n✓ All actions completed!'));
-          await clearWorkflowState(sdlcRoot);
+          // Using action.storyId - available from action loop context
+          await clearWorkflowState(sdlcRoot, action.storyId);
           console.log(c.dim('Checkpoint cleared.'));
           break;
         }

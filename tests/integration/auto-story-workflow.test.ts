@@ -204,7 +204,12 @@ describe('--auto --story Full SDLC Workflow', () => {
       const story = createStory('Test Story', sdlcRoot);
 
       // Create a mock checkpoint with fullSDLC mode
-      const checkpointPath = path.join(sdlcRoot, '.workflow-state.json');
+      // Use story-specific checkpoint location
+      const storyId = story.frontmatter.id;
+      const checkpointDir = path.join(sdlcRoot, 'stories', storyId);
+      await fs.promises.mkdir(checkpointDir, { recursive: true });
+      const checkpointPath = path.join(checkpointDir, '.workflow-state.json');
+
       const checkpoint = {
         version: '1.0',
         workflowId: 'test-workflow-123',
@@ -230,9 +235,10 @@ describe('--auto --story Full SDLC Workflow', () => {
 
       fs.writeFileSync(checkpointPath, JSON.stringify(checkpoint, null, 2));
 
-      // Resume with --continue
+      // Resume with --continue and story parameter
       await run({
         continue: true,
+        story: story.frontmatter.id, // Pass story to load correct state
         dryRun: true,
       });
 

@@ -624,6 +624,45 @@ export function incrementImplementationRetryCount(story: Story): Story {
 }
 
 /**
+ * Sanitize story ID for safe path construction.
+ * Prevents path traversal attacks by rejecting dangerous characters.
+ *
+ * SECURITY: This function is CRITICAL for preventing path traversal vulnerabilities.
+ * Use this before constructing ANY file paths with user-provided story IDs.
+ *
+ * @param storyId - Story ID to sanitize (e.g., 'S-0001')
+ * @returns Sanitized story ID safe for path construction
+ * @throws Error if storyId contains dangerous characters or patterns
+ */
+export function sanitizeStoryId(storyId: string): string {
+  if (!storyId) {
+    throw new Error('Story ID cannot be empty');
+  }
+
+  // Reject path traversal attempts
+  if (storyId.includes('..')) {
+    throw new Error('Invalid story ID: contains path traversal sequence (..)');
+  }
+
+  // Reject path separators
+  if (storyId.includes('/') || storyId.includes('\\')) {
+    throw new Error('Invalid story ID: contains path separator');
+  }
+
+  // Reject absolute paths
+  if (path.isAbsolute(storyId)) {
+    throw new Error('Invalid story ID: cannot be an absolute path');
+  }
+
+  // Reject control characters and other dangerous characters
+  if (/[\x00-\x1F\x7F]/.test(storyId)) {
+    throw new Error('Invalid story ID: contains control characters');
+  }
+
+  return storyId;
+}
+
+/**
  * Sanitize user-controlled text for safe display and storage.
  * Removes ANSI escape sequences, control characters, and potential injection vectors.
  * Truncates to 200 characters maximum.

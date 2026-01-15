@@ -405,6 +405,139 @@ branch refs/heads/ai-sdlc/S-0030-second
     });
   });
 
+  describe('installDependencies', () => {
+    it('skips installation if no package.json exists', () => {
+      vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync');
+
+      service.installDependencies('/test/worktree');
+
+      // Should not call any package manager
+      expect(spawnSyncSpy).not.toHaveBeenCalledWith(
+        expect.stringMatching(/npm|yarn|pnpm/),
+        expect.anything(),
+        expect.anything()
+      );
+    });
+
+    it('uses npm when package-lock.json exists', () => {
+      vi.spyOn(fs, 'existsSync').mockImplementation((p: any) => {
+        if (p.includes('package.json')) return true;
+        if (p.includes('package-lock.json')) return true;
+        return false;
+      });
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      service.installDependencies('/test/worktree');
+
+      expect(spawnSyncSpy).toHaveBeenCalledWith(
+        'npm',
+        ['install'],
+        expect.objectContaining({
+          cwd: '/test/worktree',
+          timeout: 120000,
+        })
+      );
+    });
+
+    it('uses yarn when yarn.lock exists', () => {
+      vi.spyOn(fs, 'existsSync').mockImplementation((p: any) => {
+        if (p.includes('package.json')) return true;
+        if (p.includes('yarn.lock')) return true;
+        return false;
+      });
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      service.installDependencies('/test/worktree');
+
+      expect(spawnSyncSpy).toHaveBeenCalledWith(
+        'yarn',
+        ['install'],
+        expect.objectContaining({ cwd: '/test/worktree' })
+      );
+    });
+
+    it('uses pnpm when pnpm-lock.yaml exists', () => {
+      vi.spyOn(fs, 'existsSync').mockImplementation((p: any) => {
+        if (p.includes('package.json')) return true;
+        if (p.includes('pnpm-lock.yaml')) return true;
+        return false;
+      });
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      service.installDependencies('/test/worktree');
+
+      expect(spawnSyncSpy).toHaveBeenCalledWith(
+        'pnpm',
+        ['install'],
+        expect.objectContaining({ cwd: '/test/worktree' })
+      );
+    });
+
+    it('defaults to npm when no lock file exists', () => {
+      vi.spyOn(fs, 'existsSync').mockImplementation((p: any) => {
+        if (p.includes('package.json')) return true;
+        return false;
+      });
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      service.installDependencies('/test/worktree');
+
+      expect(spawnSyncSpy).toHaveBeenCalledWith(
+        'npm',
+        ['install'],
+        expect.anything()
+      );
+    });
+
+    it('throws error when installation fails', () => {
+      vi.spyOn(fs, 'existsSync').mockImplementation((p: any) => {
+        if (p.includes('package.json')) return true;
+        return false;
+      });
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: 'npm ERR! code ENETWORK',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      expect(() => service.installDependencies('/test/worktree')).toThrow(
+        'Failed to install dependencies'
+      );
+    });
+  });
+
   describe('remove', () => {
     it('executes correct git worktree remove command', () => {
       const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockReturnValue({

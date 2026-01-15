@@ -291,6 +291,20 @@ export interface WorktreeConfig {
 }
 
 /**
+ * Logging configuration for ai-sdlc operations
+ */
+export interface LogConfig {
+  /** Enable logging to file. @default true */
+  enabled: boolean;
+  /** Minimum log level to record. @default 'info' */
+  level: 'debug' | 'info' | 'warn' | 'error';
+  /** Maximum log file size in MB before rotation. @default 10 */
+  maxFileSizeMb: number;
+  /** Maximum number of log files to retain. @default 5 */
+  maxFiles: number;
+}
+
+/**
  * Information about a git worktree managed by ai-sdlc
  */
 export interface WorktreeInfo {
@@ -348,6 +362,11 @@ export interface Config {
    * Controls git worktree creation and location.
    */
   worktree?: WorktreeConfig;
+  /**
+   * Logging configuration for diagnostics and debugging.
+   * Controls log file location, rotation, and verbosity.
+   */
+  logging?: LogConfig;
 }
 
 // Agent types

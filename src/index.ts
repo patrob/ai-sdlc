@@ -5,9 +5,10 @@ import chalk from 'chalk';
 import { createRequire } from 'module';
 import { init, status, add, run, details, unblock, migrate, listWorktrees, addWorktree, removeWorktree } from './cli/commands.js';
 import { hasApiKey } from './core/auth.js';
-import { loadConfig, saveConfig } from './core/config.js';
+import { loadConfig, saveConfig, DEFAULT_LOGGING_CONFIG } from './core/config.js';
 import { getThemedChalk } from './core/theme.js';
-import { ThemePreference } from './types/index.js';
+import { ThemePreference, LogConfig } from './types/index.js';
+import { initLogger } from './core/logger.js';
 
 const require = createRequire(import.meta.url);
 const packageJson = require('../package.json');
@@ -87,13 +88,34 @@ program
   .option('--force', 'Skip git validation checks (use with caution)')
   .option('--worktree', 'Create isolated git worktree for story execution (requires --story)')
   .option('--no-worktree', 'Disable worktree even when enabled in config')
+  .option('--log-level <level>', 'Set log verbosity (debug, info, warn, error)', 'info')
   .action((options) => {
     if (!options.dryRun && !options.watch) {
       checkApiKey();
     }
+
+    // Initialize logger with config and CLI override
+    const config = loadConfig();
+    const logConfig: LogConfig = {
+      ...DEFAULT_LOGGING_CONFIG,
+      ...config.logging,
+    };
+
+    // CLI --log-level overrides config
+    if (options.logLevel) {
+      const validLevels = ['debug', 'info', 'warn', 'error'];
+      if (validLevels.includes(options.logLevel)) {
+        logConfig.level = options.logLevel as LogConfig['level'];
+      } else {
+        const c = getThemedChalk(config);
+        console.log(c.warning(`Invalid log level "${options.logLevel}", using "${logConfig.level}"`));
+      }
+    }
+
+    initLogger(process.cwd(), logConfig);
+
     // Validate --worktree requires --story
     if (options.worktree && !options.story) {
-      const config = loadConfig();
       const c = getThemedChalk(config);
       console.log(c.error('Error: --worktree requires --story flag'));
       process.exit(1);

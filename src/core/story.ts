@@ -665,8 +665,21 @@ export function sanitizeReasonText(text: string): string {
  * @returns Story object or null if not found
  */
 export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
-  // O(1) direct path construction for new architecture
-  // First, find the actual directory name with correct casing
+  // SECURITY: Validate storyId format (defense-in-depth)
+  // Reject any input that could be used for path traversal
+  if (
+    !storyId ||
+    storyId.includes('..') ||
+    storyId.includes('/') ||
+    storyId.includes('\\') ||
+    path.isAbsolute(storyId)
+  ) {
+    return null;
+  }
+
+  // O(n) directory scan for case-insensitive matching in new architecture
+  // Reads all story directories to find case-insensitive match
+  // Note: fs.realpathSync() does NOT canonicalize casing on macOS, so we must scan
   const storiesFolder = path.join(sdlcRoot, STORIES_FOLDER);
 
   if (fs.existsSync(storiesFolder)) {

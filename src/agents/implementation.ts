@@ -657,7 +657,7 @@ export async function runTDDImplementation(
     story.frontmatter.tdd_current_test = cycle;
 
     // Persist the TDD cycle history to disk
-    writeStory(story);
+    await writeStory(story);
 
     changesMade.push(`Completed TDD cycle ${cycleNumber}`);
 
@@ -798,13 +798,13 @@ ${implementationResult}
     // Append to story content
     const updatedStory = parseStory(storyPath);
     updatedStory.content += '\n\n' + implementationNotes;
-    writeStory(updatedStory);
+    await writeStory(updatedStory);
     changesMade.push(attemptNumber > 1 ? `Added retry ${attemptNumber - 1} notes` : 'Added implementation notes');
 
     changesMade.push('Running verification before marking complete...');
     const verification = await verifyImplementation(updatedStory, workingDir);
 
-    updateStoryField(updatedStory, 'last_test_run', {
+    await updateStoryField(updatedStory, 'last_test_run', {
       passed: verification.passed,
       failures: verification.failures,
       timestamp: verification.timestamp,
@@ -812,7 +812,7 @@ ${implementationResult}
 
     if (verification.passed) {
       // Success! Reset retry count and return success
-      resetImplementationRetryCount(updatedStory);
+      await resetImplementationRetryCount(updatedStory);
       changesMade.push('Verification passed - implementation successful');
 
       // Send success progress callback
@@ -834,7 +834,7 @@ ${implementationResult}
     const currentDiffHash = captureCurrentDiffHash(workingDir);
 
     // Track retry attempt
-    incrementImplementationRetryCount(updatedStory);
+    await incrementImplementationRetryCount(updatedStory);
 
     // Extract first 100 chars of test and build output for history
     const testSnippet = verification.testsOutput.substring(0, 100).replace(/\n/g, ' ');
@@ -988,7 +988,7 @@ export async function runImplementationAgent(
         }
 
         // Update story with branch info
-        updateStoryField(story, 'branch', branchName);
+        await updateStoryField(story, 'branch', branchName);
       }
     } catch {
       // Not a git repo, continue without branching
@@ -997,7 +997,7 @@ export async function runImplementationAgent(
 
     // Update status to in-progress if not already there
     if (story.frontmatter.status !== 'in-progress') {
-      story = updateStoryStatus(story, 'in-progress');
+      story = await updateStoryStatus(story, 'in-progress');
       currentStoryPath = story.path;
       changesMade.push('Updated status to in-progress');
     }
@@ -1022,7 +1022,7 @@ export async function runImplementationAgent(
         changesMade.push('Running final verification...');
         const verification = await verifyImplementation(tddResult.story, workingDir);
 
-        updateStoryField(tddResult.story, 'last_test_run', {
+        await updateStoryField(tddResult.story, 'last_test_run', {
           passed: verification.passed,
           failures: verification.failures,
           timestamp: verification.timestamp,
@@ -1031,7 +1031,7 @@ export async function runImplementationAgent(
         if (!verification.passed) {
           // TDD final verification failed - this is unexpected since TDD should ensure all tests pass
           // Reset retry count since this is the first failure at this stage
-          resetImplementationRetryCount(tddResult.story);
+          await resetImplementationRetryCount(tddResult.story);
 
           return {
             success: false,
@@ -1042,9 +1042,9 @@ export async function runImplementationAgent(
         }
 
         // Success - reset retry count
-        resetImplementationRetryCount(tddResult.story);
+        await resetImplementationRetryCount(tddResult.story);
 
-        updateStoryField(tddResult.story, 'implementation_complete', true);
+        await updateStoryField(tddResult.story, 'implementation_complete', true);
         changesMade.push('Marked implementation_complete: true');
 
         return {
@@ -1104,7 +1104,7 @@ export async function runImplementationAgent(
       changesMade.push(`Commit warning: ${errorMsg} (continuing implementation)`);
     }
 
-    updateStoryField(updatedStory, 'implementation_complete', true);
+    await updateStoryField(updatedStory, 'implementation_complete', true);
     changesMade.push('Marked implementation_complete: true');
 
     return {

@@ -47,7 +47,7 @@ export class WorkflowRunner {
       return;
     }
 
-    const assessment = assessState(this.sdlcRoot);
+    const assessment = await assessState(this.sdlcRoot);
 
     if (assessment.recommendedActions.length === 0) {
       console.log(c.success('No pending actions. Board is up to date!'));
@@ -116,7 +116,7 @@ export class WorkflowRunner {
       actionsProcessed++;
 
       // Re-assess after each action
-      assessment = assessState(this.sdlcRoot);
+      assessment = await assessState(this.sdlcRoot);
     }
 
     if (actionsProcessed >= maxActions) {
@@ -257,11 +257,11 @@ export class WorkflowRunner {
       // Auto-complete on approval
       if (config.reviewConfig.autoCompleteOnApproval) {
         console.log(c.success(`\n✅ Review approved! Auto-completing story "${story.frontmatter.title}"`));
-        markStoryComplete(story);
+        await markStoryComplete(story);
 
         // Update status to done if in in-progress
         if (story.frontmatter.status === 'in-progress') {
-          story = updateStoryStatus(story, 'done');
+          story = await updateStoryStatus(story, 'done');
           console.log(c.success(`Updated story status to done`));
         }
       }
@@ -289,7 +289,7 @@ export class WorkflowRunner {
         const summary = generateReviewSummary(reviewResult.issues, getTerminalWidth());
         console.log(c.dim(`  Summary: ${summary}`));
 
-        resetRPIVCycle(story, reviewResult.feedback);
+        await resetRPIVCycle(story, reviewResult.feedback);
         console.log(c.info('RPIV cycle reset. Planning phase will restart on next run.'));
       }
     } else if (reviewResult.decision === ReviewDecision.FAILED) {

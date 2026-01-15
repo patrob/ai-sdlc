@@ -59,31 +59,31 @@ Test content
     return filePath;
   }
 
-  it('should update status to blocked in frontmatter', () => {
+  it('should update status to blocked in frontmatter', async () => {
     const storyPath = createTestStory('in-progress', 'test-story');
     const originalStory = parseStory(storyPath);
 
     expect(originalStory.frontmatter.status).toBe('in-progress');
 
-    moveToBlocked(storyPath, 'Test reason');
+    await moveToBlocked(storyPath, 'Test reason');
 
     const updatedStory = parseStory(storyPath);
     expect(updatedStory.frontmatter.status).toBe('blocked');
   });
 
-  it('should keep file in same location', () => {
+  it('should keep file in same location', async () => {
     const storyPath = createTestStory('in-progress', 'test-story');
 
-    moveToBlocked(storyPath, 'Test reason');
+    await moveToBlocked(storyPath, 'Test reason');
 
     expect(fs.existsSync(storyPath)).toBe(true);
   });
 
-  it('should set frontmatter fields correctly', () => {
+  it('should set frontmatter fields correctly', async () => {
     const storyPath = createTestStory('in-progress', 'test-story');
     const reason = 'Max refinement attempts (2/2) reached';
 
-    moveToBlocked(storyPath, reason);
+    await moveToBlocked(storyPath, reason);
 
     const blockedStory = parseStory(storyPath);
 
@@ -97,11 +97,11 @@ Test content
     expect(timestamp.getTime()).toBeGreaterThan(0);
   });
 
-  it('should preserve other frontmatter fields', () => {
+  it('should preserve other frontmatter fields', async () => {
     const storyPath = createTestStory('in-progress', 'test-story');
     const originalStory = parseStory(storyPath);
 
-    moveToBlocked(storyPath, 'Test reason');
+    await moveToBlocked(storyPath, 'Test reason');
 
     const blockedStory = parseStory(storyPath);
 
@@ -113,12 +113,12 @@ Test content
     expect(blockedStory.content).toBe(originalStory.content);
   });
 
-  it('should allow blocking multiple stories with different IDs', () => {
+  it('should allow blocking multiple stories with different IDs', async () => {
     const story1Path = createTestStory('in-progress', 'test-story-1', 1);
-    moveToBlocked(story1Path, 'First block');
+    await moveToBlocked(story1Path, 'First block');
 
     const story2Path = createTestStory('ready', 'test-story-2', 2);
-    moveToBlocked(story2Path, 'Second block');
+    await moveToBlocked(story2Path, 'Second block');
 
     const story1 = parseStory(story1Path);
     const story2 = parseStory(story2Path);
@@ -129,28 +129,28 @@ Test content
     expect(story2.frontmatter.blocked_reason).toBe('Second block');
   });
 
-  it('should validate path security and reject path traversal', () => {
+  it('should validate path security and reject path traversal', async () => {
     // Try to use a path outside SDLC root
     const maliciousPath = path.join(tempDir, '../../../etc/passwd');
 
-    expect(() => {
-      moveToBlocked(maliciousPath, 'Test reason');
-    }).toThrow('Invalid story path');
+    await expect(async () => {
+      await moveToBlocked(maliciousPath, 'Test reason');
+    }).rejects.toThrow('Invalid story path');
   });
 
-  it('should reject paths not within .ai-sdlc folder', () => {
+  it('should reject paths not within .ai-sdlc folder', async () => {
     // Create a story outside .ai-sdlc
     const wrongDir = path.join(tempDir, 'wrong-folder');
     fs.mkdirSync(wrongDir, { recursive: true });
     const wrongPath = path.join(wrongDir, 'test.md');
     fs.writeFileSync(wrongPath, '---\nid: test\n---\n# Test');
 
-    expect(() => {
-      moveToBlocked(wrongPath, 'Test reason');
-    }).toThrow('Invalid story path: not within .ai-sdlc folder');
+    await expect(async () => {
+      await moveToBlocked(wrongPath, 'Test reason');
+    }).rejects.toThrow('Invalid story path: not within .ai-sdlc folder');
   });
 
-  it('should be idempotent when story already blocked', () => {
+  it('should be idempotent when story already blocked', async () => {
     // Use fake timers for deterministic timestamps
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-12T10:00:00.000Z'));
@@ -158,7 +158,7 @@ Test content
     const storyPath = createTestStory('in-progress', 'test-story');
 
     // Move to blocked first time - timestamp should be 10:00:00.000Z
-    moveToBlocked(storyPath, 'First reason');
+    await moveToBlocked(storyPath, 'First reason');
     const story1 = parseStory(storyPath);
     // Capture timestamp as primitive immediately to avoid any reference issues
     const firstBlockedAt = story1.frontmatter.blocked_at;
@@ -167,7 +167,7 @@ Test content
     vi.advanceTimersByTime(100);
 
     // Move to blocked second time (already blocked)
-    moveToBlocked(storyPath, 'Second reason');
+    await moveToBlocked(storyPath, 'Second reason');
     const story2 = parseStory(storyPath);
 
     // Should update the reason and timestamp
@@ -180,11 +180,11 @@ Test content
     expect(fs.existsSync(storyPath)).toBe(true);
   });
 
-  it('should preserve content when blocking', () => {
+  it('should preserve content when blocking', async () => {
     const storyPath = createTestStory('in-progress', 'test-story');
     const originalStory = parseStory(storyPath);
 
-    moveToBlocked(storyPath, 'Test reason');
+    await moveToBlocked(storyPath, 'Test reason');
 
     const blockedStory = parseStory(storyPath);
 
@@ -390,7 +390,7 @@ Test content`;
     }
   });
 
-  it('should find story after status changes (simulated move)', () => {
+  it('should find story after status changes (simulated move)', async () => {
     // getStory imported at top of file
     const storyId = 'S-0001';
     createTestStory(storyId, 'backlog');
@@ -403,7 +403,7 @@ Test content`;
     // Simulate status change by updating frontmatter
     story1.frontmatter.status = 'in-progress';
     // writeStory imported at top of file
-    writeStory(story1);
+    await writeStory(story1);
 
     // Second lookup - should still find the story
     const story2 = getStory(sdlcRoot, storyId);
@@ -522,34 +522,34 @@ Test content`;
     return filePath;
   }
 
-  it('should throw error when story not found', () => {
-    expect(() => {
-      unblockStory('nonexistent-id', sdlcRoot);
-    }).toThrow('Story nonexistent-id not found');
+  it('should throw error when story not found', async () => {
+    await expect(async () => {
+      await unblockStory('nonexistent-id', sdlcRoot);
+    }).rejects.toThrow('Story nonexistent-id not found');
   });
 
-  it('should change status to in-progress when implementation is complete', () => {
+  it('should change status to in-progress when implementation is complete', async () => {
     createBlockedStory('test-story', {
       research_complete: true,
       plan_complete: true,
       implementation_complete: true,
     });
 
-    const unblockedStory = unblockStory('test-story', sdlcRoot);
+    const unblockedStory = await unblockStory('test-story', sdlcRoot);
 
     expect(unblockedStory.frontmatter.status).toBe('in-progress');
     expect(unblockedStory.frontmatter.blocked_reason).toBeUndefined();
     expect(unblockedStory.frontmatter.blocked_at).toBeUndefined();
   });
 
-  it('should preserve completion flags when unblocking', () => {
+  it('should preserve completion flags when unblocking', async () => {
     createBlockedStory('test-story', {
       research_complete: true,
       plan_complete: true,
       implementation_complete: false,
     });
 
-    const unblockedStory = unblockStory('test-story', sdlcRoot);
+    const unblockedStory = await unblockStory('test-story', sdlcRoot);
 
     // Plan complete but not implementation → ready status
     expect(unblockedStory.frontmatter.status).toBe('ready');
@@ -557,68 +557,68 @@ Test content`;
     expect(unblockedStory.frontmatter.plan_complete).toBe(true);
   });
 
-  it('should keep story in same folder', () => {
+  it('should keep story in same folder', async () => {
     const storyPath = createBlockedStory('test-story', {
       research_complete: false,
       plan_complete: true,
       implementation_complete: false,
     });
 
-    const unblockedStory = unblockStory('test-story', sdlcRoot);
+    const unblockedStory = await unblockStory('test-story', sdlcRoot);
 
     expect(unblockedStory.path).toBe(storyPath);
     expect(fs.existsSync(storyPath)).toBe(true);
   });
 
-  it('should update status regardless of completion state', () => {
+  it('should update status regardless of completion state', async () => {
     createBlockedStory('test-story', {
       research_complete: true,
       plan_complete: true,
       implementation_complete: true,
     });
 
-    const unblockedStory = unblockStory('test-story', sdlcRoot);
+    const unblockedStory = await unblockStory('test-story', sdlcRoot);
 
     expect(unblockedStory.frontmatter.status).toBe('in-progress');
   });
 
-  it('should clear blocked_reason and blocked_at fields', () => {
+  it('should clear blocked_reason and blocked_at fields', async () => {
     createBlockedStory('test-story', {
       blocked_reason: 'Test blocking reason',
       blocked_at: '2026-01-12T10:00:00.000Z',
     });
 
-    const unblockedStory = unblockStory('test-story', sdlcRoot);
+    const unblockedStory = await unblockStory('test-story', sdlcRoot);
 
     expect(unblockedStory.frontmatter.blocked_reason).toBeUndefined();
     expect(unblockedStory.frontmatter.blocked_at).toBeUndefined();
   });
 
-  it('should reset retries when resetRetries option is true', () => {
+  it('should reset retries when resetRetries option is true', async () => {
     createBlockedStory('test-story', {
       retry_count: 5,
       refinement_count: 3,
     });
 
-    const unblockedStory = unblockStory('test-story', sdlcRoot, { resetRetries: true });
+    const unblockedStory = await unblockStory('test-story', sdlcRoot, { resetRetries: true });
 
     expect(unblockedStory.frontmatter.retry_count).toBe(0);
     expect(unblockedStory.frontmatter.refinement_count).toBe(0);
   });
 
-  it('should preserve retry counts when resetRetries is false', () => {
+  it('should preserve retry counts when resetRetries is false', async () => {
     createBlockedStory('test-story', {
       retry_count: 5,
       refinement_count: 3,
     });
 
-    const unblockedStory = unblockStory('test-story', sdlcRoot, { resetRetries: false });
+    const unblockedStory = await unblockStory('test-story', sdlcRoot, { resetRetries: false });
 
     expect(unblockedStory.frontmatter.retry_count).toBe(5);
     expect(unblockedStory.frontmatter.refinement_count).toBe(3);
   });
 
-  it('should preserve other frontmatter fields', () => {
+  it('should preserve other frontmatter fields', async () => {
     createBlockedStory('test-story', {
       title: 'Important Story',
       labels: ['urgent', 'bug'],
@@ -626,7 +626,7 @@ Test content`;
       branch: 'feature/test',
     });
 
-    const unblockedStory = unblockStory('test-story', sdlcRoot);
+    const unblockedStory = await unblockStory('test-story', sdlcRoot);
 
     expect(unblockedStory.frontmatter.title).toBe('Important Story');
     expect(unblockedStory.frontmatter.labels).toEqual(['urgent', 'bug']);
@@ -634,23 +634,23 @@ Test content`;
     expect(unblockedStory.frontmatter.branch).toBe('feature/test');
   });
 
-  it('should preserve story content when unblocking', () => {
+  it('should preserve story content when unblocking', async () => {
     const storyPath = createBlockedStory('test-story');
 
     const originalBlocked = parseStory(storyPath);
-    const unblockedStory = unblockStory('test-story', sdlcRoot);
+    const unblockedStory = await unblockStory('test-story', sdlcRoot);
 
     expect(unblockedStory.content).toBe(originalBlocked.content);
   });
 
-  it('should keep file in same location after unblocking', () => {
+  it('should keep file in same location after unblocking', async () => {
     const storyPath = createBlockedStory('test-story', {
       plan_complete: true,
     });
 
     expect(fs.existsSync(storyPath)).toBe(true);
 
-    const unblockedStory = unblockStory('test-story', sdlcRoot);
+    const unblockedStory = await unblockStory('test-story', sdlcRoot);
 
     expect(fs.existsSync(storyPath)).toBe(true);
     expect(unblockedStory.path).toBe(storyPath);
@@ -758,5 +758,152 @@ Test content for ${storyId}
     expect(story).not.toBeNull();
     // Path should match filesystem, not input
     expect(story!.path).toContain('S-0003');
+  });
+});
+
+describe('writeStory - file locking', () => {
+  let tempDir: string;
+  let sdlcRoot: string;
+
+  beforeEach(() => {
+    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-lock-test-')));
+    sdlcRoot = path.join(tempDir, '.ai-sdlc');
+    fs.mkdirSync(sdlcRoot, { recursive: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  function createTestStory(id: string = 'S-0001'): string {
+    const storiesFolder = path.join(sdlcRoot, 'stories');
+    fs.mkdirSync(storiesFolder, { recursive: true });
+
+    const storyFolder = path.join(storiesFolder, id);
+    fs.mkdirSync(storyFolder, { recursive: true });
+
+    const filePath = path.join(storyFolder, 'story.md');
+
+    const content = `---
+id: ${id}
+title: Test Story
+slug: test-story
+priority: 10
+status: backlog
+type: feature
+created: '2024-01-01'
+labels: []
+research_complete: false
+plan_complete: false
+implementation_complete: false
+reviews_complete: false
+---
+
+# Test Story
+
+Test content
+`;
+
+    fs.writeFileSync(filePath, content);
+    return filePath;
+  }
+
+  it('should acquire and release lock on successful write', async () => {
+    const storyPath = createTestStory();
+    const story = parseStory(storyPath);
+
+    story.frontmatter.status = 'in-progress';
+
+    await writeStory(story);
+
+    const updatedStory = parseStory(storyPath);
+    expect(updatedStory.frontmatter.status).toBe('in-progress');
+
+    // Lock file should be cleaned up
+    const lockPath = `${storyPath}.lock`;
+    expect(fs.existsSync(lockPath)).toBe(false);
+  });
+
+  it('should release lock even on write error', async () => {
+    const storyPath = createTestStory();
+    const story = parseStory(storyPath);
+
+    // Make the file read-only to force a write error
+    fs.chmodSync(storyPath, 0o444);
+
+    await expect(writeStory(story)).rejects.toThrow();
+
+    // Lock file should still be cleaned up
+    const lockPath = `${storyPath}.lock`;
+    expect(fs.existsSync(lockPath)).toBe(false);
+
+    // Restore permissions for cleanup
+    fs.chmodSync(storyPath, 0o644);
+  });
+
+  it('should use custom lock timeout from options', async () => {
+    const storyPath = createTestStory();
+    const story = parseStory(storyPath);
+
+    story.frontmatter.priority = 20;
+
+    // Write with custom timeout
+    await writeStory(story, { lockTimeout: 1000 });
+
+    const updatedStory = parseStory(storyPath);
+    expect(updatedStory.frontmatter.priority).toBe(20);
+  });
+
+  it('should use default timeout when not specified', async () => {
+    const storyPath = createTestStory();
+    const story = parseStory(storyPath);
+
+    story.frontmatter.priority = 30;
+
+    // Write without options (should use default 5000ms timeout)
+    await writeStory(story);
+
+    const updatedStory = parseStory(storyPath);
+    expect(updatedStory.frontmatter.priority).toBe(30);
+  });
+
+  it('should handle concurrent writes without corruption', async () => {
+    const storyPath = createTestStory();
+
+    // Launch 3 concurrent updates
+    await Promise.all([
+      (async () => {
+        const story = parseStory(storyPath);
+        story.frontmatter.status = 'in-progress';
+        await writeStory(story);
+      })(),
+      (async () => {
+        const story = parseStory(storyPath);
+        story.frontmatter.priority = 100;
+        await writeStory(story);
+      })(),
+      (async () => {
+        const story = parseStory(storyPath);
+        story.frontmatter.labels = ['test'];
+        await writeStory(story);
+      })(),
+    ]);
+
+    // File should be valid YAML and parseable
+    const finalStory = parseStory(storyPath);
+    expect(finalStory.frontmatter).toBeDefined();
+    expect(finalStory.frontmatter.id).toBe('S-0001');
+
+    // At least one of the updates should have been applied
+    // (Due to race conditions, we can't guarantee all updates are applied in the order we expect,
+    // but the file should not be corrupted)
+    expect(
+      finalStory.frontmatter.status === 'in-progress' ||
+      finalStory.frontmatter.priority === 100 ||
+      finalStory.frontmatter.labels?.includes('test')
+    ).toBe(true);
   });
 });

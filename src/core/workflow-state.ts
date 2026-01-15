@@ -14,12 +14,17 @@ import {
   WorkflowStateValidationResult,
   WorkflowStateVersion,
 } from '../types/workflow-state.js';
+import { STORIES_FOLDER } from '../types/index.js';
+import { sanitizeStoryId } from './story.js';
 
 const STATE_FILE_NAME = '.workflow-state.json';
 const CURRENT_VERSION: WorkflowStateVersion = '1.0';
 
 /**
- * Get the path to the workflow state file
+ * Get the path to the workflow state file.
+ *
+ * SECURITY: storyId is sanitized using sanitizeStoryId() to prevent path traversal attacks.
+ * Never construct paths manually - always use this function to ensure proper sanitization.
  *
  * @param sdlcRoot - Path to the .ai-sdlc directory
  * @param storyId - Optional story ID for per-story state isolation
@@ -27,7 +32,8 @@ const CURRENT_VERSION: WorkflowStateVersion = '1.0';
  */
 export function getStateFilePath(sdlcRoot: string, storyId?: string): string {
   if (storyId) {
-    return path.join(sdlcRoot, 'stories', storyId, STATE_FILE_NAME);
+    const sanitized = sanitizeStoryId(storyId);
+    return path.join(sdlcRoot, STORIES_FOLDER, sanitized, STATE_FILE_NAME);
   }
   return path.join(sdlcRoot, STATE_FILE_NAME);
 }
@@ -79,6 +85,17 @@ export async function saveWorkflowState(
     // Write atomically to prevent corruption
     await writeFileAtomic(statePath, stateJson, { encoding: 'utf-8' });
   } catch (error) {
+    // Specific permission error handling
+    if (error && typeof error === 'object' && 'code' in error) {
+      const code = (error as { code: string }).code;
+      if (code === 'EACCES' || code === 'EPERM') {
+        throw new Error(
+          `Permission denied: Cannot write workflow state to ${statePath}. ` +
+          `Check file permissions for the directory and ensure it is writable.`
+        );
+      }
+    }
+
     throw new Error(
       `Failed to save workflow state: ${error instanceof Error ? error.message : String(error)}`
     );
@@ -207,20 +224,28 @@ export function hasWorkflowState(sdlcRoot: string, storyId?: string): boolean {
 }
 
 /**
- * Migrate global workflow state to story-specific location
+ * Migrate global workflow state to story-specific location.
  *
- * This function detects existing global .workflow-state.json files and moves them
- * to the appropriate story-specific location (.ai-sdlc/stories/{id}/.workflow-state.json).
+ * Call this function at CLI startup (before loading workflow state) to automatically
+ * move legacy global state files to the new per-story location.
  *
- * Migration is idempotent and non-destructive. It will:
- * - Check if global state file exists
- * - Extract story ID from state (context.options.story or completedActions[0].storyId)
- * - Move state to story-specific location
- * - Delete global state file only after successful migration
- * - Skip migration if no story ID can be determined
+ * Migration behavior:
+ * - Extracts story ID from context.options.story, completedActions, or currentAction
+ * - Skips migration if workflow is currently in progress (currentAction set)
+ * - Skips migration if no story ID can be determined
+ * - Validates target file if it already exists before deleting global file
+ * - Deletes global file only after successful write to target location
  *
  * @param sdlcRoot - Path to the .ai-sdlc directory
- * @returns Migration result with status and message
+ * @returns Promise resolving to migration result object:
+ *   - migrated: boolean - true if migration was performed, false if skipped
+ *   - message: string - Human-readable description of what happened
+ *
+ * @example
+ * const result = await migrateGlobalWorkflowState(sdlcRoot);
+ * if (result.migrated) {
+ *   console.log(result.message); // "Successfully migrated workflow state to story S-0033"
+ * }
  */
 export async function migrateGlobalWorkflowState(
   sdlcRoot: string
@@ -237,6 +262,14 @@ export async function migrateGlobalWorkflowState(
     const content = await fs.promises.readFile(globalStatePath, 'utf-8');
     const state = JSON.parse(content) as WorkflowExecutionState;
 
+    // Check if workflow in progress IMMEDIATELY after reading state
+    if (state.currentAction) {
+      return {
+        migrated: false,
+        message: 'Skipping migration: workflow currently in progress. Complete or reset workflow before migrating.',
+      };
+    }
+
     // Determine the story ID from the state
     let storyId: string | undefined;
 
@@ -245,12 +278,11 @@ export async function migrateGlobalWorkflowState(
       storyId = state.context.options.story;
     }
     // Fallback to first completed action's storyId
-    else if (state.completedActions && state.completedActions.length > 0) {
-      storyId = state.completedActions[0].storyId;
-    }
-    // Fallback to current action's storyId
-    else if (state.currentAction) {
-      storyId = state.currentAction.storyId;
+    if (!storyId && state.completedActions && state.completedActions.length > 0) {
+      const firstAction = state.completedActions[0];
+      if (firstAction && 'storyId' in firstAction) {
+        storyId = firstAction.storyId;
+      }
     }
 
     // If no story ID found, leave state in place
@@ -261,23 +293,45 @@ export async function migrateGlobalWorkflowState(
       };
     }
 
-    // Check if target location already exists (idempotent)
-    const targetPath = getStateFilePath(sdlcRoot, storyId);
-    if (fs.existsSync(targetPath)) {
-      // Target already exists - just delete global file
-      await fs.promises.unlink(globalStatePath);
+    // SECURITY: Sanitize story ID to prevent path traversal
+    let sanitizedStoryId: string;
+    try {
+      sanitizedStoryId = sanitizeStoryId(storyId);
+    } catch (error) {
       return {
-        migrated: true,
-        message: `Migration skipped: story-specific state already exists for ${storyId}. Global state removed.`,
+        migrated: false,
+        message: `Cannot migrate: invalid story ID "${storyId}". ${error instanceof Error ? error.message : String(error)}`,
       };
     }
 
-    // Check if workflow is currently in progress (currentAction is set)
-    if (state.currentAction) {
-      return {
-        migrated: false,
-        message: 'Migration skipped: workflow is currently in progress. Complete or abort workflow before migrating.',
-      };
+    // Check if target location already exists (idempotent)
+    const targetPath = getStateFilePath(sdlcRoot, sanitizedStoryId);
+    if (fs.existsSync(targetPath)) {
+      // Validate existing target is not corrupt before deleting global backup
+      try {
+        const targetContent = await fs.promises.readFile(targetPath, 'utf-8');
+        const targetState = JSON.parse(targetContent);
+        const validation = validateWorkflowState(targetState);
+
+        if (!validation.valid) {
+          return {
+            migrated: false,
+            message: `Target state file exists but is invalid. Keeping global file as backup. Manual intervention required. Errors: ${validation.errors.join(', ')}`,
+          };
+        }
+
+        // Target is valid, safe to delete global
+        await fs.promises.unlink(globalStatePath);
+        return {
+          migrated: true,
+          message: `Global workflow state already migrated to story ${sanitizedStoryId}. Removed duplicate global file.`,
+        };
+      } catch (error) {
+        return {
+          migrated: false,
+          message: `Target state file exists but is corrupted. Keeping global file as backup. Manual intervention required. Error: ${error instanceof Error ? error.message : String(error)}`,
+        };
+      }
     }
 
     // Create target directory
@@ -298,9 +352,35 @@ export async function migrateGlobalWorkflowState(
 
     return {
       migrated: true,
-      message: `Successfully migrated workflow state from global to story-specific location: ${storyId}`,
+      message: `Successfully migrated workflow state from global to story-specific location: ${sanitizedStoryId}`,
     };
   } catch (error) {
+    // Specific error handling for common cases
+    if (error && typeof error === 'object' && 'code' in error) {
+      const code = (error as { code: string }).code;
+
+      if (code === 'ENOENT') {
+        return {
+          migrated: false,
+          message: 'Global state file disappeared during migration. No action taken.',
+        };
+      }
+
+      if (code === 'EACCES' || code === 'EPERM') {
+        return {
+          migrated: false,
+          message: `Permission denied during migration. Check file permissions for: ${globalStatePath}`,
+        };
+      }
+    }
+
+    if (error instanceof SyntaxError) {
+      return {
+        migrated: false,
+        message: 'Global state file contains invalid JSON. Manual migration required.',
+      };
+    }
+
     const errorMsg = error instanceof Error ? error.message : String(error);
     return {
       migrated: false,

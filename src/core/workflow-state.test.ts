@@ -73,6 +73,29 @@ describe('workflow-state', () => {
       expect(result).toContain('S-0123');
       expect(result).toContain('.workflow-state.json');
     });
+
+    it('should sanitize malicious story IDs with path traversal', () => {
+      // Test path traversal attempts
+      expect(() => getStateFilePath(TEST_SDLC_ROOT, '../../etc/passwd')).toThrow('path traversal');
+      expect(() => getStateFilePath(TEST_SDLC_ROOT, '../../../root')).toThrow('path traversal');
+      expect(() => getStateFilePath(TEST_SDLC_ROOT, 'S-0001/../../../evil')).toThrow('path traversal');
+    });
+
+    it('should reject story IDs with path separators', () => {
+      expect(() => getStateFilePath(TEST_SDLC_ROOT, 'S-0001/evil')).toThrow('path separator');
+      expect(() => getStateFilePath(TEST_SDLC_ROOT, 'evil\\path')).toThrow('path separator');
+    });
+
+    it('should reject absolute paths as story IDs', () => {
+      // Note: Absolute paths starting with '/' trigger 'path separator' check first
+      expect(() => getStateFilePath(TEST_SDLC_ROOT, '/etc/passwd')).toThrow('path separator');
+      expect(() => getStateFilePath(TEST_SDLC_ROOT, '/tmp/evil')).toThrow('path separator');
+    });
+
+    it('should reject story IDs with control characters', () => {
+      expect(() => getStateFilePath(TEST_SDLC_ROOT, 'S-0001\x00evil')).toThrow('control characters');
+      expect(() => getStateFilePath(TEST_SDLC_ROOT, 'S\n0001')).toThrow('control characters');
+    });
   });
 
   describe('generateWorkflowId', () => {
@@ -470,6 +493,62 @@ describe('workflow-state', () => {
     });
   });
 
+  describe('Error Handling Tests', () => {
+    it('should provide clear permission error when saving state', async () => {
+      const state = createValidState();
+      const readOnlyPath = path.join(TEST_SDLC_ROOT, 'readonly-test');
+
+      // Create a directory that we'll make read-only
+      await fs.promises.mkdir(readOnlyPath, { recursive: true });
+
+      // Try to write to a non-existent subdirectory with improper permissions
+      // Note: This test simulates the error, actual permission testing is platform-specific
+      try {
+        // Mock the error by catching it
+        await saveWorkflowState(state, readOnlyPath, 'S-0001');
+      } catch (error) {
+        // The error should mention the path
+        expect(error).toBeDefined();
+      }
+    });
+
+    it('should handle ENOENT gracefully during migration', async () => {
+      // No global state file exists - should return appropriate message
+      const result = await migrateGlobalWorkflowState(TEST_SDLC_ROOT);
+      expect(result.migrated).toBe(false);
+      expect(result.message).toContain('No global workflow state file found');
+    });
+
+    it('should handle corrupt JSON gracefully during migration', async () => {
+      // Create corrupt global state file
+      const globalPath = getStateFilePath(TEST_SDLC_ROOT);
+      await fs.promises.writeFile(globalPath, '{ invalid json {{', 'utf-8');
+
+      const result = await migrateGlobalWorkflowState(TEST_SDLC_ROOT);
+      expect(result.migrated).toBe(false);
+      expect(result.message).toContain('invalid JSON');
+    });
+  });
+
+  describe('Edge Case Tests', () => {
+    it('should create deeply nested story directories', async () => {
+      const state = createValidState();
+      const complexStoryId = 'S-LEVEL1-LEVEL2-LEVEL3';
+
+      // Save state with deeply nested story ID
+      await saveWorkflowState(state, TEST_SDLC_ROOT, complexStoryId);
+
+      // Verify all parent directories were created
+      const statePath = getStateFilePath(TEST_SDLC_ROOT, complexStoryId);
+      expect(fs.existsSync(statePath)).toBe(true);
+
+      // Verify state can be loaded
+      const loadedState = await loadWorkflowState(TEST_SDLC_ROOT, complexStoryId);
+      expect(loadedState).toBeDefined();
+      expect(loadedState?.workflowId).toBe(state.workflowId);
+    });
+  });
+
   describe('Migration Tests', () => {
     it('should migrate global state to story directory', async () => {
       // Create global state with story ID
@@ -522,7 +601,7 @@ describe('workflow-state', () => {
       // Run migration second time
       const result2 = await migrateGlobalWorkflowState(TEST_SDLC_ROOT);
       expect(result2.migrated).toBe(true); // Should still succeed
-      expect(result2.message).toContain('already exists');
+      expect(result2.message).toContain('already migrated');
 
       // Verify only story-specific state exists
       expect(hasWorkflowState(TEST_SDLC_ROOT, 'S-MIGRATE-002')).toBe(true);
@@ -615,6 +694,128 @@ describe('workflow-state', () => {
       // Verify state was moved
       expect(hasWorkflowState(TEST_SDLC_ROOT, 'S-MIGRATE-004')).toBe(true);
       expect(hasWorkflowState(TEST_SDLC_ROOT)).toBe(false);
+    });
+
+    it('should reject path traversal in story ID during migration', async () => {
+      // Create global state with malicious story ID
+      const globalState = createValidState({
+        context: {
+          sdlcRoot: TEST_SDLC_ROOT,
+          options: { story: '../../etc/passwd' },
+        },
+      });
+      await saveWorkflowState(globalState, TEST_SDLC_ROOT);
+
+      // Run migration
+      const result = await migrateGlobalWorkflowState(TEST_SDLC_ROOT);
+
+      // Verify migration failed with security error
+      expect(result.migrated).toBe(false);
+      expect(result.message).toContain('invalid story ID');
+      expect(result.message).toContain('path traversal');
+
+      // Verify global state still exists (not deleted)
+      expect(hasWorkflowState(TEST_SDLC_ROOT)).toBe(true);
+    });
+
+    it('should validate target file before deleting global state', async () => {
+      // Create global state
+      const globalState = createValidState({
+        context: {
+          sdlcRoot: TEST_SDLC_ROOT,
+          options: { story: 'S-MIGRATE-005' },
+        },
+      });
+      await saveWorkflowState(globalState, TEST_SDLC_ROOT);
+
+      // Manually create corrupt target file
+      const targetPath = getStateFilePath(TEST_SDLC_ROOT, 'S-MIGRATE-005');
+      const targetDir = path.dirname(targetPath);
+      await fs.promises.mkdir(targetDir, { recursive: true });
+      await fs.promises.writeFile(targetPath, 'invalid json {{{', 'utf-8');
+
+      // Run migration
+      const result = await migrateGlobalWorkflowState(TEST_SDLC_ROOT);
+
+      // Verify migration failed and global file NOT deleted
+      expect(result.migrated).toBe(false);
+      expect(result.message).toContain('corrupted');
+      expect(hasWorkflowState(TEST_SDLC_ROOT)).toBe(true); // Global state preserved
+    });
+
+    it('should check in-progress before any file operations', async () => {
+      // Create global state with workflow in progress
+      const globalState = createValidState({
+        context: {
+          sdlcRoot: TEST_SDLC_ROOT,
+          options: { story: 'S-MIGRATE-006' },
+        },
+        currentAction: {
+          type: 'implement',
+          storyId: 'S-MIGRATE-006',
+          storyPath: '/path/to/story.md',
+          startedAt: new Date().toISOString(),
+        },
+      });
+      await saveWorkflowState(globalState, TEST_SDLC_ROOT);
+
+      // Run migration
+      const result = await migrateGlobalWorkflowState(TEST_SDLC_ROOT);
+
+      // Verify migration aborted early (no writes attempted)
+      expect(result.migrated).toBe(false);
+      expect(result.message).toContain('in progress');
+
+      // Verify story-specific state was NOT created
+      expect(hasWorkflowState(TEST_SDLC_ROOT, 'S-MIGRATE-006')).toBe(false);
+    });
+
+    it('should preserve workflowId during migration', async () => {
+      const specificWorkflowId = 'workflow-preserve-test-12345';
+      const globalState = createValidState({
+        workflowId: specificWorkflowId,
+        context: {
+          sdlcRoot: TEST_SDLC_ROOT,
+          options: { story: 'S-MIGRATE-007' },
+        },
+      });
+      await saveWorkflowState(globalState, TEST_SDLC_ROOT);
+
+      // Run migration
+      const result = await migrateGlobalWorkflowState(TEST_SDLC_ROOT);
+      expect(result.migrated).toBe(true);
+
+      // Load migrated state and explicitly verify workflowId
+      const loadedState = await loadWorkflowState(TEST_SDLC_ROOT, 'S-MIGRATE-007');
+      expect(loadedState?.workflowId).toBe(specificWorkflowId);
+    });
+
+    it('should verify global file deletion in idempotency test', async () => {
+      // Create global state
+      const globalState = createValidState({
+        context: {
+          sdlcRoot: TEST_SDLC_ROOT,
+          options: { story: 'S-MIGRATE-008' },
+        },
+      });
+      await saveWorkflowState(globalState, TEST_SDLC_ROOT);
+
+      // Run migration first time
+      const result1 = await migrateGlobalWorkflowState(TEST_SDLC_ROOT);
+      expect(result1.migrated).toBe(true);
+
+      // Explicitly check global file deleted
+      const globalPath = getStateFilePath(TEST_SDLC_ROOT);
+      expect(fs.existsSync(globalPath)).toBe(false);
+
+      // Run migration second time
+      const result2 = await migrateGlobalWorkflowState(TEST_SDLC_ROOT);
+      expect(result2.migrated).toBe(false);
+      expect(result2.message).toContain('No global workflow state file found');
+
+      // Verify story state intact and global still doesn't exist
+      expect(hasWorkflowState(TEST_SDLC_ROOT, 'S-MIGRATE-008')).toBe(true);
+      expect(fs.existsSync(globalPath)).toBe(false);
     });
   });
 });

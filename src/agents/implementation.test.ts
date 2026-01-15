@@ -14,6 +14,7 @@ import {
   hasChangesOccurred,
   truncateTestOutput,
   buildRetryPrompt,
+  detectMissingDependencies,
   sanitizeTestOutput,
   type TDDPhaseResult,
 } from './implementation.js';
@@ -1067,6 +1068,80 @@ Just a summary, no AC.
         // Empty after trim, so should not include output sections
         expect(prompt).not.toContain('Test Output:');
         expect(prompt).not.toContain('Build Output:');
+      });
+
+      it('should detect and provide guidance for missing dependencies', () => {
+        const buildOutput = "Cannot find module 'proper-lockfile'";
+        const prompt = buildRetryPrompt('', buildOutput, 1, 3);
+        expect(prompt).toContain('DEPENDENCY ISSUE DETECTED');
+        expect(prompt).toContain('proper-lockfile');
+        expect(prompt).toContain('npm install');
+      });
+
+      it('should detect multiple missing dependencies', () => {
+        const buildOutput = "Cannot find module 'lodash'\nCannot find module 'axios'";
+        const prompt = buildRetryPrompt('', buildOutput, 1, 3);
+        expect(prompt).toContain('lodash');
+        expect(prompt).toContain('axios');
+        expect(prompt).toContain('npm install lodash axios');
+      });
+
+      it('should handle scoped packages in missing dependency detection', () => {
+        const buildOutput = "Cannot find module '@types/node'";
+        const prompt = buildRetryPrompt('', buildOutput, 1, 3);
+        expect(prompt).toContain('@types/node');
+      });
+    });
+
+    describe('detectMissingDependencies', () => {
+      it('should return empty array for empty input', () => {
+        expect(detectMissingDependencies('')).toEqual([]);
+      });
+
+      it('should return empty array for null input', () => {
+        expect(detectMissingDependencies(null as unknown as string)).toEqual([]);
+      });
+
+      it('should detect Cannot find module pattern', () => {
+        const output = "Error: Cannot find module 'express'";
+        expect(detectMissingDependencies(output)).toEqual(['express']);
+      });
+
+      it('should detect Can\'t resolve pattern', () => {
+        const output = "Module not found: Can't resolve 'react-dom'";
+        expect(detectMissingDependencies(output)).toEqual(['react-dom']);
+      });
+
+      it('should handle scoped packages', () => {
+        const output = "Cannot find module '@anthropic-ai/sdk'";
+        expect(detectMissingDependencies(output)).toEqual(['@anthropic-ai/sdk']);
+      });
+
+      it('should deduplicate multiple occurrences', () => {
+        const output = "Cannot find module 'lodash'\nError: Cannot find module 'lodash'";
+        expect(detectMissingDependencies(output)).toEqual(['lodash']);
+      });
+
+      it('should ignore relative imports', () => {
+        const output = "Cannot find module './utils'\nCannot find module '../helpers'";
+        expect(detectMissingDependencies(output)).toEqual([]);
+      });
+
+      it('should ignore absolute paths', () => {
+        const output = "Cannot find module '/home/user/project/utils'";
+        expect(detectMissingDependencies(output)).toEqual([]);
+      });
+
+      it('should extract base package name from subpaths', () => {
+        const output = "Cannot find module 'lodash/merge'";
+        expect(detectMissingDependencies(output)).toEqual(['lodash']);
+      });
+
+      it('should handle multiple different packages', () => {
+        const output = "Cannot find module 'express'\nCan't resolve 'lodash'";
+        expect(detectMissingDependencies(output)).toContain('express');
+        expect(detectMissingDependencies(output)).toContain('lodash');
+        expect(detectMissingDependencies(output)).toHaveLength(2);
       });
     });
   });

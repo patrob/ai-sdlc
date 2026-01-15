@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig } from '../types/index.js';
 
 const CONFIG_FILENAME = '.ai-sdlc.json';
 
@@ -53,6 +53,16 @@ export const DEFAULT_IMPLEMENTATION_CONFIG: ImplementationConfig = {
   maxRetriesUpperBound: 10,
 };
 
+/**
+ * Default logging configuration
+ */
+export const DEFAULT_LOGGING_CONFIG: LogConfig = {
+  enabled: true,
+  level: 'info',
+  maxFileSizeMb: 10,
+  maxFiles: 5,
+};
+
 export const DEFAULT_CONFIG: Config = {
   sdlcFolder: '.ai-sdlc',
   stageGates: {
@@ -89,6 +99,8 @@ export const DEFAULT_CONFIG: Config = {
   tdd: { ...DEFAULT_TDD_CONFIG },
   // Worktree configuration
   worktree: { ...DEFAULT_WORKTREE_CONFIG },
+  // Logging configuration
+  logging: { ...DEFAULT_LOGGING_CONFIG },
 };
 
 /**
@@ -346,6 +358,10 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
           ...DEFAULT_WORKTREE_CONFIG,
           ...userConfig.worktree,
         },
+        logging: {
+          ...DEFAULT_LOGGING_CONFIG,
+          ...userConfig.logging,
+        },
       };
     } catch (error) {
       // Re-throw security-related errors (prototype pollution, etc.)
@@ -407,6 +423,17 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
       config.reviewConfig.autoRestartOnRejection = value === 'true';
     } else {
       console.warn(`Invalid AI_SDLC_AUTO_RESTART value "${value}" (must be "true" or "false"), ignoring`);
+    }
+  }
+
+  if (process.env.AI_SDLC_LOG_LEVEL) {
+    const value = process.env.AI_SDLC_LOG_LEVEL.toLowerCase();
+    const validLevels = ['debug', 'info', 'warn', 'error'];
+    if (validLevels.includes(value)) {
+      config.logging = config.logging || { ...DEFAULT_LOGGING_CONFIG };
+      config.logging.level = value as 'debug' | 'info' | 'warn' | 'error';
+    } else {
+      console.warn(`Invalid AI_SDLC_LOG_LEVEL value "${process.env.AI_SDLC_LOG_LEVEL}" (must be debug, info, warn, or error), ignoring`);
     }
   }
 

@@ -1,6 +1,8 @@
 import { Story } from '../types/index.js';
 import { loadConfig } from '../core/config.js';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
+import { existsSync, readdirSync } from 'fs';
+import path from 'path';
 
 export interface VerificationResult {
   passed: boolean;
@@ -14,6 +16,74 @@ export interface VerificationOptions {
   runTests?: (workingDir: string, timeout: number) => Promise<{ success: boolean; output: string }>;
   runBuild?: (workingDir: string, timeout: number) => Promise<{ success: boolean; output: string }>;
   requirePassingTests?: boolean;
+  skipDependencyCheck?: boolean;
+}
+
+/**
+ * Lock file to package manager mapping
+ */
+const LOCK_FILE_TO_PM: Record<string, string> = {
+  'package-lock.json': 'npm',
+  'yarn.lock': 'yarn',
+  'pnpm-lock.yaml': 'pnpm',
+};
+
+/**
+ * Ensures dependencies are installed before running tests/build.
+ * Checks if node_modules exists and has packages. If not, runs the appropriate install command.
+ * @param workingDir - The directory to check for dependencies
+ * @returns Result indicating if install was needed and any error that occurred
+ */
+export function ensureDependenciesInstalled(workingDir: string): { installed: boolean; error?: string } {
+  const packageJsonPath = path.join(workingDir, 'package.json');
+
+  // Skip if not a Node.js project
+  if (!existsSync(packageJsonPath)) {
+    return { installed: false };
+  }
+
+  const nodeModulesPath = path.join(workingDir, 'node_modules');
+
+  // Check if node_modules exists and has contents
+  let hasNodeModules = false;
+  if (existsSync(nodeModulesPath)) {
+    try {
+      const contents = readdirSync(nodeModulesPath);
+      // node_modules should have more than just .bin to be considered populated
+      hasNodeModules = contents.length > 1 || (contents.length === 1 && contents[0] !== '.bin');
+    } catch {
+      hasNodeModules = false;
+    }
+  }
+
+  if (hasNodeModules) {
+    return { installed: false };
+  }
+
+  // Detect package manager from lock file
+  let packageManager = 'npm';
+  for (const [lockFile, pm] of Object.entries(LOCK_FILE_TO_PM)) {
+    if (existsSync(path.join(workingDir, lockFile))) {
+      packageManager = pm;
+      break;
+    }
+  }
+
+  // Run install command
+  const result = spawnSync(packageManager, ['install'], {
+    cwd: workingDir,
+    encoding: 'utf-8',
+    shell: false,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 120000, // 2 minute timeout
+  });
+
+  if (result.status !== 0) {
+    const stderr = result.stderr?.toString() || '';
+    return { installed: false, error: `Failed to install dependencies: ${stderr}` };
+  }
+
+  return { installed: true };
 }
 
 async function runCommandAsync(
@@ -108,6 +178,20 @@ export async function verifyImplementation(
   let buildOutput = '';
   let testsRan = false;
   let buildRan = false;
+
+  // Ensure dependencies are installed before running tests/build
+  if (!options.skipDependencyCheck) {
+    const depResult = ensureDependenciesInstalled(workingDir);
+    if (depResult.error) {
+      return {
+        passed: false,
+        failures: 0,
+        timestamp,
+        testsOutput: '',
+        buildOutput: depResult.error,
+      };
+    }
+  }
 
   if (options.runTests) {
     testsRan = true;

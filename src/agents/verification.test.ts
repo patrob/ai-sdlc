@@ -1,18 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { verifyImplementation, type VerificationResult } from './verification.js';
+import { verifyImplementation, ensureDependenciesInstalled, type VerificationResult } from './verification.js';
 import type { Story } from '../types/index.js';
+import fs from 'fs';
+import child_process from 'child_process';
+import { loadConfig } from '../core/config.js';
 
-vi.mock('../core/config.js', () => ({
-  loadConfig: vi.fn(() => ({
-    timeouts: {
-      testTimeout: 300000,
-      buildTimeout: 120000,
-    },
-    tdd: {
-      requirePassingTestsForComplete: true,
-    },
-  })),
-}));
+vi.mock('fs');
+vi.mock('child_process');
+vi.mock('../core/config.js');
+
+const mockConfig = {
+  timeouts: {
+    testTimeout: 300000,
+    buildTimeout: 120000,
+  },
+  tdd: {
+    requirePassingTestsForComplete: true,
+  },
+};
 
 function createMockStory(overrides: Partial<Story> = {}): Story {
   return {
@@ -40,8 +45,13 @@ function createMockStory(overrides: Partial<Story> = {}): Story {
 
 describe('verifyImplementation', () => {
   beforeEach(() => {
+    vi.resetAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-01-15T10:00:00Z'));
+    // Set up config mock
+    vi.mocked(loadConfig).mockReturnValue(mockConfig as any);
+    // By default, skip dependency check in existing tests to avoid side effects
+    vi.mocked(fs.existsSync).mockReturnValue(false);
   });
 
   it('should return passed when tests and build both pass', async () => {
@@ -171,5 +181,177 @@ describe('verifyImplementation', () => {
 
     expect(result.passed).toBe(true);
     expect(result.testsOutput).toContain('2 failed');
+  });
+
+  it('should skip dependency check when skipDependencyCheck is true', async () => {
+    // Set up a scenario where dependency install would happen if not skipped
+    vi.mocked(fs.existsSync).mockImplementation((p) => {
+      const pathStr = p.toString();
+      return pathStr.includes('package.json');
+    });
+
+    const mockRunTests = vi.fn().mockResolvedValue({
+      success: true,
+      output: 'Tests passed',
+    });
+
+    const story = createMockStory();
+    const result = await verifyImplementation(story, '/test/dir', {
+      runTests: mockRunTests,
+      skipDependencyCheck: true,
+    });
+
+    expect(result.passed).toBe(true);
+    // spawnSync should not be called for dependency install
+    expect(child_process.spawnSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('ensureDependenciesInstalled', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('should return installed: false when no package.json exists', () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    const result = ensureDependenciesInstalled('/test/dir');
+
+    expect(result.installed).toBe(false);
+    expect(result.error).toBeUndefined();
+    expect(child_process.spawnSync).not.toHaveBeenCalled();
+  });
+
+  it('should return installed: false when node_modules already exists with packages', () => {
+    vi.mocked(fs.existsSync).mockImplementation((p) => {
+      const pathStr = p.toString();
+      return pathStr.includes('package.json') || pathStr.includes('node_modules');
+    });
+    vi.mocked(fs.readdirSync).mockReturnValue(['some-package', '.bin'] as any);
+
+    const result = ensureDependenciesInstalled('/test/dir');
+
+    expect(result.installed).toBe(false);
+    expect(result.error).toBeUndefined();
+    expect(child_process.spawnSync).not.toHaveBeenCalled();
+  });
+
+  it('should run npm install when node_modules is empty', () => {
+    vi.mocked(fs.existsSync).mockImplementation((p) => {
+      const pathStr = p.toString();
+      return pathStr.includes('package.json') || pathStr.includes('package-lock.json');
+    });
+    vi.mocked(fs.readdirSync).mockReturnValue([] as any);
+    vi.mocked(child_process.spawnSync).mockReturnValue({
+      status: 0,
+      stdout: '',
+      stderr: '',
+      pid: 1234,
+      output: [],
+      signal: null,
+    });
+
+    const result = ensureDependenciesInstalled('/test/dir');
+
+    expect(result.installed).toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(child_process.spawnSync).toHaveBeenCalledWith(
+      'npm',
+      ['install'],
+      expect.objectContaining({ cwd: '/test/dir' })
+    );
+  });
+
+  it('should use yarn when yarn.lock exists', () => {
+    vi.mocked(fs.existsSync).mockImplementation((p) => {
+      const pathStr = p.toString();
+      return pathStr.includes('package.json') || pathStr.includes('yarn.lock');
+    });
+    vi.mocked(fs.readdirSync).mockReturnValue([] as any);
+    vi.mocked(child_process.spawnSync).mockReturnValue({
+      status: 0,
+      stdout: '',
+      stderr: '',
+      pid: 1234,
+      output: [],
+      signal: null,
+    });
+
+    const result = ensureDependenciesInstalled('/test/dir');
+
+    expect(result.installed).toBe(true);
+    expect(child_process.spawnSync).toHaveBeenCalledWith(
+      'yarn',
+      ['install'],
+      expect.objectContaining({ cwd: '/test/dir' })
+    );
+  });
+
+  it('should use pnpm when pnpm-lock.yaml exists', () => {
+    vi.mocked(fs.existsSync).mockImplementation((p) => {
+      const pathStr = p.toString();
+      return pathStr.includes('package.json') || pathStr.includes('pnpm-lock.yaml');
+    });
+    vi.mocked(fs.readdirSync).mockReturnValue([] as any);
+    vi.mocked(child_process.spawnSync).mockReturnValue({
+      status: 0,
+      stdout: '',
+      stderr: '',
+      pid: 1234,
+      output: [],
+      signal: null,
+    });
+
+    const result = ensureDependenciesInstalled('/test/dir');
+
+    expect(result.installed).toBe(true);
+    expect(child_process.spawnSync).toHaveBeenCalledWith(
+      'pnpm',
+      ['install'],
+      expect.objectContaining({ cwd: '/test/dir' })
+    );
+  });
+
+  it('should return error when install fails', () => {
+    vi.mocked(fs.existsSync).mockImplementation((p) => {
+      const pathStr = p.toString();
+      return pathStr.includes('package.json') || pathStr.includes('package-lock.json');
+    });
+    vi.mocked(fs.readdirSync).mockReturnValue([] as any);
+    vi.mocked(child_process.spawnSync).mockReturnValue({
+      status: 1,
+      stdout: '',
+      stderr: 'npm ERR! something went wrong',
+      pid: 1234,
+      output: [],
+      signal: null,
+    });
+
+    const result = ensureDependenciesInstalled('/test/dir');
+
+    expect(result.installed).toBe(false);
+    expect(result.error).toContain('Failed to install dependencies');
+    expect(result.error).toContain('npm ERR!');
+  });
+
+  it('should run install when node_modules only has .bin', () => {
+    vi.mocked(fs.existsSync).mockImplementation((p) => {
+      const pathStr = p.toString();
+      return pathStr.includes('package.json') || pathStr.includes('node_modules') || pathStr.includes('package-lock.json');
+    });
+    vi.mocked(fs.readdirSync).mockReturnValue(['.bin'] as any);
+    vi.mocked(child_process.spawnSync).mockReturnValue({
+      status: 0,
+      stdout: '',
+      stderr: '',
+      pid: 1234,
+      output: [],
+      signal: null,
+    });
+
+    const result = ensureDependenciesInstalled('/test/dir');
+
+    expect(result.installed).toBe(true);
+    expect(child_process.spawnSync).toHaveBeenCalled();
   });
 });

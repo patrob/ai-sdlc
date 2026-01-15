@@ -1238,8 +1238,52 @@ export function truncateTestOutput(output: string, maxLength: number = 5000): st
 }
 
 /**
+ * Detect if errors are related to missing dependencies
+ * Returns module names that are missing, if any
+ */
+export function detectMissingDependencies(output: string): string[] {
+  if (!output) return [];
+
+  const missingModules: string[] = [];
+
+  // Pattern: Cannot find module 'package-name'
+  const cannotFindPattern = /Cannot find module ['"]([^'"]+)['"]/g;
+  let match;
+  while ((match = cannotFindPattern.exec(output)) !== null) {
+    const moduleName = match[1];
+    // Only include external packages, not relative imports
+    if (!moduleName.startsWith('.') && !moduleName.startsWith('/')) {
+      // Extract base package name (handle scoped packages like @types/foo)
+      const baseName = moduleName.startsWith('@')
+        ? moduleName.split('/').slice(0, 2).join('/')
+        : moduleName.split('/')[0];
+      if (!missingModules.includes(baseName)) {
+        missingModules.push(baseName);
+      }
+    }
+  }
+
+  // Pattern: Module not found: Error: Can't resolve 'package-name'
+  const cantResolvePattern = /(?:Module not found|Can't resolve)[:\s]+['"]([^'"]+)['"]/g;
+  while ((match = cantResolvePattern.exec(output)) !== null) {
+    const moduleName = match[1];
+    if (!moduleName.startsWith('.') && !moduleName.startsWith('/')) {
+      const baseName = moduleName.startsWith('@')
+        ? moduleName.split('/').slice(0, 2).join('/')
+        : moduleName.split('/')[0];
+      if (!missingModules.includes(baseName)) {
+        missingModules.push(baseName);
+      }
+    }
+  }
+
+  return missingModules;
+}
+
+/**
  * Build retry prompt for implementation agent
  * @param testOutput Test failure output
+ * @param buildOutput Build output
  * @param attemptNumber Current attempt number (1-indexed)
  * @param maxRetries Maximum number of retries
  * @returns Prompt string for retry attempt
@@ -1253,11 +1297,29 @@ export function buildRetryPrompt(
   const truncatedTestOutput = truncateTestOutput(testOutput);
   const truncatedBuildOutput = truncateTestOutput(buildOutput);
 
+  // Detect if this is a dependency issue
+  const combinedOutput = (buildOutput || '') + '\n' + (testOutput || '');
+  const missingDeps = detectMissingDependencies(combinedOutput);
+
   let prompt = `CRITICAL: Tests are failing. You attempted implementation but verification failed.
 
 This is retry attempt ${attemptNumber} of ${maxRetries}. Previous attempts failed with similar errors.
 
 `;
+
+  // Add special guidance for missing dependencies
+  if (missingDeps.length > 0) {
+    prompt += `**DEPENDENCY ISSUE DETECTED**
+
+The errors indicate missing npm packages: ${missingDeps.join(', ')}
+
+This is NOT a code bug - the packages need to be installed. Before making any code changes:
+1. Run \`npm install ${missingDeps.join(' ')}\` to add the missing packages
+2. If these are type definitions, also run \`npm install -D @types/${missingDeps.filter(d => !d.startsWith('@')).join(' @types/')}\`
+3. Re-run the build/tests after installing
+
+`;
+  }
 
   if (buildOutput && buildOutput.trim().length > 0) {
     prompt += `Build Output:

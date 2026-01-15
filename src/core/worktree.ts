@@ -35,7 +35,17 @@ const ERROR_MESSAGES = {
   WORKTREE_HAS_CHANGES: 'Worktree has uncommitted changes. Use --force to remove.',
   LIST_FAILED: 'Failed to list worktrees',
   REMOVE_FAILED: 'Failed to remove worktree',
+  INSTALL_FAILED: 'Failed to install dependencies',
 } as const;
+
+/**
+ * Lock file to package manager mapping
+ */
+const LOCK_FILE_TO_PM: Record<string, string> = {
+  'package-lock.json': 'npm',
+  'yarn.lock': 'yarn',
+  'pnpm-lock.yaml': 'pnpm',
+};
 
 /**
  * Service for managing git worktrees for isolated story execution
@@ -161,7 +171,48 @@ export class GitWorktreeService {
       throw new Error(`${ERROR_MESSAGES.CREATE_FAILED}: ${stderr}`);
     }
 
+    // Install dependencies in the new worktree
+    this.installDependencies(worktreePath);
+
     return worktreePath;
+  }
+
+  /**
+   * Install npm dependencies in a worktree
+   * Detects the package manager (npm/yarn/pnpm) and runs the appropriate install command
+   * @param worktreePath - Path to the worktree
+   * @throws Error if installation fails
+   */
+  installDependencies(worktreePath: string): void {
+    const packageJsonPath = path.join(worktreePath, 'package.json');
+
+    // Skip if not a Node.js project
+    if (!existsSync(packageJsonPath)) {
+      return;
+    }
+
+    // Detect package manager from lock file
+    let packageManager = 'npm'; // default
+    for (const [lockFile, pm] of Object.entries(LOCK_FILE_TO_PM)) {
+      if (existsSync(path.join(worktreePath, lockFile))) {
+        packageManager = pm;
+        break;
+      }
+    }
+
+    // Run install command
+    const result = spawnSync(packageManager, ['install'], {
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 120000, // 2 minute timeout
+    });
+
+    if (result.status !== 0) {
+      const stderr = result.stderr?.toString() || '';
+      throw new Error(`${ERROR_MESSAGES.INSTALL_FAILED}: ${stderr}`);
+    }
   }
 
   /**

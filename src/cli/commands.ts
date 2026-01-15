@@ -353,8 +353,17 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
   let storyContentHash: string | undefined;
 
   if (options.continue) {
-    // Try to load existing state
-    const existingState = await loadWorkflowState(sdlcRoot);
+    // Determine storyId for loading state
+    // If --story is provided, use it; otherwise, try to infer from existing state
+    let resumeStoryId: string | undefined;
+
+    // First try: use --story flag if provided
+    if (options.story) {
+      resumeStoryId = options.story;
+    }
+
+    // Try to load existing state (with or without storyId)
+    const existingState = await loadWorkflowState(sdlcRoot, resumeStoryId);
 
     if (!existingState) {
       console.log(c.error('Error: No checkpoint found.'));
@@ -408,7 +417,11 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     console.log();
   } else {
     // Check if there's an existing state and suggest --continue
-    if (hasWorkflowState(sdlcRoot) && !options.dryRun) {
+    // Check both global and story-specific state
+    const hasGlobalState = hasWorkflowState(sdlcRoot);
+    const hasStoryState = options.story ? hasWorkflowState(sdlcRoot, options.story) : false;
+
+    if ((hasGlobalState || hasStoryState) && !options.dryRun) {
       console.log(c.info('Note: Found previous checkpoint. Use --continue to resume.'));
       console.log();
     }
@@ -524,7 +537,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
     // Clear state if workflow is complete
     if (options.continue || hasWorkflowState(sdlcRoot)) {
-      await clearWorkflowState(sdlcRoot);
+      await clearWorkflowState(sdlcRoot, options.story);
       console.log(c.dim('Checkpoint cleared.'));
     }
 
@@ -574,7 +587,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
     if (actionsToProcess.length === 0) {
       console.log(c.success('All actions from checkpoint already completed!'));
-      await clearWorkflowState(sdlcRoot);
+      await clearWorkflowState(sdlcRoot, options.story);
       console.log(c.dim('Checkpoint cleared.'));
       return;
     }
@@ -731,7 +744,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
           console.log(c.info('You can:'));
           console.log(c.dim('  1. Fix issues manually and run again'));
           console.log(c.dim('  2. Reset retry count in the story frontmatter'));
-          await clearWorkflowState(sdlcRoot);
+          await clearWorkflowState(sdlcRoot, action.storyId);
           return;
         }
 
@@ -806,7 +819,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
         },
       };
 
-      await saveWorkflowState(state, sdlcRoot);
+      await saveWorkflowState(state, sdlcRoot, action.storyId);
       console.log(c.dim(`  ✓ Progress saved (${completedActions.length} actions completed)`));
     }
 
@@ -830,7 +843,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
               console.log(c.dim(`Retry attempts: ${retryAttempt}`));
             }
             console.log(c.dim(`Story is now ready for PR creation.`));
-            await clearWorkflowState(sdlcRoot);
+            await clearWorkflowState(sdlcRoot, action.storyId);
             console.log(c.dim('Checkpoint cleared.'));
           } else {
             // This shouldn't happen if our logic is correct, but handle it
@@ -845,7 +858,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
         const newAssessment = assessState(sdlcRoot);
         if (newAssessment.recommendedActions.length === 0) {
           console.log(c.success('\n✓ All actions completed!'));
-          await clearWorkflowState(sdlcRoot);
+          await clearWorkflowState(sdlcRoot, action.storyId);
           console.log(c.dim('Checkpoint cleared.'));
           break;
         }

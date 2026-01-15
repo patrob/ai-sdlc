@@ -2,11 +2,15 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
+import { createRequire } from 'module';
 import { init, status, add, run, details, unblock, migrate, listWorktrees, addWorktree, removeWorktree } from './cli/commands.js';
 import { hasApiKey } from './core/auth.js';
 import { loadConfig, saveConfig } from './core/config.js';
 import { getThemedChalk } from './core/theme.js';
 import { ThemePreference } from './types/index.js';
+
+const require = createRequire(import.meta.url);
+const packageJson = require('../package.json');
 
 // Check for API key when running commands that need it
 function checkApiKey(): boolean {
@@ -31,7 +35,7 @@ const program = new Command();
 program
   .name('ai-sdlc')
   .description('Agent-first SDLC workflow manager')
-  .version('0.1.0');
+  .version(packageJson.version);
 
 program
   .command('init')

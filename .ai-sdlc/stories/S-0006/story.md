@@ -2,17 +2,17 @@
 id: S-0006
 title: Validate clean git state before workflow execution
 priority: 21
-status: backlog
+status: done
 type: feature
 created: '2026-01-13'
 labels:
   - p0-mvp
   - safety
   - git
-research_complete: false
-plan_complete: false
-implementation_complete: false
-reviews_complete: false
+research_complete: true
+plan_complete: true
+implementation_complete: true
+reviews_complete: true
 slug: validate-git-state-before-workflow
 ---
 # Validate clean git state before workflow execution
@@ -29,14 +29,14 @@ Running automated workflows without validating git state can lead to messy situa
 
 ## Acceptance Criteria
 
-- [ ] Before executing any action that modifies git (implement, create_pr), check git status
-- [ ] Verify working directory is clean (no uncommitted changes)
-- [ ] Verify no untracked files that might conflict with implementation
-- [ ] Verify current branch is not main/master (unless explicitly allowed)
-- [ ] Verify local branch is not behind remote (would cause push failures)
-- [ ] If validation fails, display clear error message explaining the issue and how to resolve
-- [ ] If validation fails, exit gracefully without making any changes
-- [ ] User can override validation with `--force` flag if they understand the risks
+- [x] Before executing any action that modifies git (implement, create_pr), check git status
+- [x] Verify working directory is clean (no uncommitted changes)
+- [x] Verify no untracked files that might conflict with implementation
+- [x] Verify current branch is not main/master (unless explicitly allowed)
+- [x] Verify local branch is not behind remote (would cause push failures)
+- [x] If validation fails, display clear error message explaining the issue and how to resolve
+- [x] If validation fails, exit gracefully without making any changes
+- [x] User can override validation with `--force` flag if they understand the risks
 
 ## Technical Notes
 

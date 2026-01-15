@@ -80,6 +80,7 @@ program
   .option('--max-iterations <number>', 'Maximum retry iterations (default: infinite)')
   .option('--watch', 'Run in daemon mode, continuously processing backlog')
   .option('-v, --verbose', 'Show detailed daemon output (use with --watch)')
+  .option('--force', 'Skip git validation checks (use with caution)')
   .action((options) => {
     if (!options.dryRun && !options.watch) {
       checkApiKey();

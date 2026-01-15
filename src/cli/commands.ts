@@ -20,6 +20,7 @@ import { getStoryFlags as getStoryFlagsUtil, formatStatus as formatStatusUtil } 
 import { migrateToFolderPerStory } from './commands/migrate.js';
 import { generateReviewSummary } from '../agents/review.js';
 import { getTerminalWidth } from './formatting.js';
+import { validateGitState, GitValidationResult } from '../core/git-utils.js';
 
 /**
  * Initialize the .ai-sdlc folder structure
@@ -242,9 +243,44 @@ function generateFullSDLCActions(story: Story, c?: any): Action[] {
 }
 
 /**
+ * Actions that modify git and require validation
+ */
+const GIT_MODIFYING_ACTIONS: ActionType[] = ['implement', 'review', 'create_pr'];
+
+/**
+ * Check if any actions in the list require git validation
+ */
+function requiresGitValidation(actions: Action[]): boolean {
+  return actions.some(action => GIT_MODIFYING_ACTIONS.includes(action.type));
+}
+
+/**
+ * Display git validation errors and warnings
+ */
+function displayGitValidationResult(result: GitValidationResult, c: any): void {
+  if (result.errors.length > 0) {
+    console.log();
+    console.log(c.error('Git validation failed:'));
+    for (const error of result.errors) {
+      console.log(c.error(`  - ${error}`));
+    }
+    console.log();
+    console.log(c.info('To override this check, use --force (at your own risk)'));
+  }
+
+  if (result.warnings.length > 0) {
+    console.log();
+    console.log(c.warning('Git validation warnings:'));
+    for (const warning of result.warnings) {
+      console.log(c.warning(`  - ${warning}`));
+    }
+  }
+}
+
+/**
  * Run the workflow (process one action or all)
  */
-export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string; maxIterations?: string; watch?: boolean }): Promise<void> {
+export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean }): Promise<void> {
   const config = loadConfig();
   // Parse maxIterations from CLI (undefined means use config default which is Infinity)
   const maxIterationsOverride = options.maxIterations !== undefined
@@ -517,6 +553,22 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       await clearWorkflowState(sdlcRoot);
       console.log(c.dim('Checkpoint cleared.'));
       return;
+    }
+  }
+
+  // Validate git state before processing actions that modify git
+  if (!options.force && requiresGitValidation(actionsToProcess)) {
+    const workingDir = path.dirname(sdlcRoot);
+    const gitValidation = validateGitState(workingDir);
+
+    if (!gitValidation.valid) {
+      displayGitValidationResult(gitValidation, c);
+      return;
+    }
+
+    if (gitValidation.warnings.length > 0) {
+      displayGitValidationResult(gitValidation, c);
+      console.log();
     }
   }
 

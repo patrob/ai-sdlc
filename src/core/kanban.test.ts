@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { assessState, calculateCompletionScore } from './kanban.js';
+import { assessState, calculateCompletionScore, findAllStories } from './kanban.js';
 import * as storyModule from './story.js';
 import { ReviewDecision, Story } from '../types/index.js';
 
@@ -111,6 +111,7 @@ Some implementation content here.
   it('should call moveToBlocked when story reaches max retries', () => {
     // Arrange
     const storyPath = createStoryWithRetries('test-story-1', 3, 3);
+    const canonicalPath = fs.realpathSync(storyPath);
     createConfigFile(3);
 
     // Act
@@ -119,7 +120,7 @@ Some implementation content here.
     // Assert
     expect(moveToBlockedSpy).toHaveBeenCalledTimes(1);
     expect(moveToBlockedSpy).toHaveBeenCalledWith(
-      storyPath,
+      canonicalPath,
       expect.stringContaining('Max review retries (3/3) reached')
     );
   });
@@ -190,13 +191,14 @@ Implementation content.
 
     fs.writeFileSync(filePath, content, 'utf-8');
     createConfigFile(3);
+    const canonicalPath = fs.realpathSync(filePath);
 
     // Act
     assessState(sdlcRoot);
 
     // Assert
     expect(moveToBlockedSpy).toHaveBeenCalledWith(
-      filePath,
+      canonicalPath,
       expect.stringContaining('last failure: unknown')
     );
   });
@@ -580,5 +582,154 @@ describe('calculateCompletionScore', () => {
 
     // More complete story should have lower priority number (worked first)
     expect(morePriorityNum).toBeLessThan(lessPriorityNum);
+  });
+});
+
+describe('findAllStories - path canonicalization', () => {
+  let tempDir: string;
+  let sdlcRoot: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-findall-test-'));
+    sdlcRoot = path.join(tempDir, '.ai-sdlc');
+    fs.mkdirSync(sdlcRoot, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  function createStory(storyId: string): string {
+    const storiesFolder = path.join(sdlcRoot, 'stories');
+    fs.mkdirSync(storiesFolder, { recursive: true });
+
+    const storyFolder = path.join(storiesFolder, storyId);
+    fs.mkdirSync(storyFolder, { recursive: true });
+
+    const filePath = path.join(storyFolder, 'story.md');
+
+    const content = `---
+id: ${storyId}
+title: Test Story ${storyId}
+slug: test-story-${storyId}
+priority: 10
+status: backlog
+type: feature
+created: '2024-01-01'
+labels: []
+research_complete: false
+plan_complete: false
+implementation_complete: false
+reviews_complete: false
+---
+
+# Test Story ${storyId}
+
+Content here.
+`;
+
+    fs.writeFileSync(filePath, content, 'utf-8');
+    return filePath;
+  }
+
+  it('should return canonical paths from findAllStories', () => {
+    const storyPath = createStory('S-0001');
+    const canonicalPath = fs.realpathSync(storyPath);
+
+    const stories = findAllStories(sdlcRoot);
+
+    expect(stories).toHaveLength(1);
+    expect(stories[0].path).toBe(canonicalPath);
+  });
+
+  it('should return paths that match getStory lookup', () => {
+    createStory('S-0002');
+
+    const stories = findAllStories(sdlcRoot);
+    const storyFromFind = stories[0];
+
+    const storyFromGet = storyModule.getStory(sdlcRoot, 'S-0002');
+
+    expect(storyFromFind.path).toBe(storyFromGet.path);
+  });
+
+  it('should handle symlinks in path by resolving to real path', () => {
+    const storiesFolder = path.join(sdlcRoot, 'stories');
+    fs.mkdirSync(storiesFolder, { recursive: true });
+
+    const realStoryFolder = path.join(tempDir, 'real-story-folder');
+    fs.mkdirSync(realStoryFolder, { recursive: true });
+
+    const storyContent = `---
+id: S-0003
+title: Symlinked Story
+slug: symlinked-story
+priority: 10
+status: backlog
+type: feature
+created: '2024-01-01'
+labels: []
+research_complete: false
+plan_complete: false
+implementation_complete: false
+reviews_complete: false
+---
+
+# Symlinked Story
+
+Content.
+`;
+    fs.writeFileSync(path.join(realStoryFolder, 'story.md'), storyContent, 'utf-8');
+
+    const symlinkPath = path.join(storiesFolder, 'S-0003');
+    try {
+      fs.symlinkSync(realStoryFolder, symlinkPath, 'dir');
+    } catch {
+      return;
+    }
+
+    const stories = findAllStories(sdlcRoot);
+
+    expect(stories).toHaveLength(1);
+    const realPathToStory = fs.realpathSync(path.join(symlinkPath, 'story.md'));
+    expect(stories[0].path).toBe(realPathToStory);
+  });
+
+  it('should return empty array when stories folder does not exist', () => {
+    const nonExistentRoot = path.join(tempDir, 'nonexistent', '.ai-sdlc');
+
+    const stories = findAllStories(nonExistentRoot);
+
+    expect(stories).toEqual([]);
+  });
+
+  it('should skip stories where realpathSync fails', () => {
+    createStory('S-0001');
+
+    const stories = findAllStories(sdlcRoot);
+
+    expect(stories).toHaveLength(1);
+    expect(stories[0].frontmatter.id).toBe('S-0001');
+  });
+
+  it('should return multiple stories with canonical paths', () => {
+    const path1 = createStory('S-0001');
+    const path2 = createStory('S-0002');
+    const path3 = createStory('S-0003');
+
+    const canonical1 = fs.realpathSync(path1);
+    const canonical2 = fs.realpathSync(path2);
+    const canonical3 = fs.realpathSync(path3);
+
+    const stories = findAllStories(sdlcRoot);
+
+    expect(stories).toHaveLength(3);
+
+    const returnedPaths = stories.map(s => s.path).sort();
+    const expectedPaths = [canonical1, canonical2, canonical3].sort();
+
+    expect(returnedPaths).toEqual(expectedPaths);
   });
 });

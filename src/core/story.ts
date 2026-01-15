@@ -294,7 +294,10 @@ export function createStory(
   };
 
   writeStory(story);
-  return story;
+
+  // Return story with canonical path for consistency
+  const canonicalPath = fs.realpathSync(filePath);
+  return { ...story, path: canonicalPath };
 }
 
 /**
@@ -699,8 +702,9 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
         const storyPath = path.join(storiesFolder, actualDirName, STORY_FILENAME);
 
         if (fs.existsSync(storyPath)) {
-          const story = parseStory(storyPath);
-          return story;
+          const canonicalPath = fs.realpathSync(storyPath);
+          const story = parseStory(canonicalPath);
+          return { ...story, path: canonicalPath };
         }
       }
     } catch (err) {
@@ -721,10 +725,11 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
     for (const file of files) {
       const filePath = path.join(folderPath, file);
       try {
-        const story = parseStory(filePath);
+        const canonicalPath = fs.realpathSync(filePath);
+        const story = parseStory(canonicalPath);
         // Case-insensitive comparison to match input
         if (story.frontmatter.id?.toLowerCase() === storyId.toLowerCase()) {
-          return story;
+          return { ...story, path: canonicalPath };
         }
       } catch (err) {
         continue;
@@ -739,10 +744,11 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
     for (const file of blockedFiles) {
       const filePath = path.join(blockedFolder, file);
       try {
-        const story = parseStory(filePath);
+        const canonicalPath = fs.realpathSync(filePath);
+        const story = parseStory(canonicalPath);
         // Case-insensitive comparison to match input
         if (story.frontmatter.id?.toLowerCase() === storyId.toLowerCase()) {
-          return story;
+          return { ...story, path: canonicalPath };
         }
       } catch (err) {
         continue;

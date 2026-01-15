@@ -26,10 +26,11 @@ export function findAllStories(sdlcRoot: string): Story[] {
 
     for (const storyPath of storyPaths) {
       try {
-        const story = parseStory(storyPath);
-        stories.push(story);
+        const canonicalPath = fs.realpathSync(storyPath);
+        const story = parseStory(canonicalPath);
+        stories.push({ ...story, path: canonicalPath });
       } catch (err) {
-        // Skip malformed stories
+        // Skip malformed stories or symlinks that can't be resolved
         continue;
       }
     }

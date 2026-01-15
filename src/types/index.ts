@@ -280,6 +280,30 @@ export interface DaemonConfig {
   escTimeout: number;
 }
 
+/**
+ * Worktree configuration for isolated story execution
+ */
+export interface WorktreeConfig {
+  /** Enable worktrees by default for story execution. @default false */
+  enabled: boolean;
+  /** Base path for worktree directories relative to project root. @default '.ai-sdlc/worktrees' */
+  basePath: string;
+}
+
+/**
+ * Information about a git worktree managed by ai-sdlc
+ */
+export interface WorktreeInfo {
+  /** Absolute path to the worktree directory */
+  path: string;
+  /** Branch name (without refs/heads/ prefix) */
+  branch: string;
+  /** Story ID extracted from branch name (if ai-sdlc managed) */
+  storyId?: string;
+  /** Whether the worktree directory exists on filesystem */
+  exists: boolean;
+}
+
 export interface Config {
   sdlcFolder: string;
   stageGates: StageGateConfig;
@@ -319,6 +343,11 @@ export interface Config {
    * Controls test-first implementation workflow.
    */
   tdd?: TDDConfig;
+  /**
+   * Worktree configuration for isolated story execution.
+   * Controls git worktree creation and location.
+   */
+  worktree?: WorktreeConfig;
 }
 
 // Agent types

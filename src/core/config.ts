@@ -1,6 +1,6 @@
-import fs from 'fs';
+import * as fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig } from '../types/index.js';
 
 const CONFIG_FILENAME = '.ai-sdlc.json';
 
@@ -35,6 +35,14 @@ export const DEFAULT_TDD_CONFIG: TDDConfig = {
   maxCycles: 50,
   requireApprovalPerCycle: false,
   requirePassingTestsForComplete: true,
+};
+
+/**
+ * Default worktree configuration
+ */
+export const DEFAULT_WORKTREE_CONFIG: WorktreeConfig = {
+  enabled: false,
+  basePath: '.ai-sdlc/worktrees',
 };
 
 /**
@@ -79,6 +87,8 @@ export const DEFAULT_CONFIG: Config = {
   daemon: { ...DEFAULT_DAEMON_CONFIG },
   // TDD configuration
   tdd: { ...DEFAULT_TDD_CONFIG },
+  // Worktree configuration
+  worktree: { ...DEFAULT_WORKTREE_CONFIG },
 };
 
 /**
@@ -258,6 +268,30 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
     }
   }
 
+  // Validate worktree configuration if present
+  if (userConfig.worktree !== undefined) {
+    if (typeof userConfig.worktree !== 'object' || userConfig.worktree === null) {
+      console.warn('Invalid worktree in config (must be object), ignoring');
+      delete userConfig.worktree;
+    } else {
+      // Validate worktree.enabled (must be boolean)
+      if (userConfig.worktree.enabled !== undefined) {
+        if (typeof userConfig.worktree.enabled !== 'boolean') {
+          console.warn('Invalid worktree.enabled in config (must be boolean), using default');
+          delete userConfig.worktree.enabled;
+        }
+      }
+
+      // Validate worktree.basePath (must be string)
+      if (userConfig.worktree.basePath !== undefined) {
+        if (typeof userConfig.worktree.basePath !== 'string') {
+          console.warn('Invalid worktree.basePath in config (must be string), using default');
+          delete userConfig.worktree.basePath;
+        }
+      }
+    }
+  }
+
   return userConfig;
 }
 
@@ -307,6 +341,10 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
         tdd: {
           ...DEFAULT_TDD_CONFIG,
           ...userConfig.tdd,
+        },
+        worktree: {
+          ...DEFAULT_WORKTREE_CONFIG,
+          ...userConfig.worktree,
         },
       };
     } catch (error) {
@@ -555,4 +593,40 @@ export function updateImplementationConfig(
   config.implementation = validateImplementationConfig(config.implementation);
   saveConfig(config, workingDir);
   return config;
+}
+
+/**
+ * Validate and resolve worktree basePath
+ * @param basePath - The configured base path (may be relative)
+ * @param projectRoot - The project root directory
+ * @returns The resolved absolute path
+ * @throws Error if the parent directory does not exist
+ */
+export function validateWorktreeBasePath(basePath: string, projectRoot: string): string {
+  const resolvedPath = path.isAbsolute(basePath)
+    ? basePath
+    : path.resolve(projectRoot, basePath);
+
+  // Check parent directory exists (worktree dir itself may not exist yet)
+  const parentDir = path.dirname(resolvedPath);
+  if (!fs.existsSync(parentDir)) {
+    throw new Error(`Worktree basePath parent directory does not exist: ${parentDir}`);
+  }
+
+  return resolvedPath;
+}
+
+/**
+ * Get resolved worktree configuration with validated paths
+ * @param config - The loaded configuration
+ * @param projectRoot - The project root directory
+ * @returns Resolved worktree config with absolute basePath
+ */
+export function getWorktreeConfig(config: Config, projectRoot: string): WorktreeConfig {
+  const worktreeConfig = config.worktree ?? DEFAULT_WORKTREE_CONFIG;
+
+  return {
+    enabled: worktreeConfig.enabled,
+    basePath: validateWorktreeBasePath(worktreeConfig.basePath, projectRoot),
+  };
 }

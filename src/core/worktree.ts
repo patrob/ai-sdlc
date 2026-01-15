@@ -2,6 +2,7 @@ import { spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import path from 'path';
 import { isCleanWorkingDirectory } from './git-utils.js';
+import { WorktreeInfo } from '../types/index.js';
 
 /**
  * Options for creating a git worktree
@@ -30,6 +31,10 @@ const ERROR_MESSAGES = {
   NO_BASE_BRANCH: 'Could not detect base branch (main or master)',
   NOT_GIT_REPO: 'Not a git repository',
   BRANCH_EXISTS: 'A branch with this name already exists',
+  WORKTREE_NOT_FOUND: 'Worktree not found',
+  WORKTREE_HAS_CHANGES: 'Worktree has uncommitted changes. Use --force to remove.',
+  LIST_FAILED: 'Failed to list worktrees',
+  REMOVE_FAILED: 'Failed to remove worktree',
 } as const;
 
 /**
@@ -38,15 +43,15 @@ const ERROR_MESSAGES = {
 export class GitWorktreeService {
   constructor(
     private projectRoot: string,
-    private sdlcRoot: string
+    private worktreeBasePath: string
   ) {}
 
   /**
    * Generate the worktree path for a story
-   * Format: {sdlcRoot}/worktrees/{storyId}-{slug}
+   * Format: {worktreeBasePath}/{storyId}-{slug}
    */
   getWorktreePath(storyId: string, slug: string): string {
-    return path.join(this.sdlcRoot, 'worktrees', `${storyId}-${slug}`);
+    return path.join(this.worktreeBasePath, `${storyId}-${slug}`);
   }
 
   /**
@@ -157,5 +162,80 @@ export class GitWorktreeService {
     }
 
     return worktreePath;
+  }
+
+  /**
+   * List all ai-sdlc managed worktrees
+   * @returns Array of WorktreeInfo objects for worktrees in the basePath
+   */
+  list(): WorktreeInfo[] {
+    const result = spawnSync('git', ['worktree', 'list', '--porcelain'], {
+      cwd: this.projectRoot,
+      encoding: 'utf-8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (result.status !== 0) {
+      throw new Error(`${ERROR_MESSAGES.LIST_FAILED}: ${result.stderr}`);
+    }
+
+    const output = result.stdout || '';
+    const worktrees: WorktreeInfo[] = [];
+    const blocks = output.trim().split('\n\n');
+
+    for (const block of blocks) {
+      if (!block.trim()) continue;
+
+      const lines = block.split('\n');
+      let worktreePath = '';
+      let branch = '';
+
+      for (const line of lines) {
+        if (line.startsWith('worktree ')) {
+          worktreePath = line.substring(9);
+        } else if (line.startsWith('branch ')) {
+          branch = line.substring(7).replace('refs/heads/', '');
+        }
+      }
+
+      // Filter to only ai-sdlc managed worktrees
+      if (worktreePath && worktreePath.startsWith(this.worktreeBasePath)) {
+        const storyIdMatch = branch.match(/^ai-sdlc\/(S-\d+)-/);
+        worktrees.push({
+          path: worktreePath,
+          branch,
+          storyId: storyIdMatch ? storyIdMatch[1] : undefined,
+          exists: existsSync(worktreePath),
+        });
+      }
+    }
+
+    return worktrees;
+  }
+
+  /**
+   * Remove a git worktree
+   * @param worktreePath - Absolute path to the worktree to remove
+   * @throws Error if removal fails
+   */
+  remove(worktreePath: string): void {
+    const result = spawnSync('git', ['worktree', 'remove', worktreePath], {
+      cwd: this.projectRoot,
+      encoding: 'utf-8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (result.status !== 0) {
+      const stderr = result.stderr?.toString() || '';
+      if (stderr.includes('not a working tree')) {
+        throw new Error(ERROR_MESSAGES.WORKTREE_NOT_FOUND);
+      }
+      if (stderr.includes('modified or untracked files')) {
+        throw new Error(ERROR_MESSAGES.WORKTREE_HAS_CHANGES);
+      }
+      throw new Error(`${ERROR_MESSAGES.REMOVE_FAILED}: ${stderr}`);
+    }
   }
 }

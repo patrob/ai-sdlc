@@ -2,7 +2,7 @@
 id: S-0033
 title: Per-Story Workflow State
 priority: 2
-status: in-progress
+status: done
 type: feature
 created: '2026-01-15'
 labels:
@@ -13,8 +13,8 @@ labels:
 epic: concurrent-workflows
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 slug: per-story-workflow-state
 worktree_path: >-
   /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0033-per-story-workflow-state

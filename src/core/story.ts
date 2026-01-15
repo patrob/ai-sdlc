@@ -666,13 +666,32 @@ export function sanitizeReasonText(text: string): string {
  */
 export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
   // O(1) direct path construction for new architecture
-  const storyPath = path.join(sdlcRoot, STORIES_FOLDER, storyId, STORY_FILENAME);
+  // First, find the actual directory name with correct casing
+  const storiesFolder = path.join(sdlcRoot, STORIES_FOLDER);
 
-  if (fs.existsSync(storyPath)) {
+  if (fs.existsSync(storiesFolder)) {
     try {
-      return parseStory(storyPath);
+      // Read actual directory names from filesystem
+      const directories = fs.readdirSync(storiesFolder, { withFileTypes: true })
+        .filter(dirent => dirent.isDirectory())
+        .map(dirent => dirent.name);
+
+      // Find directory that matches case-insensitively
+      const actualDirName = directories.find(
+        dir => dir.toLowerCase() === storyId.toLowerCase()
+      );
+
+      if (actualDirName) {
+        // Use the actual directory name (with correct filesystem casing)
+        const storyPath = path.join(storiesFolder, actualDirName, STORY_FILENAME);
+
+        if (fs.existsSync(storyPath)) {
+          const story = parseStory(storyPath);
+          return story;
+        }
+      }
     } catch (err) {
-      // Story file exists but is malformed, fall through to search
+      // If reading directory fails, fall through to fallback search
     }
   }
 
@@ -690,7 +709,8 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
       const filePath = path.join(folderPath, file);
       try {
         const story = parseStory(filePath);
-        if (story.frontmatter.id === storyId) {
+        // Case-insensitive comparison to match input
+        if (story.frontmatter.id?.toLowerCase() === storyId.toLowerCase()) {
           return story;
         }
       } catch (err) {
@@ -707,7 +727,8 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
       const filePath = path.join(blockedFolder, file);
       try {
         const story = parseStory(filePath);
-        if (story.frontmatter.id === storyId) {
+        // Case-insensitive comparison to match input
+        if (story.frontmatter.id?.toLowerCase() === storyId.toLowerCase()) {
           return story;
         }
       } catch (err) {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { moveToBlocked, parseStory, sanitizeReasonText, unblockStory, getStory, writeStory } from './story.js';
+import { moveToBlocked, parseStory, sanitizeReasonText, unblockStory, getStory, writeStory, findStoryById } from './story.js';
 import { BLOCKED_DIR } from '../types/index.js';
 
 describe('moveToBlocked', () => {
@@ -11,7 +11,8 @@ describe('moveToBlocked', () => {
 
   beforeEach(() => {
     // Create temporary directory for tests
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-'));
+    // Use realpathSync to resolve symlinks (macOS /tmp -> /private/tmp)
+    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-')));
     sdlcRoot = path.join(tempDir, '.ai-sdlc');
     fs.mkdirSync(sdlcRoot, { recursive: true });
   });
@@ -314,7 +315,8 @@ describe('getStory', () => {
 
   beforeEach(() => {
     // Create temporary directory for tests
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-'));
+    // Use realpathSync to resolve symlinks (macOS /tmp -> /private/tmp)
+    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-')));
     sdlcRoot = path.join(tempDir, '.ai-sdlc');
     fs.mkdirSync(sdlcRoot, { recursive: true });
   });
@@ -450,7 +452,8 @@ describe('unblockStory', () => {
 
   beforeEach(() => {
     // Create temporary directory for tests
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-'));
+    // Use realpathSync to resolve symlinks (macOS /tmp -> /private/tmp)
+    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-')));
     sdlcRoot = path.join(tempDir, '.ai-sdlc');
     fs.mkdirSync(sdlcRoot, { recursive: true });
 
@@ -651,5 +654,109 @@ Test content`;
 
     expect(fs.existsSync(storyPath)).toBe(true);
     expect(unblockedStory.path).toBe(storyPath);
+  });
+});
+
+describe('findStoryById - case insensitive lookup', () => {
+  let tempDir: string;
+  let sdlcRoot: string;
+
+  beforeEach(() => {
+    // Create temporary directory for tests
+    // Use realpathSync to resolve symlinks (macOS /tmp -> /private/tmp)
+    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-')));
+    sdlcRoot = path.join(tempDir, '.ai-sdlc');
+    fs.mkdirSync(sdlcRoot, { recursive: true });
+  });
+
+  afterEach(() => {
+    // Clean up temporary directory
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  function createTestStoryWithId(storyId: string): string {
+    const storiesFolder = path.join(sdlcRoot, 'stories');
+    fs.mkdirSync(storiesFolder, { recursive: true });
+
+    const storyFolder = path.join(storiesFolder, storyId);
+    fs.mkdirSync(storyFolder, { recursive: true });
+
+    const filePath = path.join(storyFolder, 'story.md');
+
+    const content = `---
+id: ${storyId}
+title: Test Story ${storyId}
+slug: ${storyId.toLowerCase()}
+priority: 1
+status: in-progress
+type: feature
+created: '2024-01-01'
+labels: []
+research_complete: true
+plan_complete: true
+implementation_complete: false
+reviews_complete: false
+---
+
+# Test Story ${storyId}
+
+Test content for ${storyId}
+`;
+
+    fs.writeFileSync(filePath, content);
+    return filePath;
+  }
+
+  it('should return canonical path when ID provided in uppercase', () => {
+    // Create story with uppercase directory: S-0001/
+    const storyId = 'S-0001';
+    createTestStoryWithId(storyId);
+
+    // Query with uppercase
+    const story = findStoryById(sdlcRoot, 'S-0001');
+
+    expect(story).toBeDefined();
+    expect(story).not.toBeNull();
+    expect(story!.frontmatter.id).toBe('S-0001');
+    expect(story!.path).toContain('S-0001'); // Should match actual filesystem casing
+  });
+
+  it('should return canonical path when ID provided in lowercase', () => {
+    // Create story with uppercase directory: S-0002/
+    const storyId = 'S-0002';
+    createTestStoryWithId(storyId);
+
+    // Query with lowercase (this is the bug scenario)
+    const story = findStoryById(sdlcRoot, 's-0002');
+
+    expect(story).toBeDefined();
+    expect(story).not.toBeNull();
+    expect(story!.frontmatter.id).toBe('S-0002');
+    // The critical assertion: path should contain uppercase S-0002 (canonical filesystem casing)
+    // not lowercase s-0002 (input casing)
+    expect(story!.path).toContain('S-0002');
+  });
+
+  it('should return null for non-existent story with lowercase input', () => {
+    // Query for non-existent story
+    const story = findStoryById(sdlcRoot, 's-9999');
+
+    expect(story).toBeNull();
+  });
+
+  it('should handle mixed case input and return canonical path', () => {
+    // Create story with uppercase directory: S-0003/
+    const storyId = 'S-0003';
+    createTestStoryWithId(storyId);
+
+    // Query with mixed case
+    const story = findStoryById(sdlcRoot, 's-0003');
+
+    expect(story).toBeDefined();
+    expect(story).not.toBeNull();
+    // Path should match filesystem, not input
+    expect(story!.path).toContain('S-0003');
   });
 });

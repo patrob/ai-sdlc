@@ -161,7 +161,7 @@ function hasFailedReview(story: Story): boolean {
 /**
  * Assess the current state of the kanban board and recommend actions
  */
-export function assessState(sdlcRoot: string): StateAssessment {
+export async function assessState(sdlcRoot: string): Promise<StateAssessment> {
   const backlogItems = findStoriesByStatus(sdlcRoot, 'backlog');
   const readyItems = findStoriesByStatus(sdlcRoot, 'ready');
   const inProgressItems = findStoriesByStatus(sdlcRoot, 'in-progress');
@@ -217,7 +217,7 @@ export function assessState(sdlcRoot: string): StateAssessment {
 
           try {
             // Move story to blocked folder
-            moveToBlocked(story.path, reason);
+            await moveToBlocked(story.path, reason);
 
             // Log blocking action with sanitized output
             const sanitizedStoryId = sanitizeReasonText(story.frontmatter.id || 'unknown');
@@ -260,7 +260,7 @@ export function assessState(sdlcRoot: string): StateAssessment {
 
       try {
         // Move story to blocked folder
-        moveToBlocked(story.path, reason);
+        await moveToBlocked(story.path, reason);
 
         // Log blocking action with sanitized output
         const sanitizedStoryId = sanitizeReasonText(story.frontmatter.id || 'unknown');

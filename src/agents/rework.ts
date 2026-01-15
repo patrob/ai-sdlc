@@ -47,18 +47,18 @@ export async function runReworkAgent(
 
     // Record this refinement attempt
     const feedbackSummary = formatFeedbackSummary(reviewFeedback);
-    recordRefinementAttempt(story, targetPhase, feedbackSummary);
+    await recordRefinementAttempt(story, targetPhase, feedbackSummary);
     const currentIteration = getRefinementCount(story);
 
     changesMade.push(`Recorded refinement attempt ${currentIteration}`);
 
     // Append detailed feedback to Review Notes section
     const refinementNote = formatRefinementNote(currentIteration, targetPhase, reviewFeedback);
-    appendRefinementNote(story, currentIteration, refinementNote);
+    await appendRefinementNote(story, currentIteration, refinementNote);
     changesMade.push(`Added refinement iteration ${currentIteration} notes to story`);
 
     // Reset the appropriate completion flag
-    resetPhaseCompletion(story, targetPhase);
+    await resetPhaseCompletion(story, targetPhase);
     changesMade.push(`Reset ${targetPhase}_complete flag for rework`);
 
     // Clear any previous error

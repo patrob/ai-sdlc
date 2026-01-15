@@ -11,22 +11,22 @@ import { assessState } from '../core/kanban.js';
  * In the future, this could use an LLM to make smarter decisions about
  * prioritization and workflow optimization.
  */
-export function runStateAssessor(sdlcRoot: string): StateAssessment {
-  return assessState(sdlcRoot);
+export async function runStateAssessor(sdlcRoot: string): Promise<StateAssessment> {
+  return await assessState(sdlcRoot);
 }
 
 /**
  * Get the next recommended action
  */
-export function getNextAction(sdlcRoot: string): Action | null {
-  const assessment = assessState(sdlcRoot);
+export async function getNextAction(sdlcRoot: string): Promise<Action | null> {
+  const assessment = await assessState(sdlcRoot);
   return assessment.recommendedActions[0] || null;
 }
 
 /**
  * Check if there's any work to be done
  */
-export function hasWork(sdlcRoot: string): boolean {
-  const assessment = assessState(sdlcRoot);
+export async function hasWork(sdlcRoot: string): Promise<boolean> {
+  const assessment = await assessState(sdlcRoot);
   return assessment.recommendedActions.length > 0;
 }

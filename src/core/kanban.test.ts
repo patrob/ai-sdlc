@@ -108,14 +108,14 @@ Some implementation content here.
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
   }
 
-  it('should call moveToBlocked when story reaches max retries', () => {
+  it('should call moveToBlocked when story reaches max retries', async () => {
     // Arrange
     const storyPath = createStoryWithRetries('test-story-1', 3, 3);
     const canonicalPath = fs.realpathSync(storyPath);
     createConfigFile(3);
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     expect(moveToBlockedSpy).toHaveBeenCalledTimes(1);
@@ -125,13 +125,13 @@ Some implementation content here.
     );
   });
 
-  it('should include retry count in blocked reason', () => {
+  it('should include retry count in blocked reason', async () => {
     // Arrange
     createStoryWithRetries('test-story-2', 5, 5, 'Failed all review checks');
     createConfigFile(5);
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     expect(moveToBlockedSpy).toHaveBeenCalledWith(
@@ -140,14 +140,14 @@ Some implementation content here.
     );
   });
 
-  it('should include feedback summary in blocked reason', () => {
+  it('should include feedback summary in blocked reason', async () => {
     // Arrange
     const longFeedback = 'Security issues found in authentication module. The password hashing algorithm is weak and needs to be updated to bcrypt with proper salt rounds.';
     createStoryWithRetries('test-story-3', 2, 2, longFeedback);
     createConfigFile(2);
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     expect(moveToBlockedSpy).toHaveBeenCalledWith(
@@ -156,7 +156,7 @@ Some implementation content here.
     );
   });
 
-  it('should use "unknown" when no review history exists', () => {
+  it('should use "unknown" when no review history exists', async () => {
     // Arrange: Create story without review history
     const storiesFolder = path.join(sdlcRoot, 'stories');
     fs.mkdirSync(storiesFolder, { recursive: true });
@@ -194,7 +194,7 @@ Implementation content.
     const canonicalPath = fs.realpathSync(filePath);
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     expect(moveToBlockedSpy).toHaveBeenCalledWith(
@@ -203,13 +203,13 @@ Implementation content.
     );
   });
 
-  it('should log success message after blocking', () => {
+  it('should log success message after blocking', async () => {
     // Arrange
     createStoryWithRetries('test-story-4', 3, 3);
     createConfigFile(3);
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     expect(consoleLogSpy).toHaveBeenCalledWith(
@@ -217,7 +217,7 @@ Implementation content.
     );
   });
 
-  it('should fall back to high-priority action when moveToBlocked throws', () => {
+  it('should fall back to high-priority action when moveToBlocked throws', async () => {
     // Arrange
     createStoryWithRetries('test-story-5', 3, 3);
     createConfigFile(3);
@@ -228,7 +228,7 @@ Implementation content.
     });
 
     // Act
-    const result = assessState(sdlcRoot);
+    const result = await assessState(sdlcRoot);
 
     // Assert - error is now logged as a single sanitized string
     expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -248,14 +248,14 @@ Implementation content.
     expect(result.recommendedActions[0].priority).toBeGreaterThan(10000);
   });
 
-  it('should handle different max_retries values correctly', () => {
+  it('should handle different max_retries values correctly', async () => {
     // Arrange: Create stories with different retry limits
     createStoryWithRetries('story-a', 2, 2);
     createStoryWithRetries('story-b', 10, 10);
     createConfigFile(5); // Config default is 5, but stories override
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert: Both stories should be blocked with their specific limits
     expect(moveToBlockedSpy).toHaveBeenCalledTimes(2);
@@ -269,13 +269,13 @@ Implementation content.
     );
   });
 
-  it('should not block stories below max retries', () => {
+  it('should not block stories below max retries', async () => {
     // Arrange
     createStoryWithRetries('story-below-max', 2, 5);
     createConfigFile(5);
 
     // Act
-    const result = assessState(sdlcRoot);
+    const result = await assessState(sdlcRoot);
 
     // Assert
     expect(moveToBlockedSpy).not.toHaveBeenCalled();
@@ -288,13 +288,13 @@ Implementation content.
     });
   });
 
-  it('should preserve retry_count in blocked reason format', () => {
+  it('should preserve retry_count in blocked reason format', async () => {
     // Arrange
     createStoryWithRetries('story-preserve-count', 10, 10);
     createConfigFile(10);
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     expect(moveToBlockedSpy).toHaveBeenCalledTimes(1);
@@ -311,7 +311,7 @@ Implementation content.
   // bounds checking which can occur from any frontmatter source. The sanitization of
   // ANSI/control chars is tested in story.test.ts with the sanitizeReasonText function.
   describe('security - input sanitization', () => {
-    it('should sanitize markdown special characters in review feedback', () => {
+    it('should sanitize markdown special characters in review feedback', async () => {
       // Arrange - feedback with markdown injection characters
       // Note: backticks, pipes, and > are valid in YAML and could be injected
       const maliciousFeedback = 'Code: rm -rf and table chars';
@@ -319,7 +319,7 @@ Implementation content.
       createConfigFile(3);
 
       // Act
-      assessState(sdlcRoot);
+      await assessState(sdlcRoot);
 
       // Assert - the content should be preserved (YAML-safe chars are kept)
       expect(moveToBlockedSpy).toHaveBeenCalledTimes(1);
@@ -330,7 +330,7 @@ Implementation content.
       expect(reason).toContain('rm -rf');
     });
 
-    it('should clamp negative retry_count values to 0', () => {
+    it('should clamp negative retry_count values to 0', async () => {
       // Arrange - create story with negative retry count
       const storiesFolder = path.join(sdlcRoot, 'stories');
       fs.mkdirSync(storiesFolder, { recursive: true });
@@ -367,13 +367,13 @@ Content.
       createConfigFile(3);
 
       // Act
-      assessState(sdlcRoot);
+      await assessState(sdlcRoot);
 
       // Assert - story should NOT be blocked because -5 < 3
       expect(moveToBlockedSpy).not.toHaveBeenCalled();
     });
 
-    it('should clamp extremely large retry_count values to 999', () => {
+    it('should clamp extremely large retry_count values to 999', async () => {
       // Arrange - create story with huge retry count
       const storiesFolder = path.join(sdlcRoot, 'stories');
       fs.mkdirSync(storiesFolder, { recursive: true });
@@ -410,7 +410,7 @@ Content.
       createConfigFile(5);
 
       // Act
-      assessState(sdlcRoot);
+      await assessState(sdlcRoot);
 
       // Assert - should be blocked (999 >= 5) with capped value shown
       expect(moveToBlockedSpy).toHaveBeenCalledTimes(1);
@@ -422,7 +422,7 @@ Content.
       expect(reason).not.toContain('999999');
     });
 
-    it('should handle NaN retry_count as 0', () => {
+    it('should handle NaN retry_count as 0', async () => {
       // Arrange - create story with NaN-producing retry count
       const storiesFolder = path.join(sdlcRoot, 'stories');
       fs.mkdirSync(storiesFolder, { recursive: true });
@@ -459,7 +459,7 @@ Content.
       createConfigFile(3);
 
       // Act
-      assessState(sdlcRoot);
+      await assessState(sdlcRoot);
 
       // Assert - story should NOT be blocked because NaN -> 0 < 3
       expect(moveToBlockedSpy).not.toHaveBeenCalled();

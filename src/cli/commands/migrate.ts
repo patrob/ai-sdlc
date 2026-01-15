@@ -118,7 +118,7 @@ export async function migrateToFolderPerStory(
     const newFolder = path.dirname(item.newPath);
     fs.mkdirSync(newFolder, { recursive: true });
     story.path = item.newPath;
-    writeStory(story);
+    await writeStory(story);
 
     fs.unlinkSync(item.oldPath);
   }

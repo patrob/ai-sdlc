@@ -83,11 +83,11 @@ Format your response as markdown for the Research section of the story.`;
     });
 
     // Append research to the story
-    appendToSection(story, 'Research', researchContent);
+    await appendToSection(story, 'Research', researchContent);
     changesMade.push('Added research findings');
 
     // Mark research as complete
-    updateStoryField(story, 'research_complete', true);
+    await updateStoryField(story, 'research_complete', true);
     changesMade.push('Marked research_complete: true');
 
     return {

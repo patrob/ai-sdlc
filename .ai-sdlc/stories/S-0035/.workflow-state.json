@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768522806281-cc607ea1",
+  "timestamp": "2026-01-16T00:23:39.669Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0035",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0035-conflict-detection-service/.ai-sdlc/stories/S-0035/story.md",
+      "completedAt": "2026-01-16T00:20:39.955Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0035",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0035-conflict-detection-service/.ai-sdlc/stories/S-0035/story.md",
+      "completedAt": "2026-01-16T00:23:08.641Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0035",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0035-conflict-detection-service/.ai-sdlc/stories/S-0035/story.md",
+      "completedAt": "2026-01-16T00:23:39.669Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0035-conflict-detection-service/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0035",
+      "fullSDLC": true
+    },
+    "storyContentHash": "ade2b4f8c5b09b4c2a7e7e30d1ec37eb14cec961f45859f8259d7c632d3d8a69"
+  }
+}

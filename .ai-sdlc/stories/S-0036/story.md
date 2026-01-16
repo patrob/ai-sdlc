@@ -2,7 +2,7 @@
 id: S-0036
 title: Pre-Flight Conflict Warning
 priority: 3
-status: in-progress
+status: done
 type: feature
 created: '2026-01-15'
 labels:
@@ -13,13 +13,10 @@ labels:
 epic: concurrent-workflows
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 slug: pre-flight-conflict-warning
-worktree_path: >-
-  /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0036-pre-flight-conflict-warning
 updated: '2026-01-16'
-branch: ai-sdlc/pre-flight-conflict-warning
 last_test_run:
   passed: true
   failures: 0

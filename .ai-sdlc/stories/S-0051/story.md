@@ -2,7 +2,7 @@
 id: S-0051
 title: Unified collaborative review with deduplicated feedback
 priority: 3
-status: in-progress
+status: done
 type: feature
 created: '2026-01-16'
 labels:

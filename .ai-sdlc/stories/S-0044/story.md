@@ -2,7 +2,7 @@
 id: S-0044
 title: Structured Task Format for Implementation Plans
 priority: 80
-status: in-progress
+status: done
 type: feature
 created: '2026-01-16'
 labels:

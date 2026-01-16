@@ -2,7 +2,7 @@
 id: S-0046
 title: Task Progress Tracking in Stories
 priority: 75
-status: in-progress
+status: done
 type: feature
 created: '2026-01-16'
 labels:

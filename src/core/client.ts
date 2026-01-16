@@ -1,5 +1,5 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { configureAgentSdkAuth, getApiKey, getCredentialType, CredentialType } from './auth.js';
+import { configureAgentSdkAuth, getApiKey, getCredentialType, CredentialType, getTokenExpirationInfo } from './auth.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from './config.js';
 import { platform, homedir } from 'os';
 import path from 'path';
@@ -12,6 +12,16 @@ export class AgentTimeoutError extends Error {
     const timeoutSec = Math.round(timeoutMs / 1000);
     super(`Agent query timed out after ${timeoutSec} seconds. Consider increasing 'timeouts.agentTimeout' in .ai-sdlc.json`);
     this.name = 'AgentTimeoutError';
+  }
+}
+
+/**
+ * Error thrown when authentication fails (e.g., expired token)
+ */
+export class AuthenticationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuthenticationError';
   }
 }
 
@@ -88,6 +98,24 @@ export async function runAgentQuery(options: AgentQueryOptions): Promise<string>
     errorMessage += '.';
 
     throw new Error(errorMessage);
+  }
+
+  // Check token expiration (only for OAuth tokens from credential file)
+  if (authResult.type === 'oauth_token') {
+    const tokenInfo = getTokenExpirationInfo();
+
+    // If token is expired, throw authentication error
+    if (tokenInfo.isExpired) {
+      const source = tokenInfo.source ? `Token from ${tokenInfo.source}` : 'OAuth token';
+      throw new AuthenticationError(
+        `${source} has expired. Please run \`claude login\` to refresh your credentials.`
+      );
+    }
+
+    // If token expires within 5 minutes, show warning but proceed
+    if (tokenInfo.expiresInMs !== null && tokenInfo.expiresInMs < 5 * 60 * 1000) {
+      console.warn('⚠️  OAuth token expires in less than 5 minutes. Consider running `claude login`.');
+    }
   }
 
   // Validate and normalize working directory

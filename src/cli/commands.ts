@@ -5,7 +5,7 @@ import path from 'path';
 import * as readline from 'readline';
 import { getSdlcRoot, loadConfig, initConfig, validateWorktreeBasePath, DEFAULT_WORKTREE_CONFIG } from '../core/config.js';
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoriesByStatus } from '../core/kanban.js';
-import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory } from '../core/story.js';
+import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId } from '../core/story.js';
 import { GitWorktreeService } from '../core/worktree.js';
 import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext, WorktreeInfo, PreFlightResult } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
@@ -300,13 +300,31 @@ function displayGitValidationResult(result: GitValidationResult, c: any): void {
 }
 
 /**
+ * Sanitize a string for safe display in the terminal.
+ * Strips ANSI escape sequences, control characters, and other potentially dangerous sequences.
+ *
+ * @param str - The string to sanitize
+ * @returns Sanitized string safe for terminal display
+ */
+function sanitizeForDisplay(str: string): string {
+  // Strip ANSI escape sequences (pattern: \x1B\[[0-9;]*[a-zA-Z])
+  // Strip control characters ([\x00-\x1F\x7F-\x9F])
+  return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+}
+
+/**
  * Perform pre-flight conflict check before starting work on a story in a worktree.
  * Warns about potential file conflicts with active stories and prompts for confirmation.
  *
+ * **Race Condition Warning:** Multiple users can pass this check simultaneously
+ * before branches are created. This is an accepted risk - git will catch conflicts
+ * during merge/PR creation.
+ *
  * @param targetStory - The story to check for conflicts
- * @param sdlcRoot - Root directory of the .ai-sdlc folder
+ * @param sdlcRoot - Root directory of the .ai-sdlc folder (must be absolute, validated)
  * @param options - Command options (force flag)
  * @returns PreFlightResult indicating whether to proceed and any warnings
+ * @throws Error if sdlcRoot is invalid (null bytes, not absolute, too long)
  */
 export async function preFlightConflictCheck(
   targetStory: Story,
@@ -320,6 +338,23 @@ export async function preFlightConflictCheck(
   if (options.force) {
     console.log(c.warning('⚠️  Skipping conflict check (--force)'));
     return { proceed: true, warnings: ['Conflict check skipped'] };
+  }
+
+  // Validate sdlcRoot parameter
+  if (!path.isAbsolute(sdlcRoot)) {
+    throw new Error('sdlcRoot must be an absolute path');
+  }
+  if (sdlcRoot.includes('\0')) {
+    throw new Error('sdlcRoot path contains null bytes');
+  }
+  if (sdlcRoot.length > 1024) {
+    throw new Error('sdlcRoot path exceeds maximum length (1024 characters)');
+  }
+
+  // Check if target story is already in-progress
+  if (targetStory.frontmatter.status === 'in-progress') {
+    console.log(c.error('❌ Story is already in-progress'));
+    return { proceed: false, warnings: ['Story already in progress'] };
   }
 
   try {
@@ -341,41 +376,52 @@ export async function preFlightConflictCheck(
       conflict => conflict.storyA === targetStory.frontmatter.id || conflict.storyB === targetStory.frontmatter.id
     );
 
-    // Filter out 'none' severity conflicts
-    const significantConflicts = relevantConflicts.filter(conflict => conflict.severity !== 'none');
+    // Filter out 'none' severity conflicts (keep all displayable conflicts including low)
+    const displayableConflicts = relevantConflicts.filter(conflict => conflict.severity !== 'none');
 
-    if (significantConflicts.length === 0) {
+    if (displayableConflicts.length === 0) {
       console.log(c.success('✓ Conflict check: No overlapping files with active stories'));
       return { proceed: true, warnings: [] };
     }
+
+    // Sort conflicts by severity (high -> medium -> low)
+    const severityOrder = { high: 0, medium: 1, low: 2, none: 3 };
+    const sortedConflicts = displayableConflicts.sort((a, b) =>
+      severityOrder[a.severity] - severityOrder[b.severity]
+    );
 
     // Display conflicts
     console.log();
     console.log(c.warning('⚠️  Potential conflicts detected:'));
     console.log();
 
-    for (const conflict of significantConflicts) {
+    for (const conflict of sortedConflicts) {
       const otherStoryId = conflict.storyA === targetStory.frontmatter.id ? conflict.storyB : conflict.storyA;
-      console.log(c.warning(`   ${targetStory.frontmatter.id} may conflict with ${otherStoryId}:`));
+      const sanitizedTargetId = sanitizeStoryId(targetStory.frontmatter.id);
+      const sanitizedOtherId = sanitizeStoryId(otherStoryId);
+      console.log(c.warning(`   ${sanitizedTargetId} may conflict with ${sanitizedOtherId}:`));
 
       // Display shared files
       for (const file of conflict.sharedFiles) {
         const severityLabel = conflict.severity === 'high' ? c.error('High') :
                               conflict.severity === 'medium' ? c.warning('Medium') :
-                              c.dim('Low');
-        console.log(`   - ${severityLabel}: ${file} (modified by both)`);
+                              c.info('Low');
+        const sanitizedFile = sanitizeForDisplay(file);
+        console.log(`   - ${severityLabel}: ${sanitizedFile} (both stories modify this file)`);
       }
 
       // Display shared directories
       for (const dir of conflict.sharedDirectories) {
         const severityLabel = conflict.severity === 'high' ? c.error('High') :
                               conflict.severity === 'medium' ? c.warning('Medium') :
-                              c.dim('Low');
-        console.log(`   - ${severityLabel}: ${dir} (same directory)`);
+                              c.info('Low');
+        const sanitizedDir = sanitizeForDisplay(dir);
+        console.log(`   - ${severityLabel}: ${sanitizedDir} (both stories modify files in this directory)`);
       }
 
       console.log();
-      console.log(c.dim(`   Recommendation: ${conflict.recommendation}`));
+      const sanitizedRecommendation = sanitizeForDisplay(conflict.recommendation);
+      console.log(c.dim(`   Recommendation: ${sanitizedRecommendation}`));
       console.log();
     }
 
@@ -750,8 +796,8 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       return;
     }
 
-    // Log warnings if user proceeded despite conflicts
-    if (preFlightResult.warnings.length > 0 && preFlightResult.warnings[0] !== 'Conflict check skipped') {
+    // Log warnings if user proceeded despite conflicts (skip internal flag messages)
+    if (preFlightResult.warnings.length > 0 && !preFlightResult.warnings.includes('Conflict check skipped')) {
       preFlightResult.warnings.forEach(w => console.log(c.dim(`  ⚠ ${w}`)));
       console.log();
     }
@@ -1924,12 +1970,15 @@ export async function migrate(options: { dryRun?: boolean; backup?: boolean; for
  * Helper function to prompt for removal confirmation
  */
 async function confirmRemoval(message: string): Promise<boolean> {
+  // Sanitize message to prevent terminal injection attacks
+  const sanitizedMessage = message.replace(/[\x00-\x1F\x7F-\x9F\x1B\[\]]/g, '');
+
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
   return new Promise((resolve) => {
-    rl.question(message + ' (y/N): ', (answer) => {
+    rl.question(sanitizedMessage + ' (y/N): ', (answer) => {
       rl.close();
       resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
     });

@@ -20,6 +20,16 @@ vi.mock('../../src/core/client.js', () => ({
     output: 'Mock agent output',
   }),
 }));
+vi.mock('../../src/core/theme.js', () => ({
+  getThemedChalk: vi.fn(() => ({
+    success: (s: string) => s,
+    warning: (s: string) => s,
+    error: (s: string) => s,
+    dim: (s: string) => s,
+    bold: (s: string) => s,
+    info: (s: string) => s,
+  })),
+}));
 
 describe('Pre-Flight Conflict Check Integration', () => {
   const mockTargetStory: Story = {

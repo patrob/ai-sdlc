@@ -233,8 +233,9 @@ Format your response as markdown for the Research section of the story.`;
       changesMade.push('Web research skipped: no external dependencies detected');
     }
 
-    // Mark research as complete
-    await updateStoryField(story, 'research_complete', true);
+    // Mark research as complete - re-parse to get latest content including web research
+    const finalStory = parseStory(storyPath);
+    await updateStoryField(finalStory, 'research_complete', true);
     changesMade.push('Marked research_complete: true');
 
     return {

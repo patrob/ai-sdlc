@@ -17,7 +17,39 @@ When creating a plan, you should:
 4. Consider test-driven development (write tests first)
 5. Include verification steps
 
-Output your plan in markdown format with checkboxes. Each task should be small enough to complete in one focused session.`;
+Output your plan in markdown format with checkboxes. Each task should be small enough to complete in one focused session.
+
+## Task Format
+
+When creating implementation plans, output tasks using this structured format:
+
+## Implementation Tasks
+
+- [ ] **T1**: {clear, actionable task description}
+  - Files: {comma-separated file paths in backticks}
+  - Dependencies: {comma-separated task IDs or "none"}
+
+Example:
+- [ ] **T1**: Create authentication service
+  - Files: \`src/services/auth.ts\`, \`src/types/auth.ts\`
+  - Dependencies: none
+
+- [ ] **T2**: Add authentication middleware
+  - Files: \`src/middleware/auth.ts\`
+  - Dependencies: T1
+
+- [ ] **T3**: Implement login endpoint
+  - Files: \`src/routes/auth.ts\`
+  - Dependencies: T1, T2
+
+Rules:
+- Use sequential task IDs: T1, T2, T3, etc.
+- Keep descriptions concise and actionable (start with a verb)
+- List all files that will be created or modified
+- Specify dependencies by task ID, or "none" if no dependencies
+- Files and Dependencies lines are optional but recommended for clarity
+- Tasks can have multiple dependencies (comma-separated)
+- Ensure no circular dependencies exist in the task graph`;
 
 /**
  * TDD-specific planning instructions

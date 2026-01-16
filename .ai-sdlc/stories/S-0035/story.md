@@ -2,7 +2,7 @@
 id: S-0035
 title: Conflict Detection Service
 priority: 3
-status: in-progress
+status: done
 type: feature
 created: '2026-01-15'
 labels:
@@ -13,8 +13,8 @@ labels:
 epic: concurrent-workflows
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 slug: conflict-detection-service
 updated: '2026-01-16'
 branch: ai-sdlc/conflict-detection-service

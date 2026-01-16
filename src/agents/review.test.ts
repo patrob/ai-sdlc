@@ -409,8 +409,9 @@ describe('Review Agent - Pre-check Optimization', () => {
 
   describe('edge cases', () => {
     it('should skip verification if no testCommand configured', async () => {
-      const configWithoutTests = { ...mockConfig, testCommand: undefined };
-      vi.mocked(configModule.loadConfig).mockResolvedValue(configWithoutTests);
+      // Skip both build and test verification to proceed directly to reviews
+      const configWithoutVerification = { ...mockConfig, testCommand: undefined, buildCommand: undefined };
+      vi.mocked(configModule.loadConfig).mockReturnValue(configWithoutVerification);
       vi.mocked(clientModule.runAgentQuery).mockResolvedValue('APPROVED\n\nNo issues found.');
 
       const result = await runReviewAgent(mockStoryPath, mockWorkingDir);

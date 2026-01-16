@@ -236,6 +236,8 @@ export interface ReviewConfig {
   maxRetriesUpperBound: number;
   autoCompleteOnApproval: boolean;
   autoRestartOnRejection: boolean;
+  /** Enable test anti-pattern detection. @default true */
+  detectTestAntipatterns?: boolean;
 }
 
 /**

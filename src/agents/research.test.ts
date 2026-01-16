@@ -1,12 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   shouldPerformWebResearch,
   evaluateFAR,
   sanitizeWebResearchContent,
   sanitizeForLogging,
-  sanitizeCodebaseContext
+  sanitizeCodebaseContext,
+  gatherCodebaseContext
 } from './research.js';
 import { Story } from '../types/index.js';
+import fs from 'fs';
+import { glob } from 'glob';
 
 describe('shouldPerformWebResearch', () => {
   let mockStory: Story;
@@ -411,5 +414,233 @@ describe('Web Research Content Sanitization', () => {
       const result = sanitizeCodebaseContext(input);
       expect(result.length).toBe(10000);
     });
+  });
+});
+
+// Mock modules for gatherCodebaseContext tests
+vi.mock('fs');
+vi.mock('glob');
+
+describe('gatherCodebaseContext', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should include project configuration files in context', async () => {
+    // Mock fs.existsSync to return true for package.json
+    vi.mocked(fs.existsSync).mockImplementation((filePath: fs.PathLike) => {
+      const pathStr = String(filePath);
+      return pathStr.includes('package.json');
+    });
+
+    // Mock fs.readFileSync to return package.json content
+    vi.mocked(fs.readFileSync).mockReturnValue('{"name": "test-project"}');
+
+    // Mock fs.readdirSync for directory listing
+    vi.mocked(fs.readdirSync).mockReturnValue([]);
+
+    // Mock glob to return empty arrays
+    vi.mocked(glob).mockResolvedValue([]);
+
+    const result = await gatherCodebaseContext('/test/project/.ai-sdlc');
+
+    expect(result).toContain('package.json');
+    expect(result).toContain('test-project');
+  });
+
+  it('should include test files in context', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.readdirSync).mockReturnValue([]);
+
+    // Mock glob to return test files
+    vi.mocked(glob).mockImplementation(async (pattern: string) => {
+      if (pattern.includes('.test.')) {
+        return ['src/core/story.test.ts', 'src/agents/research.test.ts'];
+      }
+      if (pattern.includes('{tests,test,__tests__}')) {
+        return ['tests/integration/cli.test.ts'];
+      }
+      return [];
+    });
+
+    const result = await gatherCodebaseContext('/test/project/.ai-sdlc');
+
+    expect(result).toContain('Test Files');
+    expect(result).toContain('story.test.ts');
+    expect(result).toContain('research.test.ts');
+  });
+
+  it('should include config files in context', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.readdirSync).mockReturnValue([]);
+
+    // Mock glob to return config files
+    vi.mocked(glob).mockImplementation(async (pattern: string) => {
+      if (pattern.includes('.config.')) {
+        return ['vitest.config.ts', 'eslint.config.js'];
+      }
+      if (pattern.includes('eslintrc') || pattern.includes('prettierrc')) {
+        return ['.eslintrc.json'];
+      }
+      return [];
+    });
+
+    const result = await gatherCodebaseContext('/test/project/.ai-sdlc');
+
+    expect(result).toContain('Config Files');
+    expect(result).toContain('vitest.config.ts');
+  });
+
+  it('should include source files in context', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.readdirSync).mockReturnValue([]);
+
+    // Mock glob to return source files
+    vi.mocked(glob).mockImplementation(async (pattern: string) => {
+      if (pattern.includes('src/**/*.')) {
+        return ['src/index.ts', 'src/core/story.ts', 'src/agents/research.ts'];
+      }
+      return [];
+    });
+
+    const result = await gatherCodebaseContext('/test/project/.ai-sdlc');
+
+    expect(result).toContain('Source Files');
+    expect(result).toContain('src/index.ts');
+    expect(result).toContain('src/core/story.ts');
+  });
+
+  it('should include directory structure in context', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    // Mock fs.readdirSync to return directory entries
+    vi.mocked(fs.readdirSync).mockReturnValue([
+      { name: 'src', isDirectory: () => true, isFile: () => false } as unknown as fs.Dirent,
+      { name: 'tests', isDirectory: () => true, isFile: () => false } as unknown as fs.Dirent,
+      { name: 'README.md', isDirectory: () => false, isFile: () => true } as unknown as fs.Dirent,
+    ]);
+
+    vi.mocked(glob).mockResolvedValue([]);
+
+    const result = await gatherCodebaseContext('/test/project/.ai-sdlc');
+
+    expect(result).toContain('Directory Structure');
+    expect(result).toContain('src');
+    expect(result).toContain('tests');
+    expect(result).toContain('README.md');
+  });
+
+  it('should limit source files to 20 entries', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.readdirSync).mockReturnValue([]);
+
+    // Mock glob to return more than 20 source files
+    const manyFiles = Array.from({ length: 30 }, (_, i) => `src/file${i}.ts`);
+    vi.mocked(glob).mockImplementation(async (pattern: string) => {
+      if (pattern.includes('src/**/*.')) {
+        return manyFiles;
+      }
+      return [];
+    });
+
+    const result = await gatherCodebaseContext('/test/project/.ai-sdlc');
+
+    // Count occurrences of "file" in result to verify limiting
+    const fileMatches = result.match(/file\d+\.ts/g) || [];
+    expect(fileMatches.length).toBeLessThanOrEqual(20);
+  });
+
+  it('should limit test files to 15 entries', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.readdirSync).mockReturnValue([]);
+
+    // Mock glob to return more than 15 test files
+    const manyTestFiles = Array.from({ length: 25 }, (_, i) => `src/test${i}.test.ts`);
+    vi.mocked(glob).mockImplementation(async (pattern: string) => {
+      if (pattern.includes('.test.')) {
+        return manyTestFiles;
+      }
+      return [];
+    });
+
+    const result = await gatherCodebaseContext('/test/project/.ai-sdlc');
+
+    // Count test file occurrences
+    const testMatches = result.match(/test\d+\.test\.ts/g) || [];
+    expect(testMatches.length).toBeLessThanOrEqual(15);
+  });
+
+  it('should handle missing directories gracefully', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.readdirSync).mockImplementation(() => {
+      throw new Error('ENOENT: no such file or directory');
+    });
+    vi.mocked(glob).mockResolvedValue([]);
+
+    const result = await gatherCodebaseContext('/test/project/.ai-sdlc');
+
+    expect(result).toBe('No codebase context available.');
+  });
+
+  it('should handle glob errors gracefully', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.readdirSync).mockReturnValue([]);
+    vi.mocked(glob).mockRejectedValue(new Error('Glob error'));
+
+    const result = await gatherCodebaseContext('/test/project/.ai-sdlc');
+
+    // Should not throw - directory structure still gets added even if empty
+    // because fs.readdirSync doesn't throw here
+    expect(result).toContain('Directory Structure');
+    // But should NOT contain Source Files, Test Files, or Config Files sections
+    // since those globs failed
+    expect(result).not.toContain('Source Files');
+    expect(result).not.toContain('Test Files');
+    expect(result).not.toContain('Config Files');
+  });
+
+  it('should truncate project file content to 1000 characters', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    // Return a very long package.json content
+    const longContent = 'x'.repeat(2000);
+    vi.mocked(fs.readFileSync).mockReturnValue(longContent);
+    vi.mocked(fs.readdirSync).mockReturnValue([]);
+    vi.mocked(glob).mockResolvedValue([]);
+
+    const result = await gatherCodebaseContext('/test/project/.ai-sdlc');
+
+    // The content should be truncated - find the package.json section
+    const packageSection = result.split('===').find(s => s.includes('package.json'));
+    if (packageSection) {
+      // The truncated content should not include the full 2000 chars
+      expect(packageSection.length).toBeLessThan(1500);
+    }
+  });
+
+  it('should deduplicate test files from different sources', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.readdirSync).mockReturnValue([]);
+
+    // Mock glob to return overlapping test files
+    vi.mocked(glob).mockImplementation(async (pattern: string) => {
+      if (pattern.includes('.test.')) {
+        return ['src/story.test.ts', 'tests/story.test.ts'];
+      }
+      if (pattern.includes('{tests,test,__tests__}')) {
+        return ['tests/story.test.ts', 'tests/other.test.ts'];
+      }
+      return [];
+    });
+
+    const result = await gatherCodebaseContext('/test/project/.ai-sdlc');
+
+    // 'tests/story.test.ts' should only appear once due to Set deduplication
+    const matches = result.match(/tests\/story\.test\.ts/g) || [];
+    expect(matches.length).toBe(1);
   });
 });

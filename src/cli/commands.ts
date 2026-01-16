@@ -673,16 +673,24 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
         baseBranch,
       });
 
-      // Update story frontmatter with worktree path
-      const updatedStory = await updateStoryField(targetStory, 'worktree_path', worktreePath);
-      await writeStory(updatedStory);
-
-      // Change to worktree directory
+      // Change to worktree directory BEFORE updating story
+      // This ensures story updates happen in the worktree, not on main
+      // (allows parallel story launches from clean main)
       process.chdir(worktreePath);
 
       // Recalculate sdlcRoot for the worktree context
       sdlcRoot = getSdlcRoot();
       worktreeCreated = true;
+
+      // Now update story frontmatter with worktree path (writes to worktree copy)
+      // Re-resolve target story in worktree context
+      const worktreeStory = findStoryById(sdlcRoot, targetStory.frontmatter.id);
+      if (worktreeStory) {
+        const updatedStory = await updateStoryField(worktreeStory, 'worktree_path', worktreePath);
+        await writeStory(updatedStory);
+        // Update targetStory reference for downstream use
+        targetStory = updatedStory;
+      }
 
       console.log(c.success(`✓ Created worktree at: ${worktreePath}`));
       console.log(c.dim(`  Branch: ai-sdlc/${targetStory.frontmatter.id}-${targetStory.slug}`));

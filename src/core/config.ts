@@ -90,8 +90,8 @@ export const DEFAULT_CONFIG: Config = {
   // Test and build commands - auto-detected from package.json if present
   testCommand: 'npm test',
   buildCommand: 'npm run build',
-  // Agent SDK settings sources - empty array maintains SDK isolation mode (default)
-  settingSources: [],
+  // Agent SDK settings sources - enables Skills discovery from .claude/skills/
+  settingSources: ['project'],
   // Timeout configuration
   timeouts: { ...DEFAULT_TIMEOUTS },
   // Daemon configuration

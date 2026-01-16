@@ -404,6 +404,66 @@ describe('config - Review configuration defaults', () => {
   });
 });
 
+describe('config - Skills infrastructure defaults', () => {
+  it('should have settingSources set to ["project"] by default', () => {
+    expect(DEFAULT_CONFIG.settingSources).toBeDefined();
+    expect(DEFAULT_CONFIG.settingSources).toEqual(['project']);
+  });
+
+  it('should load default settingSources when no config file exists', () => {
+    const tempDir = '.test-skills-config';
+    fs.mkdirSync(tempDir, { recursive: true });
+    try {
+      const config = loadConfig(tempDir);
+      expect(config.settingSources).toEqual(['project']);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should allow user to override settingSources via config file', () => {
+    const tempDir = '.test-skills-config-override';
+    fs.mkdirSync(tempDir, { recursive: true });
+    try {
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
+      const userConfig = {
+        settingSources: ['user', 'project'],
+      };
+      fs.writeFileSync(configPath, JSON.stringify(userConfig));
+
+      const config = loadConfig(tempDir);
+      expect(config.settingSources).toEqual(['user', 'project']);
+    } finally {
+      const configFile = path.join(tempDir, '.ai-sdlc.json');
+      if (fs.existsSync(configFile)) {
+        fs.unlinkSync(configFile);
+      }
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should allow user to disable Skills by setting empty array', () => {
+    const tempDir = '.test-skills-config-disabled';
+    fs.mkdirSync(tempDir, { recursive: true });
+    try {
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
+      const userConfig = {
+        settingSources: [],
+      };
+      fs.writeFileSync(configPath, JSON.stringify(userConfig));
+
+      const config = loadConfig(tempDir);
+      expect(config.settingSources).toEqual([]);
+    } finally {
+      const configFile = path.join(tempDir, '.ai-sdlc.json');
+      if (fs.existsSync(configFile)) {
+        fs.unlinkSync(configFile);
+      }
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('config - Worktree configuration', () => {
   describe('Worktree config defaults', () => {
     it('should have worktree configuration in DEFAULT_CONFIG', () => {

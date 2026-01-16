@@ -425,6 +425,25 @@ export interface AgentResult {
 }
 
 /**
+ * FAR scale evaluation for web research findings.
+ * Used to assess the quality of external documentation and resources.
+ *
+ * Scale (1-5):
+ * - Factuality: How accurate and verifiable is the information?
+ *   1 = Unverified/speculative, 5 = Official documentation or peer-reviewed
+ * - Actionability: Can this be directly applied to the task?
+ *   1 = Abstract concepts only, 5 = Copy-paste code examples or step-by-step instructions
+ * - Relevance: How closely does this match the story requirements?
+ *   1 = Tangentially related, 5 = Directly addresses a story acceptance criterion
+ */
+export interface FARScore {
+  factuality: 1 | 2 | 3 | 4 | 5;
+  actionability: 1 | 2 | 3 | 4 | 5;
+  relevance: 1 | 2 | 3 | 4 | 5;
+  justification: string;
+}
+
+/**
  * Review-specific result with structured feedback
  */
 export interface ReviewResult extends AgentResult {

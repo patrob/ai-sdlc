@@ -299,32 +299,57 @@ function displayGitValidationResult(result: GitValidationResult, c: any): void {
   }
 }
 
+// ANSI escape sequence patterns for sanitization
+const ANSI_CSI_PATTERN = /\x1B\[[0-9;]*[a-zA-Z]/g;
+const ANSI_OSC_BEL_PATTERN = /\x1B\][^\x07]*\x07/g;
+const ANSI_OSC_ESC_PATTERN = /\x1B\][^\x1B]*\x1B\\/g;
+const ANSI_SINGLE_CHAR_PATTERN = /\x1B./g;
+const CONTROL_CHARS_PATTERN = /[\x00-\x1F\x7F-\x9F]/g;
+
 /**
  * Sanitize a string for safe display in the terminal.
- * Strips ANSI escape sequences, control characters, and other potentially dangerous sequences.
+ * Strips ANSI escape sequences (CSI, OSC, single-char), control characters,
+ * and truncates extremely long strings to prevent DoS attacks.
+ *
+ * This uses the same comprehensive ANSI stripping patterns as sanitizeReasonText
+ * from src/core/story.ts for consistency.
  *
  * @param str - The string to sanitize
- * @returns Sanitized string safe for terminal display
+ * @returns Sanitized string safe for terminal display (max 500 chars)
  */
 function sanitizeForDisplay(str: string): string {
-  // Strip ANSI escape sequences (pattern: \x1B\[[0-9;]*[a-zA-Z])
-  // Strip control characters ([\x00-\x1F\x7F-\x9F])
-  return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+  const cleaned = str
+    .replace(ANSI_CSI_PATTERN, '')       // CSI sequences (e.g., \x1B[31m)
+    .replace(ANSI_OSC_BEL_PATTERN, '')   // OSC with BEL terminator (e.g., \x1B]...\x07)
+    .replace(ANSI_OSC_ESC_PATTERN, '')   // OSC with ESC\ terminator (e.g., \x1B]...\x1B\\)
+    .replace(ANSI_SINGLE_CHAR_PATTERN, '') // Single-char escapes (e.g., \x1BH)
+    .replace(CONTROL_CHARS_PATTERN, ''); // Control characters (0x00-0x1F, 0x7F-0x9F)
+
+  // Truncate extremely long strings (DoS protection)
+  return cleaned.length > 500 ? cleaned.slice(0, 497) + '...' : cleaned;
 }
 
 /**
  * Perform pre-flight conflict check before starting work on a story in a worktree.
  * Warns about potential file conflicts with active stories and prompts for confirmation.
  *
- * **Race Condition Warning:** Multiple users can pass this check simultaneously
- * before branches are created. This is an accepted risk - git will catch conflicts
- * during merge/PR creation.
+ * **Race Condition (TOCTOU):** Multiple users can pass this check simultaneously
+ * before branches are created. This is an accepted risk - the window is small
+ * (~100ms) and git will catch conflicts during merge/PR creation. Adding file
+ * locks would significantly increase complexity for minimal security gain.
+ *
+ * **Security Notes:**
+ * - sdlcRoot is normalized and validated (absolute path, no null bytes, max 1024 chars)
+ * - All display output is sanitized to prevent terminal injection attacks
+ * - Story IDs are validated with sanitizeStoryId() then stripped with sanitizeForDisplay()
+ * - Error messages are generic to prevent information leakage
  *
  * @param targetStory - The story to check for conflicts
  * @param sdlcRoot - Root directory of the .ai-sdlc folder (must be absolute, validated)
  * @param options - Command options (force flag)
+ * @param options.force - Skip conflict check if true
  * @returns PreFlightResult indicating whether to proceed and any warnings
- * @throws Error if sdlcRoot is invalid (null bytes, not absolute, too long)
+ * @throws Error if sdlcRoot is invalid (not absolute, null bytes, too long)
  */
 export async function preFlightConflictCheck(
   targetStory: Story,
@@ -340,15 +365,17 @@ export async function preFlightConflictCheck(
     return { proceed: true, warnings: ['Conflict check skipped'] };
   }
 
-  // Validate sdlcRoot parameter
-  if (!path.isAbsolute(sdlcRoot)) {
-    throw new Error('sdlcRoot must be an absolute path');
+  // Validate sdlcRoot parameter (normalize first to prevent bypass attacks)
+  const normalizedPath = path.normalize(sdlcRoot);
+
+  if (!path.isAbsolute(normalizedPath)) {
+    throw new Error('Invalid project path');
   }
-  if (sdlcRoot.includes('\0')) {
-    throw new Error('sdlcRoot path contains null bytes');
+  if (normalizedPath.includes('\0')) {
+    throw new Error('Invalid project path');
   }
-  if (sdlcRoot.length > 1024) {
-    throw new Error('sdlcRoot path exceeds maximum length (1024 characters)');
+  if (normalizedPath.length > 1024) {
+    throw new Error('Invalid project path');
   }
 
   // Check if target story is already in-progress
@@ -359,7 +386,8 @@ export async function preFlightConflictCheck(
 
   try {
     // Query for all in-progress stories (excluding target)
-    const activeStories = findStoriesByStatus(sdlcRoot, 'in-progress')
+    // Use normalizedPath for all subsequent operations
+    const activeStories = findStoriesByStatus(normalizedPath, 'in-progress')
       .filter(s => s.frontmatter.id !== targetStory.frontmatter.id);
 
     if (activeStories.length === 0) {
@@ -367,8 +395,8 @@ export async function preFlightConflictCheck(
       return { proceed: true, warnings: [] };
     }
 
-    // Run conflict detection
-    const workingDir = path.dirname(sdlcRoot);
+    // Run conflict detection (use normalizedPath)
+    const workingDir = path.dirname(normalizedPath);
     const result = detectConflicts([targetStory, ...activeStories], workingDir, 'main');
 
     // Filter conflicts involving target story
@@ -397,9 +425,18 @@ export async function preFlightConflictCheck(
 
     for (const conflict of sortedConflicts) {
       const otherStoryId = conflict.storyA === targetStory.frontmatter.id ? conflict.storyB : conflict.storyA;
-      const sanitizedTargetId = sanitizeStoryId(targetStory.frontmatter.id);
-      const sanitizedOtherId = sanitizeStoryId(otherStoryId);
-      console.log(c.warning(`   ${sanitizedTargetId} may conflict with ${sanitizedOtherId}:`));
+
+      // Two-stage sanitization: validate structure, then strip for display
+      try {
+        const validatedTargetId = sanitizeStoryId(targetStory.frontmatter.id);
+        const validatedOtherId = sanitizeStoryId(otherStoryId);
+        const sanitizedTargetId = sanitizeForDisplay(validatedTargetId);
+        const sanitizedOtherId = sanitizeForDisplay(validatedOtherId);
+        console.log(c.warning(`   ${sanitizedTargetId} may conflict with ${sanitizedOtherId}:`));
+      } catch (error) {
+        // If validation fails, show generic error (defensive)
+        console.log(c.warning(`   Story may have conflicting changes (invalid ID format)`));
+      }
 
       // Display shared files
       for (const file of conflict.sharedFiles) {
@@ -1971,7 +2008,8 @@ export async function migrate(options: { dryRun?: boolean; backup?: boolean; for
  */
 async function confirmRemoval(message: string): Promise<boolean> {
   // Sanitize message to prevent terminal injection attacks
-  const sanitizedMessage = message.replace(/[\x00-\x1F\x7F-\x9F\x1B\[\]]/g, '');
+  // Use consistent sanitizeForDisplay() for all terminal output
+  const sanitizedMessage = sanitizeForDisplay(message);
 
   const rl = readline.createInterface({
     input: process.stdin,

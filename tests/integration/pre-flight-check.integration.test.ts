@@ -30,6 +30,19 @@ vi.mock('../../src/core/theme.js', () => ({
     info: (s: string) => s,
   })),
 }));
+vi.mock('../../src/core/config.js', () => ({
+  getSdlcRoot: vi.fn(() => '/test/.ai-sdlc'),
+  loadConfig: vi.fn(() => ({
+    theme: 'dark',
+    sdlcFolder: '.ai-sdlc',
+    stageGates: { requireResearch: false, requirePlan: false, requireReview: false },
+    refinement: { enabled: false, maxAttempts: 3 },
+    reviewConfig: { enabled: false },
+    implementation: { autoCommit: false },
+    defaultLabels: [],
+    worktree: { enabled: true, basePath: '.ai-sdlc/worktrees' },
+  })),
+}));
 
 describe('Pre-Flight Conflict Check Integration', () => {
   const mockTargetStory: Story = {
@@ -136,6 +149,7 @@ describe('Pre-Flight Conflict Check Integration', () => {
     vi.spyOn(story, 'findStoryById').mockReturnValue(mockTargetStory);
 
     // Mock kanban operations
+    vi.spyOn(kanban, 'kanbanExists').mockReturnValue(true);
     vi.spyOn(kanban, 'assessState').mockResolvedValue({
       recommendedActions: [
         {
@@ -365,14 +379,33 @@ describe('Pre-Flight Conflict Check Integration', () => {
     });
 
     it('should skip pre-flight check when not using worktree mode', async () => {
-      // Mock active stories (should not be called without worktree)
-      const findStoriesSpy = vi.spyOn(kanban, 'findStoriesByStatus').mockReturnValue([mockActiveStory]);
+      // Mock active stories with conflicts
+      vi.spyOn(kanban, 'findStoriesByStatus').mockReturnValue([mockActiveStory]);
 
-      // Run without worktree flag
-      await run({ story: 'S-0002' });
+      // Mock conflict detection - would return conflicts if called
+      const detectConflictsSpy = vi.spyOn(conflictDetector, 'detectConflicts').mockReturnValue({
+        conflicts: [
+          {
+            storyA: 'S-0001',
+            storyB: 'S-0002',
+            sharedFiles: ['src/api/user.ts'],
+            sharedDirectories: [],
+            severity: 'high',
+            recommendation: 'Run sequentially',
+          },
+        ],
+        safeToRunConcurrently: false,
+        summary: 'High severity conflict',
+      });
 
-      // Verify conflict check was not performed
-      expect(findStoriesSpy).not.toHaveBeenCalled();
+      // Run with explicit worktree: false (config has worktree.enabled=true by default)
+      await run({ story: 'S-0002', worktree: false });
+
+      // Verify conflict detection was NOT called (pre-flight check is only for worktree mode)
+      expect(detectConflictsSpy).not.toHaveBeenCalled();
+      // Verify no conflict-related messages were shown
+      expect(console.log).not.toHaveBeenCalledWith(expect.stringContaining('Conflict check'));
+      expect(console.log).not.toHaveBeenCalledWith(expect.stringContaining('Potential conflicts'));
     });
   });
 });

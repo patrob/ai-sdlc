@@ -3,8 +3,12 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+// Use vi.hoisted to define mock before vi.mock factory runs (handles hoisting)
+const { mockRunAgentQuery } = vi.hoisted(() => ({
+  mockRunAgentQuery: vi.fn(),
+}));
+
 // Mock the agent query function
-const mockRunAgentQuery = vi.fn();
 vi.mock('../../src/core/client.js', () => ({
   runAgentQuery: mockRunAgentQuery,
   AgentProgressEvent: {},

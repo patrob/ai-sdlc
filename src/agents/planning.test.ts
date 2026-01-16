@@ -70,6 +70,31 @@ describe('Planning Agent TDD Support', () => {
     it('PLANNING_SYSTEM_PROMPT should mention test-driven development', () => {
       expect(PLANNING_SYSTEM_PROMPT.toLowerCase()).toContain('test');
     });
+
+    it('PLANNING_SYSTEM_PROMPT should include task format specification', () => {
+      expect(PLANNING_SYSTEM_PROMPT).toContain('## Task Format');
+      expect(PLANNING_SYSTEM_PROMPT).toContain('Implementation Tasks');
+    });
+
+    it('PLANNING_SYSTEM_PROMPT should include task format example', () => {
+      expect(PLANNING_SYSTEM_PROMPT).toContain('**T1**:');
+      expect(PLANNING_SYSTEM_PROMPT).toContain('**T2**:');
+      expect(PLANNING_SYSTEM_PROMPT).toContain('Files:');
+      expect(PLANNING_SYSTEM_PROMPT).toContain('Dependencies:');
+    });
+
+    it('PLANNING_SYSTEM_PROMPT should specify "none" convention for dependencies', () => {
+      expect(PLANNING_SYSTEM_PROMPT).toContain('none');
+    });
+
+    it('PLANNING_SYSTEM_PROMPT should mention sequential task IDs', () => {
+      expect(PLANNING_SYSTEM_PROMPT.toLowerCase()).toContain('sequential');
+      expect(PLANNING_SYSTEM_PROMPT).toContain('T1, T2, T3');
+    });
+
+    it('PLANNING_SYSTEM_PROMPT should warn against circular dependencies', () => {
+      expect(PLANNING_SYSTEM_PROMPT.toLowerCase()).toContain('circular');
+    });
   });
 
   describe('buildPlanningPrompt', () => {

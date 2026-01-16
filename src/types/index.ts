@@ -141,6 +141,44 @@ export interface Story {
   content: string;
 }
 
+/**
+ * Task status in the implementation workflow
+ */
+export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+
+/**
+ * Structured task within an implementation plan
+ *
+ * Tasks use markdown checkbox format with embedded metadata:
+ * - [ ] **T1**: Task description
+ *   - Files: file1.ts, file2.ts
+ *   - Dependencies: T2, T3
+ */
+export interface ImplementationTask {
+  /** Task identifier (e.g., "T1", "T2") */
+  id: string;
+  /** Human-readable task description */
+  description: string;
+  /** Current status of the task */
+  status: TaskStatus;
+  /** Optional list of files to create or modify */
+  files?: string[];
+  /** Optional list of task IDs this task depends on */
+  dependencies?: string[];
+}
+
+/**
+ * Result of validating task format and dependencies
+ */
+export interface TaskValidationResult {
+  /** Whether the task format is valid (no errors) */
+  valid: boolean;
+  /** Blocking issues (e.g., circular dependencies) */
+  errors: string[];
+  /** Non-blocking issues (e.g., missing task references) */
+  warnings: string[];
+}
+
 // Action types for state assessor
 export type ActionType =
   | 'refine'

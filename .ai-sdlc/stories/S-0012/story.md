@@ -2,7 +2,7 @@
 id: S-0012
 title: Add file input support for story creation
 priority: 4
-status: in-progress
+status: done
 type: feature
 created: '2026-01-09'
 labels:
@@ -11,16 +11,14 @@ labels:
 research_complete: true
 plan_complete: true
 implementation_complete: true
-reviews_complete: false
+reviews_complete: true
 updated: '2026-01-16'
 slug: ability-to-attach-a-document-instead-of-just-text-
-worktree_path: >-
-  /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0012-ability-to-attach-a-document-instead-of-just-text-
-branch: ai-sdlc/ability-to-attach-a-document-instead-of-just-text-
 last_test_run:
-  passed: false
-  failures: 1
-  timestamp: '2026-01-16T16:43:32.062Z'
+  passed: true
+  failures: 0
+  timestamp: '2026-01-16T16:55:00.000Z'
+released_in: 0.2.0-alpha.25
 implementation_retry_count: 5
 max_retries: 3
 review_history:

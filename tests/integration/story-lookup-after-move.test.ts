@@ -5,7 +5,9 @@ import os from 'os';
 import { createStory, getStory, updateStoryStatus } from '../../src/core/story.js';
 import { STORIES_FOLDER } from '../../src/types/index.js';
 
-describe('Story Lookup After Move Integration', () => {
+// Use describe.sequential to prevent race conditions with shared testDir variable
+// and temp directory cleanup between tests
+describe.sequential('Story Lookup After Move Integration', () => {
   let testDir: string;
   let sdlcRoot: string;
 
@@ -26,9 +28,9 @@ describe('Story Lookup After Move Integration', () => {
     }
   });
 
-  it('should find story by ID after status changes from backlog → in-progress → done', () => {
+  it('should find story by ID after status changes from backlog → in-progress → done', async () => {
     // Create story in backlog
-    const story = createStory('Test Story for Lookup', sdlcRoot);
+    const story = await createStory('Test Story for Lookup', sdlcRoot);
     const storyId = story.frontmatter.id;
 
     // Act 1: Lookup in backlog status
@@ -38,7 +40,7 @@ describe('Story Lookup After Move Integration', () => {
     expect(story1.path).toBe(story.path); // Same path (folder-per-story)
 
     // Change status to in-progress
-    updateStoryStatus(story1, 'in-progress');
+    await updateStoryStatus(story1, 'in-progress');
 
     // Act 2: Lookup after status change to in-progress
     const story2 = getStory(sdlcRoot, storyId);
@@ -47,7 +49,7 @@ describe('Story Lookup After Move Integration', () => {
     expect(story2.path).toBe(story.path); // Still same path (no file move)
 
     // Change status to done
-    updateStoryStatus(story2, 'done');
+    await updateStoryStatus(story2, 'done');
 
     // Act 3: Lookup after status change to done
     const story3 = getStory(sdlcRoot, storyId);
@@ -56,15 +58,15 @@ describe('Story Lookup After Move Integration', () => {
     expect(story3.path).toBe(story.path); // Still same path (no file move)
   });
 
-  it('should find story by ID regardless of current status', () => {
+  it('should find story by ID regardless of current status', async () => {
     // Create multiple stories with different statuses
-    const story1 = createStory('Story 1', sdlcRoot);
-    const story2 = createStory('Story 2', sdlcRoot);
-    const story3 = createStory('Story 3', sdlcRoot);
+    const story1 = await createStory('Story 1', sdlcRoot);
+    const story2 = await createStory('Story 2', sdlcRoot);
+    const story3 = await createStory('Story 3', sdlcRoot);
 
-    updateStoryStatus(story1, 'ready');
-    updateStoryStatus(story2, 'in-progress');
-    updateStoryStatus(story3, 'done');
+    await updateStoryStatus(story1, 'ready');
+    await updateStoryStatus(story2, 'in-progress');
+    await updateStoryStatus(story3, 'done');
 
     // All stories should be findable by ID
     const found1 = getStory(sdlcRoot, story1.frontmatter.id);
@@ -93,13 +95,13 @@ describe('Story Lookup After Move Integration', () => {
     }
   });
 
-  it('should return story with correct metadata after status changes', () => {
-    const story = createStory('Test Story', sdlcRoot);
+  it('should return story with correct metadata after status changes', async () => {
+    const story = await createStory('Test Story', sdlcRoot);
     const storyId = story.frontmatter.id;
 
     // Change to in-progress and mark research complete
     story.frontmatter.research_complete = true;
-    updateStoryStatus(story, 'in-progress');
+    await updateStoryStatus(story, 'in-progress');
 
     // Lookup should return updated story
     const updatedStory = getStory(sdlcRoot, storyId);
@@ -108,8 +110,8 @@ describe('Story Lookup After Move Integration', () => {
     expect(updatedStory.frontmatter.id).toBe(storyId);
   });
 
-  it('should handle concurrent lookups of same story', () => {
-    const story = createStory('Concurrent Test Story', sdlcRoot);
+  it('should handle concurrent lookups of same story', async () => {
+    const story = await createStory('Concurrent Test Story', sdlcRoot);
     const storyId = story.frontmatter.id;
 
     // Simulate concurrent lookups (all should succeed)

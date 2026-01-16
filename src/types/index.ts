@@ -305,6 +305,11 @@ export interface LogConfig {
 }
 
 /**
+ * Log levels for per-story logging
+ */
+export type LogLevel = 'INFO' | 'AGENT' | 'ERROR' | 'WARN' | 'DEBUG';
+
+/**
  * File locking options for atomic story updates
  */
 export interface LockOptions {

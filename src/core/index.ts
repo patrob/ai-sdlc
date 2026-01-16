@@ -11,6 +11,7 @@ export * from './kanban.js';
 export * from './config.js';
 export * from './theme.js';
 export * from './logger.js';
+export * from './story-logger.js';
 export * from './auth.js';
 export * from './client.js';
 export * from './workflow-state.js';

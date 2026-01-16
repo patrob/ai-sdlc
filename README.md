@@ -100,18 +100,28 @@ Get an API key at: https://console.anthropic.com/
 
 Releases are automated via GitHub Actions using [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) (OIDC - no tokens required).
 
-| Release Type | How to Trigger | npm Tag | Version Example |
-|--------------|----------------|---------|-----------------|
-| **Alpha** | Automatic on push to `main` | `@alpha` | `0.2.0-alpha.28` → `0.2.0-alpha.29` |
-| **Patch** | Manual: Actions → Publish → `patch` | `@latest` | `0.2.0-alpha.29` → `0.2.1` |
-| **Minor** | Manual: Actions → Publish → `minor` | `@latest` | `0.2.0-alpha.29` → `0.3.0` |
-| **Major** | Manual: Actions → Publish → `major` | `@latest` | `0.2.0-alpha.29` → `1.0.0` |
+| Release Type | How to Trigger | npm Tag |
+|--------------|----------------|---------|
+| **Alpha** | Automatic on push to `main` | `@alpha` |
+| **Stable** | Push a git tag (`v1.2.3`) | `@latest` |
 
-**To release a stable version:**
-1. Go to GitHub → Actions → "Publish"
-2. Click "Run workflow"
-3. Select version type (`patch`, `minor`, or `major`)
-4. Click "Run workflow"
+**Alpha releases** happen automatically when you push to `main`. The version is auto-incremented based on the latest alpha on npm.
+
+**Stable releases** are triggered by pushing a semver git tag:
+
+```bash
+# Patch release (bug fixes)
+git tag v0.2.1
+git push origin v0.2.1
+
+# Minor release (new features)
+git tag v0.3.0
+git push origin v0.3.0
+
+# Major release (breaking changes)
+git tag v1.0.0
+git push origin v1.0.0
+```
 
 Stable releases automatically create a GitHub Release with generated notes.
 

@@ -1,25 +1,15 @@
 name: Publish
 
 on:
-  # Alpha: automatic on push to main
   push:
+    # Alpha: automatic on push to main
     branches: [main]
+    # Stable: trigger on version tags
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
     paths-ignore:
       - '**/*.md'
       - '.ai-sdlc/**'
-
-  # Stable: manual trigger
-  workflow_dispatch:
-    inputs:
-      release_type:
-        description: 'Release type'
-        required: true
-        type: choice
-        options:
-          - alpha
-          - patch
-          - minor
-          - major
 
 jobs:
   test:
@@ -38,16 +28,15 @@ jobs:
       - run: npm test
       - run: npm run test:integration
 
-  publish:
+  publish-alpha:
+    if: github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      id-token: write  # Required for npm trusted publishing (OIDC)
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -58,68 +47,68 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      - name: Configure git
+      - name: Get next alpha version
+        id: version
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Get the latest alpha version from npm, default to 0.0.0-alpha.0 if none exists
+          LATEST=$(npm view ai-sdlc@alpha version 2>/dev/null || echo "0.0.0-alpha.0")
+          echo "Latest alpha: ${LATEST}"
 
-      # Determine release type: manual input or default to alpha for push events
-      - name: Determine release type
-        id: release
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "type=${{ inputs.release_type }}" >> $GITHUB_OUTPUT
-          else
-            echo "type=alpha" >> $GITHUB_OUTPUT
-          fi
+          # Extract base version and alpha number
+          # Format: X.Y.Z-alpha.N
+          BASE=$(echo "${LATEST}" | sed 's/-alpha.*//')
+          ALPHA_NUM=$(echo "${LATEST}" | sed -n 's/.*alpha\.\([0-9]*\).*/\1/p')
+          ALPHA_NUM=${ALPHA_NUM:-0}
 
-      # Alpha release: bump prerelease version
-      - name: Bump alpha version
-        if: steps.release.outputs.type == 'alpha'
-        run: |
-          npm version prerelease --preid=alpha --no-git-tag-version
-          VERSION=$(node -p "require('./package.json').version")
-          git add package.json
-          git commit -m "chore: bump to ${VERSION} [skip ci]"
-          git push
+          # Increment alpha number
+          NEXT_ALPHA=$((ALPHA_NUM + 1))
+          NEXT_VERSION="${BASE}-alpha.${NEXT_ALPHA}"
 
-      # Stable release: strip alpha suffix and apply version bump
-      - name: Bump stable version
-        if: steps.release.outputs.type != 'alpha'
-        run: |
-          CURRENT=$(node -p "require('./package.json').version")
-          echo "Current version: ${CURRENT}"
+          echo "Next version: ${NEXT_VERSION}"
+          echo "version=${NEXT_VERSION}" >> $GITHUB_OUTPUT
 
-          # Extract base version (strip -alpha.X suffix if present)
-          BASE=$(echo "${CURRENT}" | sed 's/-alpha.*//')
-          echo "Base version: ${BASE}"
+      - name: Set version in package.json
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version
 
-          # Set to base version first (removes alpha suffix)
-          npm version "${BASE}" --no-git-tag-version --allow-same-version
-
-          # Apply the requested bump (creates git tag)
-          npm version ${{ steps.release.outputs.type }} -m "release: %s"
-
-          # Push commit and tag
-          git push && git push --tags
-
-      # Publish alpha to @alpha tag
-      - name: Publish alpha to npm
-        if: steps.release.outputs.type == 'alpha'
+      - name: Publish to npm
         run: npm publish --provenance --access public --tag alpha
 
-      # Publish stable to @latest tag (default)
-      - name: Publish stable to npm
-        if: steps.release.outputs.type != 'alpha'
+  publish-stable:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Publishing version: ${VERSION}"
+
+      - name: Set version in package.json
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+
+      - name: Publish to npm
         run: npm publish --provenance --access public
 
-      # Create GitHub release for stable versions only
       - name: Create GitHub Release
-        if: steps.release.outputs.type != 'alpha'
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          gh release create "v${VERSION}" \
-            --title "v${VERSION}" \
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
             --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768528716929-0adfd9f0",
+  "timestamp": "2026-01-16T02:01:50.197Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0015",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0015-add-web-research-as-secondary-source-for-external-/.ai-sdlc/stories/S-0015/story.md",
+      "completedAt": "2026-01-16T01:59:07.139Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0015",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0015-add-web-research-as-secondary-source-for-external-/.ai-sdlc/stories/S-0015/story.md",
+      "completedAt": "2026-01-16T02:01:11.393Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0015",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0015-add-web-research-as-secondary-source-for-external-/.ai-sdlc/stories/S-0015/story.md",
+      "completedAt": "2026-01-16T02:01:50.197Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0015-add-web-research-as-secondary-source-for-external-/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0015",
+      "fullSDLC": true
+    },
+    "storyContentHash": "7e679fd93d5d07079247a3f94005bd99b394d8107b30ad7fd1dd2f1218d77869"
+  }
+}

@@ -21,5 +21,5 @@ publish: clean
 publish-dry: clean
 	npm publish --tag alpha --access public --dry-run
 
-verify: lint test test-integration build
+verify: lint build test test-integration
 	@echo "All checks passed - ready for commit"

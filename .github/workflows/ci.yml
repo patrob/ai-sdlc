@@ -14,6 +14,8 @@ jobs:
         node-version: [20.x]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for git diff in conflict-detector tests
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}

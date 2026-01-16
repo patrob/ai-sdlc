@@ -6,16 +6,63 @@ import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
 import { Story, AgentResult, FARScore } from '../types/index.js';
 import { getLogger } from '../core/logger.js';
 
-const RESEARCH_SYSTEM_PROMPT = `You are a technical research specialist. Your job is to research how to implement a user story by analyzing the existing codebase and external best practices.
+const RESEARCH_SYSTEM_PROMPT = `You are a technical research specialist analyzing how to implement a user story by deeply examining the existing codebase.
 
-When researching a story, you should:
-1. Identify relevant existing code patterns in the codebase
-2. Suggest which files/modules need to be modified
-3. Research external best practices if applicable
-4. Identify potential challenges or risks
-5. Note any dependencies or prerequisites
+## Research Methodology
 
-Output your research findings in markdown format. Be specific about file paths and code patterns.`;
+**Phase 1: Problem Understanding**
+- Parse the story requirements to extract core needs
+- Identify key terms and concepts that map to codebase elements
+- Clarify the scope: what is being asked vs what is NOT being asked
+
+**Phase 2: Codebase Exploration**
+- Use the provided codebase context to locate relevant code
+- Trace dependencies and call chains from entry points
+- Identify architectural boundaries and interfaces
+- Find similar implementations that can serve as templates
+
+**Phase 3: Solution Mapping**
+- Map story requirements to specific code locations
+- Identify the change surface area (all affected files)
+- Consider alternative approaches and trade-offs
+- Determine the sequence of changes (what depends on what)
+
+## Required Output Structure
+
+Your research MUST include these five sections:
+
+### Problem Summary
+[Restate the problem in your own words to confirm understanding. What is the core goal?]
+
+### Codebase Context
+[Describe relevant architecture, patterns, and existing implementations you found. Reference specific files and patterns.]
+
+### Files Requiring Changes
+
+For each file that needs modification:
+- **Path**: \`path/to/file\`
+- **Change Type**: [Create New | Modify Existing | Delete]
+- **Reason**: [Why this file needs to change]
+- **Specific Changes**: [What aspects need modification]
+- **Dependencies**: [What other changes must happen first]
+
+### Testing Strategy
+- **Test Files to Modify**: [Existing test files that need updates]
+- **New Tests Needed**: [New test files or test cases required]
+- **Test Scenarios**: [Specific scenarios to cover: happy path, edge cases, error handling]
+
+### Additional Context
+- **Relevant Patterns**: [Existing code patterns to follow for consistency]
+- **Potential Risks**: [Things to watch out for, breaking changes]
+- **Performance Considerations**: [If applicable]
+- **Security Implications**: [If applicable]
+
+## Quality Standards
+- Be SPECIFIC about file paths (e.g., \`src/core/story.ts:42\` not just "the story module")
+- Reference existing patterns when suggesting new code
+- Identify at least 3-5 relevant files in the codebase
+- Provide concrete examples, not abstract concepts
+- If you cannot find relevant code, say so explicitly`;
 
 /**
  * Keywords that indicate a story is purely internal and does not require web research.
@@ -254,9 +301,19 @@ Format your response as markdown for the Research section of the story.`;
 }
 
 /**
- * Gather context about the codebase for research
+ * Gather context about the codebase for research.
+ *
+ * Collects information about:
+ * - Project configuration files (package.json, tsconfig.json, etc.)
+ * - Directory structure
+ * - Source files
+ * - Test files (for understanding testing patterns)
+ * - Configuration files (for discovering config patterns)
+ *
+ * @param sdlcRoot - Path to the .ai-sdlc directory
+ * @returns Formatted context string with codebase information
  */
-async function gatherCodebaseContext(sdlcRoot: string): Promise<string> {
+export async function gatherCodebaseContext(sdlcRoot: string): Promise<string> {
   const workingDir = path.dirname(sdlcRoot);
   const context: string[] = [];
 
@@ -305,6 +362,50 @@ async function gatherCodebaseContext(sdlcRoot: string): Promise<string> {
 
     if (sourceFiles.length > 0) {
       context.push(`=== Source Files ===\n${sourceFiles.slice(0, 20).join('\n')}`);
+    }
+  } catch {
+    // Ignore glob errors
+  }
+
+  // Look for test files (helps identify testing patterns)
+  try {
+    const testFiles = await glob('**/*.test.{ts,js,tsx,jsx}', {
+      cwd: workingDir,
+      ignore: ['node_modules/**', 'dist/**', 'build/**'],
+    });
+
+    // Also look for tests in dedicated test directories
+    const testDirFiles = await glob('{tests,test,__tests__}/**/*.{ts,js,tsx,jsx}', {
+      cwd: workingDir,
+      ignore: ['node_modules/**'],
+    });
+
+    const allTestFiles = [...new Set([...testFiles, ...testDirFiles])];
+
+    if (allTestFiles.length > 0) {
+      context.push(`=== Test Files ===\n${allTestFiles.slice(0, 15).join('\n')}`);
+    }
+  } catch {
+    // Ignore glob errors
+  }
+
+  // Look for configuration files (helps identify config patterns)
+  try {
+    const configFiles = await glob('**/*.config.{ts,js,json,mjs,cjs}', {
+      cwd: workingDir,
+      ignore: ['node_modules/**', 'dist/**'],
+    });
+
+    // Also look for common config file patterns
+    const commonConfigs = await glob('{.eslintrc*,.prettierrc*,jest.config.*,vitest.config.*,vite.config.*}', {
+      cwd: workingDir,
+      dot: true,
+    });
+
+    const allConfigFiles = [...new Set([...configFiles, ...commonConfigs])];
+
+    if (allConfigFiles.length > 0) {
+      context.push(`=== Config Files ===\n${allConfigFiles.slice(0, 10).join('\n')}`);
     }
   } catch {
     // Ignore glob errors

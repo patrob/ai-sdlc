@@ -23,6 +23,7 @@ import { migrateToFolderPerStory } from './commands/migrate.js';
 import { generateReviewSummary } from '../agents/review.js';
 import { getTerminalWidth } from './formatting.js';
 import { validateGitState, GitValidationResult } from '../core/git-utils.js';
+import { StoryLogger } from '../core/story-logger.js';
 import { detectConflicts } from '../core/conflict-detector.js';
 
 /**
@@ -1144,65 +1145,87 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
   const config = loadConfig();
   const c = getThemedChalk(config);
 
-  // Resolve story by ID to get current path (handles moves between folders)
-  let resolvedPath: string;
+  // Initialize per-story logger
+  const maxLogs = config.logging?.maxFiles ?? 5;
+  let logger: StoryLogger | null = null;
+  let spinner: ReturnType<typeof ora> | null = null;
+
   try {
-    const story = getStory(sdlcRoot, action.storyId);
-    resolvedPath = story.path;
+    logger = new StoryLogger(action.storyId, sdlcRoot, maxLogs);
+    logger.log('INFO', `Starting action: ${action.type} for story ${action.storyId}`);
   } catch (error) {
-    console.log(c.error(`Error: Story not found for action "${action.type}"`));
-    console.log(c.dim(`  Story ID: ${action.storyId}`));
-    console.log(c.dim(`  Original path: ${action.storyPath}`));
-    if (error instanceof Error) {
-      console.log(c.dim(`  ${error.message}`));
-    }
-    return { success: false };
+    // If logger initialization fails, continue without logging (console-only)
+    console.warn(`Warning: Failed to initialize logger: ${error instanceof Error ? error.message : String(error)}`);
   }
-
-  // Update action path if it was stale
-  if (resolvedPath !== action.storyPath) {
-    console.log(c.warning(`Note: Story path updated (file was moved)`));
-    console.log(c.dim(`  From: ${action.storyPath}`));
-    console.log(c.dim(`  To: ${resolvedPath}`));
-    action.storyPath = resolvedPath;
-  }
-
-  // Store phase completion state BEFORE action execution (to detect transitions)
-  const storyBeforeAction = parseStory(action.storyPath);
-  const prevPhaseState = {
-    research_complete: storyBeforeAction.frontmatter.research_complete,
-    plan_complete: storyBeforeAction.frontmatter.plan_complete,
-    implementation_complete: storyBeforeAction.frontmatter.implementation_complete,
-    reviews_complete: storyBeforeAction.frontmatter.reviews_complete,
-    status: storyBeforeAction.frontmatter.status,
-  };
-
-  const spinner = ora(formatAction(action, true, c)).start();
-  const baseText = formatAction(action, true, c);
-
-  // Create agent progress callback for real-time updates
-  const onAgentProgress = (event: { type: string; toolName?: string; sessionId?: string }) => {
-    switch (event.type) {
-      case 'session_start':
-        spinner.text = `${baseText} ${c.dim('(session started)')}`;
-        break;
-      case 'tool_start':
-        // Show which tool is being executed
-        const toolName = event.toolName || 'unknown';
-        const shortName = toolName.replace(/^(mcp__|Mcp)/, '').substring(0, 30);
-        spinner.text = `${baseText} ${c.dim(`→ ${shortName}`)}`;
-        break;
-      case 'tool_end':
-        // Keep showing the action, tool completed
-        spinner.text = baseText;
-        break;
-      case 'completion':
-        spinner.text = `${baseText} ${c.dim('(completing...)')}`;
-        break;
-    }
-  };
 
   try {
+    // Resolve story by ID to get current path (handles moves between folders)
+    let resolvedPath: string;
+    try {
+      const story = getStory(sdlcRoot, action.storyId);
+      resolvedPath = story.path;
+    } catch (error) {
+      const errorMsg = `Error: Story not found for action "${action.type}"`;
+      logger?.log('ERROR', errorMsg);
+      logger?.log('ERROR', `  Story ID: ${action.storyId}`);
+      logger?.log('ERROR', `  Original path: ${action.storyPath}`);
+      console.log(c.error(errorMsg));
+      console.log(c.dim(`  Story ID: ${action.storyId}`));
+      console.log(c.dim(`  Original path: ${action.storyPath}`));
+      if (error instanceof Error) {
+        logger?.log('ERROR', `  ${error.message}`);
+        console.log(c.dim(`  ${error.message}`));
+      }
+      return { success: false };
+    }
+
+    // Update action path if it was stale
+    if (resolvedPath !== action.storyPath) {
+      logger?.log('WARN', `Note: Story path updated (file was moved)`);
+      logger?.log('WARN', `  From: ${action.storyPath}`);
+      logger?.log('WARN', `  To: ${resolvedPath}`);
+      console.log(c.warning(`Note: Story path updated (file was moved)`));
+      console.log(c.dim(`  From: ${action.storyPath}`));
+      console.log(c.dim(`  To: ${resolvedPath}`));
+      action.storyPath = resolvedPath;
+    }
+
+    // Store phase completion state BEFORE action execution (to detect transitions)
+    const storyBeforeAction = parseStory(action.storyPath);
+    const prevPhaseState = {
+      research_complete: storyBeforeAction.frontmatter.research_complete,
+      plan_complete: storyBeforeAction.frontmatter.plan_complete,
+      implementation_complete: storyBeforeAction.frontmatter.implementation_complete,
+      reviews_complete: storyBeforeAction.frontmatter.reviews_complete,
+      status: storyBeforeAction.frontmatter.status,
+    };
+
+    spinner = ora(formatAction(action, true, c)).start();
+    const baseText = formatAction(action, true, c);
+
+    // Create agent progress callback for real-time updates
+    const onAgentProgress = (event: { type: string; toolName?: string; sessionId?: string }) => {
+      if (!spinner) return; // Guard against null spinner
+      switch (event.type) {
+        case 'session_start':
+          spinner.text = `${baseText} ${c.dim('(session started)')}`;
+          break;
+        case 'tool_start':
+          // Show which tool is being executed
+          const toolName = event.toolName || 'unknown';
+          const shortName = toolName.replace(/^(mcp__|Mcp)/, '').substring(0, 30);
+          spinner.text = `${baseText} ${c.dim(`→ ${shortName}`)}`;
+          break;
+        case 'tool_end':
+          // Keep showing the action, tool completed
+          spinner.text = baseText;
+          break;
+        case 'completion':
+          spinner.text = `${baseText} ${c.dim('(completing...)')}`;
+          break;
+      }
+    };
+
     // Import and run the appropriate agent
     let result;
 
@@ -1231,6 +1254,7 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
         const { runReviewAgent } = await import('../agents/review.js');
         result = await runReviewAgent(action.storyPath, sdlcRoot, {
           onVerificationProgress: (phase, status, message) => {
+            if (!spinner) return; // Guard against null spinner
             const phaseLabel = phase === 'build' ? 'Building' : 'Testing';
             switch (status) {
               case 'starting':
@@ -1287,17 +1311,21 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
     // Check if agent succeeded
     if (result && !result.success) {
       spinner.fail(c.error(`Failed: ${formatAction(action, true, c)}`));
+      logger?.log('ERROR', `Action failed: ${formatAction(action, false, c)}`);
       if (result.error) {
+        logger?.log('ERROR', `  Error: ${result.error}`);
         console.error(c.error(`  Error: ${result.error}`));
       }
       return { success: false };
     }
 
     spinner.succeed(c.success(formatAction(action, true, c)));
+    logger?.log('INFO', `Action completed successfully: ${formatAction(action, false, c)}`);
 
     // Show changes made
     if (result && result.changesMade.length > 0) {
       for (const change of result.changesMade) {
+        logger?.log('INFO', `  → ${change}`);
         console.log(c.dim(`  → ${change}`));
       }
     }
@@ -1358,7 +1386,13 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
 
     return { success: true };
   } catch (error) {
-    spinner.fail(c.error(`Failed: ${formatAction(action, true, c)}`));
+    if (spinner) {
+      spinner.fail(c.error(`Failed: ${formatAction(action, true, c)}`));
+    } else {
+      console.error(c.error(`Failed: ${formatAction(action, true, c)}`));
+    }
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger?.log('ERROR', `Exception during action execution: ${errorMessage}`);
     console.error(error);
 
     // Show phase checklist with error indication (if file still exists)
@@ -1366,12 +1400,15 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
       const story = parseStory(action.storyPath);
       console.log(c.dim(`  Progress: ${renderPhaseChecklist(story, c)}`));
       // Update story with error
-      story.frontmatter.last_error = error instanceof Error ? error.message : String(error);
+      story.frontmatter.last_error = errorMessage;
     } catch {
       // File may have been moved - skip progress display
     }
     // Don't throw - let the workflow continue if in auto mode
     return { success: false };
+  } finally {
+    // Always close logger, even if action fails or throws
+    logger?.close();
   }
 }
 

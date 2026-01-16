@@ -103,7 +103,9 @@ jobs:
           echo "Publishing version: ${VERSION}"
 
           # Determine npm tag based on version type
-          if [[ "$VERSION" == *"-beta"* ]]; then
+          if [[ "$VERSION" == *"-alpha"* ]]; then
+            echo "tag=alpha" >> $GITHUB_OUTPUT
+          elif [[ "$VERSION" == *"-beta"* ]]; then
             echo "tag=beta" >> $GITHUB_OUTPUT
           elif [[ "$VERSION" == *"-rc"* ]]; then
             echo "tag=rc" >> $GITHUB_OUTPUT

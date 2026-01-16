@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768528981867-f26cda0c",
+  "timestamp": "2026-01-16T02:07:20.496Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0007",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0007-create-github-pr-with-story-summary/.ai-sdlc/stories/S-0007/story.md",
+      "completedAt": "2026-01-16T02:03:27.876Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0007",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0007-create-github-pr-with-story-summary/.ai-sdlc/stories/S-0007/story.md",
+      "completedAt": "2026-01-16T02:06:38.647Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0007",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0007-create-github-pr-with-story-summary/.ai-sdlc/stories/S-0007/story.md",
+      "completedAt": "2026-01-16T02:07:20.496Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0007-create-github-pr-with-story-summary/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0007",
+      "fullSDLC": true
+    },
+    "storyContentHash": "a4a92f8b29891a332cdcd1c48674d9eefe0afd99d5aec35fc410291dfdff77b4"
+  }
+}

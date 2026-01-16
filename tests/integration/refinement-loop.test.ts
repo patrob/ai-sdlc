@@ -463,11 +463,11 @@ describe.sequential('Review Agent Pre-check Integration', () => {
     const result = await runReviewAgent(story.path, testDir);
 
     // Verify: Reviews proceeded normally
-    expect(result.changesMade).toContain('Verification passed - proceeding with code/security/PO reviews');
+    expect(result.changesMade).toContain('Verification passed - proceeding with unified collaborative review');
     expect(result.changesMade).toContain('Tests passed: npm test');
 
-    // Verify: LLM reviews WERE called (3 times: code, security, PO)
-    expect(runAgentQuery).toHaveBeenCalledTimes(3);
+    // Verify: LLM review WAS called (1 unified review instead of 3)
+    expect(runAgentQuery).toHaveBeenCalledTimes(1);
   });
 
   it('should truncate large test output in BLOCKER issue', async () => {

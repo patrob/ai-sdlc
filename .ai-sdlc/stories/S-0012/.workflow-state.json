@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768580849131-730c5a1f",
+  "timestamp": "2026-01-16T16:30:08.917Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "research",
+      "storyId": "S-0012",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0012-ability-to-attach-a-document-instead-of-just-text-/.ai-sdlc/stories/S-0012/story.md",
+      "completedAt": "2026-01-16T16:29:39.149Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0012",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0012-ability-to-attach-a-document-instead-of-just-text-/.ai-sdlc/stories/S-0012/story.md",
+      "completedAt": "2026-01-16T16:30:08.917Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0012-ability-to-attach-a-document-instead-of-just-text-/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0012",
+      "fullSDLC": true
+    },
+    "storyContentHash": "b0bb86302d2594caf5a00dcd37b8fa1b7e6339ae87bfbca14670b8729366291b"
+  }
+}

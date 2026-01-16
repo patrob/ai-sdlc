@@ -135,6 +135,39 @@ NEVER mark implementation as complete until:
 2. `npm run build` succeeds
 3. Story status accurately reflects current state (no conflicting "Complete" claims)
 
+## Implementation Phase Requirements (Anti-Hallucination)
+
+**CRITICAL**: The implementation phase requires MODIFYING SOURCE CODE, not writing documentation.
+
+### What Implementation IS:
+- Modifying `.ts`/`.js` files in `src/`
+- Writing new test files for the feature
+- Running `npm test` and fixing failures
+- Making actual code changes that show up in `git diff`
+
+### What Implementation IS NOT:
+- Writing research notes in the story file
+- Creating implementation plans or documentation
+- Documenting what SHOULD be done without doing it
+- Claiming completion based on existing passing tests
+
+### If You Cannot Proceed:
+- **Lacking file permissions**: Set status to `blocked`, explain what access is needed
+- **Requirements unclear**: Set status to `blocked`, list specific questions
+- **Technical blocker**: Set status to `blocked`, describe the issue
+
+### NEVER Do These:
+- Set `implementation_complete: true` without actual code changes
+- Claim "tests passed" if you didn't write new tests for the feature
+- Say "waiting for permission" then mark as complete
+- Write 500 lines of documentation and call it implementation
+
+### Self-Check Before Marking Complete:
+1. Did I modify files in `src/` (not just `.ai-sdlc/stories/`)?
+2. Did I write new tests that verify the new functionality?
+3. Would `git diff --name-only` show `.ts` or `.js` files I changed?
+4. If I answer "no" to any of these, I have NOT completed implementation.
+
 ## Handling Test Failures During Implementation
 When tests fail after writing implementation code, DO NOT give up or mark as blocked. Instead:
 

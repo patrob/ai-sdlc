@@ -90,7 +90,7 @@ describe('Auth Expiration Integration Tests', () => {
           prompt: 'test query',
           workingDirectory: process.cwd(),
         })
-      ).rejects.toThrow(/OAuth token.*expired/);
+      ).rejects.toThrow(/has expired/);
 
       await expect(
         runAgentQuery({
@@ -276,13 +276,14 @@ describe('Auth Expiration Integration Tests', () => {
   });
 
   describe('OAuth token environment variable', () => {
-    it('should check expiration for CLAUDE_CODE_OAUTH_TOKEN env var', async () => {
+    it('should still check expiration from credential file when CLAUDE_CODE_OAUTH_TOKEN is set', async () => {
       vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
 
-      // Set expired OAuth token in env var
+      // Set OAuth token in env var (takes precedence for authentication)
       process.env.CLAUDE_CODE_OAUTH_TOKEN = 'sk-ant-oat-env-token';
 
-      // Mock credential file with expired token (env var will be used)
+      // Mock credential file with expired token
+      // Note: Expiration is always checked from credential file, even when env var is used
       vi.mocked(mockFs.readFileSync).mockReturnValue(JSON.stringify({
         accessToken: 'sk-ant-oat-file-token',
         expiresAt: '2026-01-15T11:00:00Z', // Expired
@@ -292,16 +293,13 @@ describe('Auth Expiration Integration Tests', () => {
         mode: parseInt('100600', 8),
       } as any);
 
-      // Note: Env vars take precedence, so we can't check expiration for them
-      // The implementation only checks expiration for tokens from credential file
-      // This test documents that behavior
-      const result = await runAgentQuery({
-        prompt: 'test query',
-        workingDirectory: process.cwd(),
-      });
-
-      // Should succeed (env vars bypass expiration check)
-      expect(result).toBe('Test response');
+      // Should fail because expiration is checked from credential file regardless of env var
+      await expect(
+        runAgentQuery({
+          prompt: 'test query',
+          workingDirectory: process.cwd(),
+        })
+      ).rejects.toThrow(AuthenticationError);
     });
   });
 });

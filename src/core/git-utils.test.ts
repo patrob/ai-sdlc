@@ -489,5 +489,41 @@ describe('git-utils', () => {
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBe(3);
     });
+
+    it('respects excludePatterns option for clean check', () => {
+      // Only .ai-sdlc files are modified - should be excluded
+      mockSpawnSync
+        .mockReturnValueOnce(createSpawnResult(' M .ai-sdlc/stories/S-0001/story.md\n')) // dirty but in .ai-sdlc
+        .mockReturnValueOnce(createSpawnResult(''))
+        .mockReturnValueOnce(createSpawnResult('feature/test\n'))
+        .mockReturnValueOnce(createSpawnResult(''))
+        .mockReturnValueOnce(createSpawnResult('0\t0\n'));
+
+      const options: GitValidationOptions = { excludePatterns: ['.ai-sdlc/**'] };
+      const result = validateGitState('/test/dir', options);
+
+      expect(result.valid).toBe(true);
+      expect(result.errors).not.toContain(
+        'Working directory has uncommitted changes. Commit or stash your changes first.'
+      );
+    });
+
+    it('still fails when non-excluded files are dirty with excludePatterns', () => {
+      // Mix of .ai-sdlc and src changes - src should still cause failure
+      mockSpawnSync
+        .mockReturnValueOnce(createSpawnResult(' M .ai-sdlc/stories/S-0001/story.md\n M src/index.ts\n'))
+        .mockReturnValueOnce(createSpawnResult(''))
+        .mockReturnValueOnce(createSpawnResult('feature/test\n'))
+        .mockReturnValueOnce(createSpawnResult(''))
+        .mockReturnValueOnce(createSpawnResult('0\t0\n'));
+
+      const options: GitValidationOptions = { excludePatterns: ['.ai-sdlc/**'] };
+      const result = validateGitState('/test/dir', options);
+
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain(
+        'Working directory has uncommitted changes. Commit or stash your changes first.'
+      );
+    });
   });
 });

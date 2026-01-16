@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768596271445-a5160605",
+  "timestamp": "2026-01-16T20:49:10.497Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0046",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0046-task-progress-tracking-in-stories/.ai-sdlc/stories/S-0046/story.md",
+      "completedAt": "2026-01-16T20:45:04.057Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0046",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0046-task-progress-tracking-in-stories/.ai-sdlc/stories/S-0046/story.md",
+      "completedAt": "2026-01-16T20:48:20.299Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0046",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0046-task-progress-tracking-in-stories/.ai-sdlc/stories/S-0046/story.md",
+      "completedAt": "2026-01-16T20:49:10.497Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0046-task-progress-tracking-in-stories/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0046",
+      "fullSDLC": true
+    },
+    "storyContentHash": "0319899bdbb6c6dcc3c1e11a7af3140ee1651edbd9fbb9e91d1fa8e0c0b6b6e5"
+  }
+}

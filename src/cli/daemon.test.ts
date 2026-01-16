@@ -50,6 +50,7 @@ vi.mock('../core/theme.js', () => ({
 
 vi.mock('../core/story.js', () => ({
   parseStory: vi.fn(),
+  getStory: vi.fn(),
 }));
 
 vi.mock('./runner.js', () => ({

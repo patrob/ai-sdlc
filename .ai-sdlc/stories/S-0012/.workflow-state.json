@@ -1,0 +1,53 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768580849131-730c5a1f",
+  "timestamp": "2026-01-16T16:34:44.522Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "research",
+      "storyId": "S-0012",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0012-ability-to-attach-a-document-instead-of-just-text-/.ai-sdlc/stories/S-0012/story.md",
+      "completedAt": "2026-01-16T16:29:39.149Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0012",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0012-ability-to-attach-a-document-instead-of-just-text-/.ai-sdlc/stories/S-0012/story.md",
+      "completedAt": "2026-01-16T16:30:08.917Z"
+    },
+    {
+      "type": "implement",
+      "storyId": "S-0012",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0012-ability-to-attach-a-document-instead-of-just-text-/.ai-sdlc/stories/S-0012/story.md",
+      "completedAt": "2026-01-16T16:30:23.366Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0012",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0012-ability-to-attach-a-document-instead-of-just-text-/.ai-sdlc/stories/S-0012/story.md",
+      "completedAt": "2026-01-16T16:32:34.643Z"
+    },
+    {
+      "type": "implement",
+      "storyId": "S-0012",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0012-ability-to-attach-a-document-instead-of-just-text-/.ai-sdlc/stories/S-0012/story.md",
+      "completedAt": "2026-01-16T16:32:50.714Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0012",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0012-ability-to-attach-a-document-instead-of-just-text-/.ai-sdlc/stories/S-0012/story.md",
+      "completedAt": "2026-01-16T16:34:44.522Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0012-ability-to-attach-a-document-instead-of-just-text-/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0012",
+      "fullSDLC": true
+    },
+    "storyContentHash": "d0d4ad045d2b41370a33a5685251b61fa8159f2b2488fb46417066d00c6a881a"
+  }
+}

@@ -17,6 +17,121 @@ When researching a story, you should:
 
 Output your research findings in markdown format. Be specific about file paths and code patterns.`;
 
+/**
+ * Keywords that indicate a story is purely internal and does not require web research.
+ * These keywords suggest refactoring, code organization, or internal maintenance tasks.
+ */
+const WEB_RESEARCH_INTERNAL_KEYWORDS = [
+  'refactor internal',
+  'move function',
+  'rename variable',
+  'rename function',
+  'move utility',
+  'internal refactor',
+  'move code',
+  'reorganize internal',
+];
+
+/**
+ * Keywords that indicate external dependencies or integrations requiring web research.
+ * These keywords suggest the need for library documentation, API references, or best practices.
+ */
+const WEB_RESEARCH_EXTERNAL_KEYWORDS = [
+  'integrate',
+  'api',
+  'library',
+  'framework',
+  'best practices',
+  'npm package',
+  'external',
+  'third-party',
+  'sdk',
+  'documentation',
+  'webhook',
+  'rest api',
+  'graphql',
+  'oauth',
+  'authentication provider',
+];
+
+/**
+ * Web research prompt template for supplementary research phase.
+ * Instructs the agent on tool usage, FAR evaluation, and output formatting.
+ */
+const WEB_RESEARCH_PROMPT_TEMPLATE = (storyTitle: string, storyContent: string, codebaseContext: string) => `You are performing supplementary web research for a software development story.
+
+**Story Title**: ${storyTitle}
+
+**Story Content**:
+${storyContent}
+
+**Codebase Context** (already analyzed):
+${codebaseContext}... [truncated]
+
+---
+
+## Web Research Instructions
+
+You have access to these web research tools:
+
+1. **Context7** (if available) - Use FIRST for library/framework documentation
+   - Best for: npm packages, Python libraries, popular frameworks
+   - Example: "Search Context7 for React Query documentation on data fetching"
+
+2. **WebSearch** - Use for community knowledge and best practices
+   - Best for: Stack Overflow patterns, blog posts, tutorials
+   - Example: "Search the web for TypeScript error handling best practices"
+
+3. **WebFetch** - Use to read specific authoritative URLs
+   - Best for: Official documentation, specific articles
+   - Example: "Fetch https://docs.anthropic.com/claude/reference"
+
+## Research Strategy
+
+- Try Context7 FIRST for any npm packages or popular frameworks mentioned in the story
+- Fall back to WebSearch for general solutions and community patterns
+- Use WebFetch only when you have specific authoritative URLs to read
+- Limit research to 3-5 high-quality sources to avoid information overload
+- Focus on actionable information that directly addresses the story requirements
+
+## Output Format
+
+For EACH finding, provide:
+
+### [Topic Name]
+**Source**: [Context7 - Library Name] or [Web Search Result] or [URL]
+**FAR Score**: Factuality: [1-5], Actionability: [1-5], Relevance: [1-5]
+**Justification**: [Why these scores? How does this help the story?]
+
+[Finding content with code examples, patterns, or instructions]
+
+---
+
+## FAR Scale Definitions
+
+**Factuality (1-5)**: How accurate and verifiable is the information?
+- 1: Unverified/speculative
+- 3: Community knowledge (Stack Overflow, blogs)
+- 5: Official documentation or peer-reviewed
+
+**Actionability (1-5)**: Can this be directly applied to the task?
+- 1: Abstract concepts only
+- 3: General patterns or approaches
+- 5: Copy-paste code examples or step-by-step instructions
+
+**Relevance (1-5)**: How closely does this match the story requirements?
+- 1: Tangentially related
+- 3: Related but not specific to story
+- 5: Directly addresses a story acceptance criterion
+
+## Important Notes
+
+- If web tools are unavailable (offline, not configured), simply state: "Web research tools unavailable - skipping web research"
+- If a finding contradicts patterns in the codebase context, note the discrepancy and defer to local patterns
+- Focus on NEW information not already present in codebase analysis
+
+Begin web research now. Provide 3-5 high-quality findings with FAR evaluations.`;
+
 export interface AgentOptions {
   /** Context from a previous review failure - must address these issues */
   reworkContext?: string;
@@ -42,6 +157,9 @@ export async function runResearchAgent(
     // Gather codebase context
     const codebaseContext = await gatherCodebaseContext(sdlcRoot);
 
+    // Sanitize codebase context before including in prompt (prevent prompt injection)
+    const sanitizedContext = sanitizeCodebaseContext(codebaseContext);
+
     // Build the prompt, including rework context if this is a refinement iteration
     let prompt = `Please research how to implement this story:
 
@@ -51,7 +169,7 @@ Story content:
 ${story.content}
 
 Codebase context:
-${codebaseContext}`;
+${sanitizedContext}`;
 
     if (options.reworkContext) {
       prompt += `
@@ -83,23 +201,29 @@ Format your response as markdown for the Research section of the story.`;
       onProgress: options.onProgress,
     });
 
+    // Sanitize research content before storage (prevent ANSI/markdown injection)
+    const sanitizedResearch = sanitizeWebResearchContent(researchContent);
+
     // Append codebase research to the story
-    await appendToSection(story, 'Research', researchContent);
+    await appendToSection(story, 'Research', sanitizedResearch);
     changesMade.push('Added codebase research findings');
 
     // Phase 2: Web Research (conditional)
-    if (shouldPerformWebResearch(story, codebaseContext)) {
+    if (shouldPerformWebResearch(story, sanitizedContext)) {
       const webResearchContent = await performWebResearch(
         story,
-        codebaseContext,
+        sanitizedContext,
         path.dirname(sdlcRoot),
         options.onProgress
       );
 
       if (webResearchContent.trim()) {
+        // Sanitize web research content before storage (prevent ANSI/markdown injection)
+        const sanitizedWebResearch = sanitizeWebResearchContent(webResearchContent);
+
         // Re-parse story to get updated content after codebase research
         const updatedStory = parseStory(storyPath);
-        await appendToSection(updatedStory, 'Research', '\n## Web Research Findings\n\n' + webResearchContent);
+        await appendToSection(updatedStory, 'Research', '\n## Web Research Findings\n\n' + sanitizedWebResearch);
         changesMade.push('Added web research findings');
       } else {
         getLogger().info('web-research', 'Web research returned empty - tools may be unavailable');
@@ -207,46 +331,19 @@ export function shouldPerformWebResearch(story: Story, codebaseContext: string):
   const combinedText = `${title} ${content}`;
 
   // Skip if purely internal keywords are dominant
-  const internalKeywords = [
-    'refactor internal',
-    'move function',
-    'rename variable',
-    'rename function',
-    'move utility',
-    'internal refactor',
-    'move code',
-    'reorganize internal',
-  ];
-
-  for (const keyword of internalKeywords) {
+  for (const keyword of WEB_RESEARCH_INTERNAL_KEYWORDS) {
     if (combinedText.includes(keyword)) {
-      getLogger().info('web-research', `Skipping web research: purely internal topic detected (${keyword})`);
+      // Sanitize keyword for logging (prevent log injection)
+      getLogger().info('web-research', `Skipping web research: purely internal topic detected (${sanitizeForLogging(keyword)})`);
       return false;
     }
   }
 
   // Trigger if external library/API/framework mentioned
-  const externalKeywords = [
-    'integrate',
-    'api',
-    'library',
-    'framework',
-    'best practices',
-    'npm package',
-    'external',
-    'third-party',
-    'sdk',
-    'documentation',
-    'webhook',
-    'rest api',
-    'graphql',
-    'oauth',
-    'authentication provider',
-  ];
-
-  for (const keyword of externalKeywords) {
+  for (const keyword of WEB_RESEARCH_EXTERNAL_KEYWORDS) {
     if (combinedText.includes(keyword)) {
-      getLogger().info('web-research', `Web research triggered: external keyword detected (${keyword})`);
+      // Sanitize keyword for logging (prevent log injection)
+      getLogger().info('web-research', `Web research triggered: external keyword detected (${sanitizeForLogging(keyword)})`);
       return true;
     }
   }
@@ -264,14 +361,159 @@ export function shouldPerformWebResearch(story: Story, codebaseContext: string):
 }
 
 /**
+ * Maximum input length to prevent DoS attacks.
+ * Set to 10,000 chars to accommodate long research findings
+ * while preventing memory exhaustion from malicious inputs.
+ */
+const MAX_INPUT_LENGTH = 10000;
+
+/**
+ * Maximum log string length for readability and security.
+ * Prevents log injection and maintains log file readability.
+ */
+const MAX_LOG_LENGTH = 200;
+
+/**
+ * Sanitize web research content for safe storage and display.
+ * Removes ANSI escape sequences, control characters, and potential injection vectors.
+ *
+ * Security rationale: Web research content comes from external sources (LLM, web tools)
+ * and must be sanitized before storage to prevent:
+ * - ANSI injection (terminal control sequence attacks)
+ * - Markdown injection (malicious formatting)
+ * - Control character injection (null bytes, bell characters, etc.)
+ *
+ * @param text - Raw web research content from external source
+ * @returns Sanitized text safe for storage in markdown files
+ */
+export function sanitizeWebResearchContent(text: string): string {
+  if (!text) return '';
+
+  // Enforce maximum length to prevent DoS
+  if (text.length > MAX_INPUT_LENGTH) {
+    text = text.substring(0, MAX_INPUT_LENGTH);
+  }
+
+  // Remove ANSI CSI sequences (colors, cursor movement) - e.g., \x1B[31m
+  text = text.replace(/\x1B\[[^a-zA-Z\x1B]*[a-zA-Z]?/g, '');
+
+  // Remove OSC sequences (hyperlinks, window titles) - terminated by BEL (\x07) or ST (\x1B\\)
+  text = text.replace(/\x1B\][^\x07]*\x07/g, '');
+  text = text.replace(/\x1B\][^\x1B]*\x1B\\/g, '');
+
+  // Remove any remaining standalone escape characters
+  text = text.replace(/\x1B/g, '');
+
+  // Remove control characters (0x00-0x08, 0x0B-0x0C, 0x0E-0x1F, 0x7F-0x9F)
+  // eslint-disable-next-line no-control-regex
+  text = text.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+
+  // Normalize Unicode to prevent homograph attacks and ensure consistent representation
+  text = text.normalize('NFC');
+
+  // Validate markdown structure - escape dangerous patterns
+  // Triple backticks could be used to break out of code blocks
+  text = text.replace(/```/g, '\\`\\`\\`');
+
+  return text;
+}
+
+/**
+ * Sanitize text for logging to prevent log injection attacks.
+ * Replaces newlines with spaces and truncates for readability.
+ *
+ * Security rationale: Log injection attacks use newlines to inject fake log entries.
+ * By replacing newlines with spaces, we ensure each log() call produces exactly one log line.
+ *
+ * @param text - Raw text that will be logged
+ * @returns Sanitized text safe for logging (single line, truncated)
+ */
+export function sanitizeForLogging(text: string): string {
+  if (!text) return '';
+
+  // Remove ANSI escape sequences
+  text = text.replace(/\x1B\[[^a-zA-Z\x1B]*[a-zA-Z]?/g, '');
+  text = text.replace(/\x1B\][^\x07]*\x07/g, '');
+  text = text.replace(/\x1B\][^\x1B]*\x1B\\/g, '');
+  text = text.replace(/\x1B/g, '');
+
+  // Replace newlines and carriage returns with spaces to prevent log injection
+  text = text.replace(/[\n\r]/g, ' ');
+
+  // Truncate to reasonable length for logs
+  if (text.length > MAX_LOG_LENGTH) {
+    text = text.substring(0, MAX_LOG_LENGTH) + '...';
+  }
+
+  return text.trim();
+}
+
+/**
+ * Sanitize codebase context before including in LLM prompts.
+ * Escapes dangerous patterns that could cause prompt injection.
+ *
+ * Security rationale: Codebase files may contain malicious content from:
+ * - Compromised dependencies
+ * - Malicious commits
+ * - Untrusted contributors
+ *
+ * We must prevent prompt injection by escaping patterns that could:
+ * - Terminate the prompt early (triple backticks)
+ * - Inject commands or instructions
+ * - Confuse the LLM's understanding of structure
+ *
+ * @param text - Raw codebase context
+ * @returns Sanitized text safe for LLM prompts
+ */
+export function sanitizeCodebaseContext(text: string): string {
+  if (!text) return '';
+
+  // Remove ANSI escape sequences
+  text = text.replace(/\x1B\[[^a-zA-Z\x1B]*[a-zA-Z]?/g, '');
+  text = text.replace(/\x1B\][^\x07]*\x07/g, '');
+  text = text.replace(/\x1B\][^\x1B]*\x1B\\/g, '');
+  text = text.replace(/\x1B/g, '');
+
+  // Escape triple backticks to prevent breaking out of code blocks
+  text = text.replace(/```/g, '\\`\\`\\`');
+
+  // Validate UTF-8 boundaries at truncation points
+  // If we need to truncate, ensure we don't split multi-byte characters
+  if (text.length > MAX_INPUT_LENGTH) {
+    // Use substring which is UTF-16 safe, then validate
+    let truncated = text.substring(0, MAX_INPUT_LENGTH);
+
+    // Check if we split a surrogate pair (0xD800-0xDFFF)
+    const lastCharCode = truncated.charCodeAt(truncated.length - 1);
+    if (lastCharCode >= 0xD800 && lastCharCode <= 0xDFFF) {
+      // We split a surrogate pair, remove the incomplete character
+      truncated = truncated.substring(0, truncated.length - 1);
+    }
+
+    text = truncated;
+  }
+
+  return text;
+}
+
+/**
  * Parse FAR evaluation from web research finding text.
  * Expected format from LLM:
  * **FAR Score**: Factuality: 5, Actionability: 4, Relevance: 5
  * **Justification**: Official documentation provides...
  *
- * Returns a default low score if parsing fails.
+ * Returns default scores (2, 2, 2) with parsingSucceeded: false if parsing fails.
+ * Default of 2 (rather than 3) indicates uncertainty rather than average quality.
+ *
+ * @param finding - Web research finding text to parse
+ * @returns FARScore with parsed or default values and parsing status
  */
 export function evaluateFAR(finding: string): FARScore {
+  // Enforce maximum length to prevent ReDoS attacks
+  if (finding.length > MAX_INPUT_LENGTH) {
+    finding = finding.substring(0, MAX_INPUT_LENGTH);
+  }
+
   try {
     // Look for FAR score pattern
     const scoreMatch = finding.match(/\*\*FAR Score\*\*:.*?Factuality:\s*(\d+).*?Actionability:\s*(\d+).*?Relevance:\s*(\d+)/i);
@@ -285,25 +527,40 @@ export function evaluateFAR(finding: string): FARScore {
 
       // Validate scores are in range 1-5
       if ([factuality, actionability, relevance].every(s => s >= 1 && s <= 5)) {
-        return { factuality, actionability, relevance, justification };
+        return {
+          factuality,
+          actionability,
+          relevance,
+          justification,
+          parsingSucceeded: true,
+        };
+      } else {
+        getLogger().warn('web-research', 'FAR scores out of valid range (1-5), using defaults');
       }
+    } else if (scoreMatch && !justificationMatch) {
+      getLogger().warn('web-research', 'FAR justification missing, using defaults');
+    } else if (!scoreMatch && justificationMatch) {
+      getLogger().warn('web-research', 'FAR scores not found in finding, using defaults');
+    } else {
+      getLogger().warn('web-research', 'FAR scores and justification not found in finding, using defaults');
     }
 
-    // If parsing failed, return a default low score
-    getLogger().warn('web-research', 'Failed to parse FAR scores from finding, using defaults');
+    // If parsing failed, return default scores (2/5 indicates uncertainty)
     return {
-      factuality: 3,
-      actionability: 3,
-      relevance: 3,
-      justification: 'Unable to parse FAR evaluation from finding',
+      factuality: 2,
+      actionability: 2,
+      relevance: 2,
+      justification: 'FAR scores could not be parsed from finding. Default scores (2/5) applied.',
+      parsingSucceeded: false,
     };
   } catch (error) {
     getLogger().error('web-research', 'Error parsing FAR scores', { error });
     return {
-      factuality: 3,
-      actionability: 3,
-      relevance: 3,
+      factuality: 2,
+      actionability: 2,
+      relevance: 2,
       justification: 'Error parsing FAR evaluation',
+      parsingSucceeded: false,
     };
   }
 }
@@ -322,79 +579,12 @@ async function performWebResearch(
   logger.info('web-research', 'Starting web research phase', { storyId: story.frontmatter.id });
 
   try {
-    const webResearchPrompt = `You are performing supplementary web research for a software development story.
-
-**Story Title**: ${story.frontmatter.title}
-
-**Story Content**:
-${story.content}
-
-**Codebase Context** (already analyzed):
-${codebaseContext.substring(0, 2000)}... [truncated]
-
----
-
-## Web Research Instructions
-
-You have access to these web research tools:
-
-1. **Context7** (if available) - Use FIRST for library/framework documentation
-   - Best for: npm packages, Python libraries, popular frameworks
-   - Example: "Search Context7 for React Query documentation on data fetching"
-
-2. **WebSearch** - Use for community knowledge and best practices
-   - Best for: Stack Overflow patterns, blog posts, tutorials
-   - Example: "Search the web for TypeScript error handling best practices"
-
-3. **WebFetch** - Use to read specific authoritative URLs
-   - Best for: Official documentation, specific articles
-   - Example: "Fetch https://docs.anthropic.com/claude/reference"
-
-## Research Strategy
-
-- Try Context7 FIRST for any npm packages or popular frameworks mentioned in the story
-- Fall back to WebSearch for general solutions and community patterns
-- Use WebFetch only when you have specific authoritative URLs to read
-- Limit research to 3-5 high-quality sources to avoid information overload
-- Focus on actionable information that directly addresses the story requirements
-
-## Output Format
-
-For EACH finding, provide:
-
-### [Topic Name]
-**Source**: [Context7 - Library Name] or [Web Search Result] or [URL]
-**FAR Score**: Factuality: [1-5], Actionability: [1-5], Relevance: [1-5]
-**Justification**: [Why these scores? How does this help the story?]
-
-[Finding content with code examples, patterns, or instructions]
-
----
-
-## FAR Scale Definitions
-
-**Factuality (1-5)**: How accurate and verifiable is the information?
-- 1: Unverified/speculative
-- 3: Community knowledge (Stack Overflow, blogs)
-- 5: Official documentation or peer-reviewed
-
-**Actionability (1-5)**: Can this be directly applied to the task?
-- 1: Abstract concepts only
-- 3: General patterns or approaches
-- 5: Copy-paste code examples or step-by-step instructions
-
-**Relevance (1-5)**: How closely does this match the story requirements?
-- 1: Tangentially related
-- 3: Related but not specific to story
-- 5: Directly addresses a story acceptance criterion
-
-## Important Notes
-
-- If web tools are unavailable (offline, not configured), simply state: "Web research tools unavailable - skipping web research"
-- If a finding contradicts patterns in the codebase context, note the discrepancy and defer to local patterns
-- Focus on NEW information not already present in codebase analysis
-
-Begin web research now. Provide 3-5 high-quality findings with FAR evaluations.`;
+    const sanitizedContext = sanitizeCodebaseContext(codebaseContext.substring(0, 2000));
+    const webResearchPrompt = WEB_RESEARCH_PROMPT_TEMPLATE(
+      story.frontmatter.title,
+      story.content,
+      sanitizedContext
+    );
 
     const webResearchResult = await runAgentQuery({
       prompt: webResearchPrompt,

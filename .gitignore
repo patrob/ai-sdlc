@@ -24,6 +24,9 @@ Thumbs.db
 # Lock files (proper-lockfile)
 *.lock
 
+# Worktrees (parallel story execution)
+.ai-sdlc/worktrees/
+
 # Logs
 *.log
 npm-debug.log*

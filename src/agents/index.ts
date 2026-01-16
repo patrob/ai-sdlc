@@ -5,3 +5,10 @@ export { runPlanningAgent } from './planning.js';
 export { runImplementationAgent } from './implementation.js';
 export { runReviewAgent, createPullRequest } from './review.js';
 export { runReworkAgent, determineTargetPhase, packageReworkContext } from './rework.js';
+export {
+  runSingleTaskAgent,
+  buildTaskPrompt,
+  parseTaskResult,
+  verifyChanges,
+  detectScopeViolation,
+} from './single-task.js';

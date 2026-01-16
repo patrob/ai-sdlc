@@ -8,6 +8,7 @@ import { getLogger } from '../core/logger.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from '../core/config.js';
 import { Story, AgentResult, ReviewResult, ReviewIssue, ReviewIssueSeverity, ReviewDecision, ReviewSeverity, ReviewAttempt, Config, TDDTestCycle } from '../types/index.js';
 import { sanitizeInput, truncateText } from '../cli/formatting.js';
+import { detectTestDuplicationPatterns } from './test-pattern-detector.js';
 
 /**
  * Security: Validate Git branch name to prevent command injection
@@ -803,6 +804,25 @@ export async function runReviewAgent(
 
     // Verification passed - proceed with all reviews in parallel, passing verification context
     changesMade.push('Verification passed - proceeding with code/security/PO reviews');
+
+    // Run test pattern detection if enabled
+    let testPatternIssues: ReviewIssue[] = [];
+    if (config.reviewConfig.detectTestAntipatterns !== false) {
+      try {
+        changesMade.push('Running test anti-pattern detection...');
+        testPatternIssues = await detectTestDuplicationPatterns(workingDir);
+        if (testPatternIssues.length > 0) {
+          changesMade.push(`Detected ${testPatternIssues.length} test anti-pattern(s)`);
+        } else {
+          changesMade.push('No test anti-patterns detected');
+        }
+      } catch (error) {
+        // Don't fail review if detection errors - just log and continue
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        changesMade.push(`Test pattern detection error: ${errorMsg}`);
+      }
+    }
+
     const [codeReview, securityReview, poReview] = await Promise.all([
       runSubReview(story, CODE_REVIEW_PROMPT, 'Code Review', workingDir, verificationContext),
       runSubReview(story, SECURITY_REVIEW_PROMPT, 'Security Review', workingDir, verificationContext),
@@ -826,6 +846,12 @@ export async function runReviewAgent(
       } else {
         changesMade.push('TDD validation: All cycles completed correctly');
       }
+    }
+
+    // Add test pattern issues to code result (they're code-quality related)
+    if (testPatternIssues.length > 0) {
+      codeResult.issues.push(...testPatternIssues);
+      codeResult.passed = false;
     }
 
     // Add verification issues to code result (they're code-quality related)

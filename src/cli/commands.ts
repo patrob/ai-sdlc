@@ -642,66 +642,82 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
   if (shouldUseWorktree && options.story && targetStory) {
     const workingDir = path.dirname(sdlcRoot);
 
-    // Resolve worktree base path from config
-    let resolvedBasePath: string;
-    try {
-      resolvedBasePath = validateWorktreeBasePath(worktreeConfig.basePath, workingDir);
-    } catch (error) {
-      console.log(c.error(`Configuration Error: ${error instanceof Error ? error.message : String(error)}`));
-      console.log(c.dim('Fix worktree.basePath in .ai-sdlc.json or remove it to use default location'));
-      return;
-    }
-
-    const worktreeService = new GitWorktreeService(workingDir, resolvedBasePath);
-
-    // Validate git state for worktree creation
-    const validation = worktreeService.validateCanCreateWorktree();
-    if (!validation.valid) {
-      console.log(c.error(`Error: ${validation.error}`));
-      return;
-    }
-
-    try {
-      // Detect base branch
-      const baseBranch = worktreeService.detectBaseBranch();
-
-      // Create worktree
+    // Check if story already has an existing worktree (resume scenario)
+    const existingWorktreePath = targetStory.frontmatter.worktree_path;
+    if (existingWorktreePath && fs.existsSync(existingWorktreePath)) {
+      // Reuse existing worktree
       originalCwd = process.cwd();
-      worktreePath = worktreeService.create({
-        storyId: targetStory.frontmatter.id,
-        slug: targetStory.slug,
-        baseBranch,
-      });
-
-      // Change to worktree directory BEFORE updating story
-      // This ensures story updates happen in the worktree, not on main
-      // (allows parallel story launches from clean main)
+      worktreePath = existingWorktreePath;
       process.chdir(worktreePath);
-
-      // Recalculate sdlcRoot for the worktree context
       sdlcRoot = getSdlcRoot();
       worktreeCreated = true;
 
-      // Now update story frontmatter with worktree path (writes to worktree copy)
-      // Re-resolve target story in worktree context
-      const worktreeStory = findStoryById(sdlcRoot, targetStory.frontmatter.id);
-      if (worktreeStory) {
-        const updatedStory = await updateStoryField(worktreeStory, 'worktree_path', worktreePath);
-        await writeStory(updatedStory);
-        // Update targetStory reference for downstream use
-        targetStory = updatedStory;
-      }
-
-      console.log(c.success(`✓ Created worktree at: ${worktreePath}`));
+      console.log(c.success(`✓ Resuming in existing worktree: ${worktreePath}`));
       console.log(c.dim(`  Branch: ai-sdlc/${targetStory.frontmatter.id}-${targetStory.slug}`));
       console.log();
-    } catch (error) {
-      // Restore directory on worktree creation failure
-      if (originalCwd) {
-        process.chdir(originalCwd);
+    } else {
+      // Create new worktree
+      // Resolve worktree base path from config
+      let resolvedBasePath: string;
+      try {
+        resolvedBasePath = validateWorktreeBasePath(worktreeConfig.basePath, workingDir);
+      } catch (error) {
+        console.log(c.error(`Configuration Error: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(c.dim('Fix worktree.basePath in .ai-sdlc.json or remove it to use default location'));
+        return;
       }
-      console.log(c.error(`Failed to create worktree: ${error instanceof Error ? error.message : String(error)}`));
-      return;
+
+      const worktreeService = new GitWorktreeService(workingDir, resolvedBasePath);
+
+      // Validate git state for worktree creation
+      const validation = worktreeService.validateCanCreateWorktree();
+      if (!validation.valid) {
+        console.log(c.error(`Error: ${validation.error}`));
+        return;
+      }
+
+      try {
+        // Detect base branch
+        const baseBranch = worktreeService.detectBaseBranch();
+
+        // Create worktree
+        originalCwd = process.cwd();
+        worktreePath = worktreeService.create({
+          storyId: targetStory.frontmatter.id,
+          slug: targetStory.slug,
+          baseBranch,
+        });
+
+        // Change to worktree directory BEFORE updating story
+        // This ensures story updates happen in the worktree, not on main
+        // (allows parallel story launches from clean main)
+        process.chdir(worktreePath);
+
+        // Recalculate sdlcRoot for the worktree context
+        sdlcRoot = getSdlcRoot();
+        worktreeCreated = true;
+
+        // Now update story frontmatter with worktree path (writes to worktree copy)
+        // Re-resolve target story in worktree context
+        const worktreeStory = findStoryById(sdlcRoot, targetStory.frontmatter.id);
+        if (worktreeStory) {
+          const updatedStory = await updateStoryField(worktreeStory, 'worktree_path', worktreePath);
+          await writeStory(updatedStory);
+          // Update targetStory reference for downstream use
+          targetStory = updatedStory;
+        }
+
+        console.log(c.success(`✓ Created worktree at: ${worktreePath}`));
+        console.log(c.dim(`  Branch: ai-sdlc/${targetStory.frontmatter.id}-${targetStory.slug}`));
+        console.log();
+      } catch (error) {
+        // Restore directory on worktree creation failure
+        if (originalCwd) {
+          process.chdir(originalCwd);
+        }
+        console.log(c.error(`Failed to create worktree: ${error instanceof Error ? error.message : String(error)}`));
+        return;
+      }
     }
   }
 

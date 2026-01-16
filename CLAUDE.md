@@ -79,6 +79,7 @@ case 'rework':
 - Run `npm run build` to verify TypeScript compilation succeeds
 - Do NOT create shell scripts for manual testing - use vitest instead
 - Do NOT test frameworks or SDKs - trust that they work as documented (e.g., don't test that the Claude Agent SDK discovers CLAUDE.md)
+- We also do not test SYSTEM capabilities (i.e. the file system)
 
 ### Test Pyramid
 Follow the Testing Pyramid: **many unit tests, fewer integration tests, fewest E2E tests**.

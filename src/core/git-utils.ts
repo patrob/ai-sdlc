@@ -16,7 +16,18 @@ export interface GitValidationResult {
   currentBranch?: string;
 }
 
-export function isCleanWorkingDirectory(workingDir: string): boolean {
+/**
+ * Options for checking working directory cleanliness
+ */
+export interface CleanWorkingDirectoryOptions {
+  /** Glob patterns to exclude from the check (e.g., '.ai-sdlc/**') */
+  excludePatterns?: string[];
+}
+
+export function isCleanWorkingDirectory(
+  workingDir: string,
+  options: CleanWorkingDirectoryOptions = {}
+): boolean {
   const result = spawnSync('git', ['status', '--porcelain'], {
     cwd: workingDir,
     encoding: 'utf-8',
@@ -29,7 +40,61 @@ export function isCleanWorkingDirectory(workingDir: string): boolean {
   }
 
   const output = result.stdout?.toString() || '';
-  return output.trim() === '';
+  // Only trim trailing whitespace - leading spaces are significant in git status format
+  const trimmedOutput = output.trimEnd();
+  if (trimmedOutput === '') {
+    return true;
+  }
+
+  // If no exclude patterns, any output means not clean
+  if (!options.excludePatterns || options.excludePatterns.length === 0) {
+    return false;
+  }
+
+  // Filter out excluded paths
+  // Note: Don't trim entire output as leading spaces are part of git status format
+  const lines = trimmedOutput.split('\n').filter((line) => line.length >= 3);
+  const nonExcludedChanges = lines.filter((line) => {
+    // Git status format: XY filename or XY "filename" for quoted paths
+    // The status is the first 2 characters, then a space, then the path
+    const filePath = line.substring(3).replace(/^"(.*)"$/, '$1');
+
+    // Skip empty file paths (malformed lines)
+    if (!filePath) {
+      return false;
+    }
+
+    // Check if this path matches any exclude pattern
+    for (const pattern of options.excludePatterns!) {
+      if (matchesGlobPattern(filePath, pattern)) {
+        return false; // Exclude this change
+      }
+    }
+    return true; // Keep this change
+  });
+
+  return nonExcludedChanges.length === 0;
+}
+
+/**
+ * Simple glob pattern matching for git paths
+ * Supports ** for any depth and * for single directory segment
+ */
+function matchesGlobPattern(filePath: string, pattern: string): boolean {
+  // Normalize path separators
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  const normalizedPattern = pattern.replace(/\\/g, '/');
+
+  // Convert glob pattern to regex
+  // .ai-sdlc/** should match .ai-sdlc/anything
+  const regexPattern = normalizedPattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape special regex chars (except * and ?)
+    .replace(/\*\*/g, '<<<DOUBLESTAR>>>') // Temporarily mark **
+    .replace(/\*/g, '[^/]*') // * matches anything except /
+    .replace(/<<<DOUBLESTAR>>>/g, '.*'); // ** matches anything including /
+
+  const regex = new RegExp(`^${regexPattern}$`);
+  return regex.test(normalizedPath);
 }
 
 export function hasUntrackedFiles(workingDir: string): boolean {

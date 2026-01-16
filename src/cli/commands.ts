@@ -146,9 +146,66 @@ export async function status(options?: { active?: boolean }): Promise<void> {
 }
 
 /**
+ * Validate file path for security (path traversal, symlinks, allowed directories)
+ */
+function validateFilePath(filePath: string): void {
+  const resolvedPath = path.resolve(filePath);
+  const allowedDir = path.resolve(process.cwd());
+
+  // Check path traversal: resolved path must be within current directory
+  if (!resolvedPath.startsWith(allowedDir + path.sep) && resolvedPath !== allowedDir) {
+    throw new Error('Security: File path must be within current directory (path traversal detected)');
+  }
+
+  // Check if file exists before checking if it's a symlink
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`File not found: ${path.basename(filePath)}`);
+  }
+
+  // Check for symbolic links (security risk)
+  const stats = fs.lstatSync(resolvedPath);
+  if (stats.isSymbolicLink()) {
+    throw new Error('Security: Symbolic links are not allowed');
+  }
+}
+
+/**
+ * Validate file extension against whitelist
+ */
+function validateFileExtension(filePath: string): void {
+  const allowedExtensions = ['.md', '.txt', '.markdown'];
+  const ext = path.extname(filePath).toLowerCase();
+
+  if (!allowedExtensions.includes(ext)) {
+    throw new Error(`Invalid file type: only ${allowedExtensions.join(', ')} files are allowed`);
+  }
+}
+
+/**
+ * Validate file size (10MB maximum)
+ */
+function validateFileSize(filePath: string): void {
+  const maxSize = 10 * 1024 * 1024; // 10MB
+  const stats = fs.statSync(filePath);
+
+  if (stats.size > maxSize) {
+    const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
+    throw new Error(`File too large: ${sizeMB}MB (maximum 10MB)`);
+  }
+}
+
+/**
+ * Sanitize file content (strip null bytes, validate UTF-8)
+ */
+function sanitizeFileContent(content: string): string {
+  // Strip null bytes that could truncate strings
+  return content.replace(/\0/g, '');
+}
+
+/**
  * Add a new story to the backlog
  */
-export async function add(title: string): Promise<void> {
+export async function add(title?: string, options?: { file?: string }): Promise<void> {
   const spinner = ora('Creating story...').start();
 
   try {
@@ -161,11 +218,91 @@ export async function add(title: string): Promise<void> {
       return;
     }
 
-    const story = await createStory(title, sdlcRoot);
+    // Validate that either title or file is provided (not both, not neither)
+    if (!title && !options?.file) {
+      spinner.fail('Error: Must provide either a title or --file option');
+      console.log(c.dim('Usage:'));
+      console.log(c.dim('  ai-sdlc add "Story Title"'));
+      console.log(c.dim('  ai-sdlc add --file story.md'));
+      process.exit(1);
+    }
+
+    if (title && options?.file) {
+      spinner.fail('Error: Cannot provide both title and --file option');
+      console.log(c.dim('Use either:'));
+      console.log(c.dim('  ai-sdlc add "Story Title"'));
+      console.log(c.dim('  ai-sdlc add --file story.md'));
+      process.exit(1);
+    }
+
+    let storyTitle: string;
+    let storyContent: string | undefined;
+
+    // Handle file input with security validation
+    if (options?.file) {
+      spinner.text = 'Reading file...';
+
+      const filePath = options.file;
+
+      try {
+        // Security validations
+        validateFilePath(filePath);
+        validateFileExtension(filePath);
+
+        // Read file (includes existence check via fs.readFileSync)
+        const resolvedPath = path.resolve(filePath);
+
+        // Validate file size before reading
+        validateFileSize(resolvedPath);
+
+        // Read and sanitize content
+        const rawContent = fs.readFileSync(resolvedPath, 'utf-8');
+        storyContent = sanitizeFileContent(rawContent);
+
+        // Extract title from content or use filename
+        const { extractTitleFromContent } = await import('../core/story.js');
+        const extractedTitle = extractTitleFromContent(storyContent);
+
+        if (extractedTitle) {
+          storyTitle = extractedTitle;
+        } else {
+          // Fall back to filename without extension
+          storyTitle = path.basename(filePath, path.extname(filePath));
+        }
+
+        spinner.text = `Creating story from ${path.basename(filePath)}...`;
+      } catch (error) {
+        spinner.fail('Failed to read file');
+
+        if (error instanceof Error) {
+          // Sanitize error messages to avoid leaking system paths
+          if (error.message.startsWith('Security:') || error.message.startsWith('Invalid file type:') || error.message.startsWith('File too large:')) {
+            console.log(c.error(error.message));
+          } else if (error.message.includes('ENOENT')) {
+            console.log(c.error(`File not found: ${path.basename(filePath)}`));
+          } else if (error.message.includes('EACCES') || error.message.includes('EPERM')) {
+            console.log(c.error(`Permission denied: ${path.basename(filePath)}`));
+          } else {
+            console.log(c.error(`Unable to read file: ${path.basename(filePath)}`));
+          }
+        }
+        process.exit(1);
+      }
+    } else {
+      // Traditional title-only input
+      storyTitle = title!;
+    }
+
+    // Create the story
+    const story = await createStory(storyTitle, sdlcRoot, {}, storyContent);
 
     spinner.succeed(c.success(`Created: ${story.path}`));
     console.log(c.dim(`  ID: ${story.frontmatter.id}`));
+    console.log(c.dim(`  Title: ${story.frontmatter.title}`));
     console.log(c.dim(`  Slug: ${story.slug}`));
+    if (options?.file) {
+      console.log(c.dim(`  Source: ${path.basename(options.file)}`));
+    }
     console.log();
     console.log(c.info('Next step:'), `ai-sdlc run`);
   } catch (error) {

@@ -1,8 +1,8 @@
-import { execSync, spawn } from 'child_process';
+import { execSync, spawn, spawnSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
-import { parseStory, writeStory, updateStoryStatus, appendToSection, updateStoryField, isAtMaxRetries, appendReviewHistory, snapshotMaxRetries, getEffectiveMaxRetries } from '../core/story.js';
+import { parseStory, writeStory, updateStoryStatus, appendToSection, updateStoryField, isAtMaxRetries, appendReviewHistory, snapshotMaxRetries, getEffectiveMaxRetries, getEffectiveMaxImplementationRetries } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from '../core/config.js';
@@ -537,6 +537,44 @@ function formatIssuesForDisplay(issues: ReviewIssue[]): string {
 }
 
 /**
+ * Get source code changes from git diff
+ *
+ * Returns list of source files that have been modified (excludes tests and story files).
+ * Uses spawnSync for security (prevents command injection).
+ *
+ * @param workingDir - Working directory to run git diff in
+ * @returns Array of source file paths that have changed, or ['unknown'] if git fails
+ */
+export function getSourceCodeChanges(workingDir: string): string[] {
+  try {
+    // Security: Use spawnSync with explicit args (not shell) to prevent injection
+    const result = spawnSync('git', ['diff', '--name-only', 'HEAD~1'], {
+      cwd: workingDir,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (result.status !== 0) {
+      // Git command failed - fail open (assume changes exist)
+      return ['unknown'];
+    }
+
+    const output = result.stdout.toString();
+
+    return output
+      .split('\n')
+      .filter(f => f.trim())
+      .filter(f => /\.(ts|tsx|js|jsx)$/.test(f))      // Source files only
+      .filter(f => !f.includes('.test.'))              // Exclude test files
+      .filter(f => !f.includes('.spec.'))              // Exclude spec files
+      .filter(f => !f.startsWith('.ai-sdlc/'));        // Exclude story files
+  } catch {
+    // If git diff fails, assume there are changes (fail open, not closed)
+    return ['unknown'];
+  }
+}
+
+/**
  * Generate executive summary from review issues (1-3 sentences)
  *
  * Prioritizes by severity: blocker > critical > major > minor
@@ -728,6 +766,73 @@ export async function runReviewAgent(
         feedback: errorMsg,
       };
     }
+
+    // PRE-CHECK GATE: Detect documentation-only implementations before running expensive LLM reviews
+    const sourceChanges = getSourceCodeChanges(workingDir);
+
+    if (sourceChanges.length === 0) {
+      // No source code changes detected - check if we can recover
+      const retryCount = story.frontmatter.implementation_retry_count || 0;
+      const maxRetries = getEffectiveMaxImplementationRetries(story, config);
+
+      if (retryCount < maxRetries) {
+        // RECOVERABLE: Trigger implementation recovery
+        logger.warn('review', 'No source code changes detected - triggering implementation recovery', {
+          storyId: story.frontmatter.id,
+          retryCount,
+          maxRetries,
+        });
+
+        await updateStoryField(story, 'implementation_complete', false);
+        await updateStoryField(story, 'last_restart_reason', 'No source code changes detected. Implementation wrote documentation only.');
+
+        return {
+          success: true,
+          story: parseStory(storyPath),
+          changesMade: ['Detected documentation-only implementation', 'Triggered implementation recovery'],
+          passed: false,
+          decision: ReviewDecision.RECOVERY,
+          reviewType: 'pre-check' as any,
+          issues: [{
+            severity: 'critical',
+            category: 'implementation',
+            description: 'No source code modifications detected. Re-running implementation phase.',
+          }],
+          feedback: 'Implementation recovery triggered - no source changes found.',
+        };
+      } else {
+        // NON-RECOVERABLE: Max retries reached
+        const maxRetriesDisplay = Number.isFinite(maxRetries) ? maxRetries : '∞';
+        logger.error('review', 'No source code changes detected and max implementation retries reached', {
+          storyId: story.frontmatter.id,
+          retryCount,
+          maxRetries,
+        });
+
+        return {
+          success: true,
+          story: parseStory(storyPath),
+          changesMade: ['Detected documentation-only implementation', 'Max retries reached'],
+          passed: false,
+          decision: ReviewDecision.FAILED,
+          severity: ReviewSeverity.CRITICAL,
+          reviewType: 'pre-check' as any,
+          issues: [{
+            severity: 'blocker',
+            category: 'implementation',
+            description: `Implementation phase wrote documentation/planning only - no source code was modified. This has occurred ${retryCount} time(s) (max: ${maxRetriesDisplay}). Manual intervention required.`,
+            suggestedFix: 'Review the story requirements and implementation plan. The agent may be confused about what needs to be built. Consider simplifying the story or providing more explicit guidance.',
+          }],
+          feedback: 'Implementation failed to produce code changes after multiple attempts.',
+        };
+      }
+    }
+
+    // Source changes exist - proceed with normal review flow
+    logger.info('review', 'Source code changes detected - proceeding with verification', {
+      storyId: story.frontmatter.id,
+      fileCount: sourceChanges.length,
+    });
 
     // Run build and tests BEFORE reviews (async with progress)
     changesMade.push('Running build and test verification...');

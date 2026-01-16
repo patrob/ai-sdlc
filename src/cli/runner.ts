@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { getSdlcRoot, loadConfig, isStageGateEnabled } from '../core/config.js';
 import { assessState, kanbanExists } from '../core/kanban.js';
-import { parseStory, resetRPIVCycle, markStoryComplete, updateStoryStatus, isAtMaxRetries, getStory } from '../core/story.js';
+import { parseStory, resetRPIVCycle, markStoryComplete, updateStoryStatus, isAtMaxRetries, getStory, incrementImplementationRetryCount, updateStoryField } from '../core/story.js';
 import { Action, StateAssessment, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
 import { runRefinementAgent } from '../agents/refinement.js';
 import { runResearchAgent } from '../agents/research.js';
@@ -292,6 +292,20 @@ export class WorkflowRunner {
         await resetRPIVCycle(story, reviewResult.feedback);
         console.log(c.info('RPIV cycle reset. Planning phase will restart on next run.'));
       }
+    } else if (reviewResult.decision === ReviewDecision.RECOVERY) {
+      // Implementation recovery: reset implementation_complete and increment implementation retry count
+      // This is distinct from REJECTED which resets the entire RPIV cycle
+      const retryCount = story.frontmatter.implementation_retry_count || 0;
+      console.log(c.warning(`\n🔄 Implementation recovery triggered (attempt ${retryCount + 1})`));
+      console.log(c.dim(`  Reason: ${story.frontmatter.last_restart_reason || 'No source code changes detected'}`));
+
+      // Reset implementation_complete flag (already done by review agent, but refresh story state)
+      story = parseStory(storyPath);
+
+      // Increment implementation retry count
+      await incrementImplementationRetryCount(story);
+
+      console.log(c.info('Implementation phase will re-run on next execution.'));
     } else if (reviewResult.decision === ReviewDecision.FAILED) {
       // Review agent failed - don't increment retry count
       console.log(c.error(`\n❌ Review process failed: ${reviewResult.error}`));

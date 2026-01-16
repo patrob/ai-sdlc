@@ -35,6 +35,7 @@ export enum ReviewDecision {
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
   FAILED = 'FAILED',
+  RECOVERY = 'RECOVERY',
 }
 
 /**

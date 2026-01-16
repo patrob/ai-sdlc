@@ -1,15 +1,16 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
-import { runReviewAgent, validateTDDCycles, generateTDDIssues, generateReviewSummary, removeUnfinishedCheckboxes, getStoryFileURL, formatPRDescription, truncatePRBody, createPullRequest } from './review.js';
+import { runReviewAgent, validateTDDCycles, generateTDDIssues, generateReviewSummary, removeUnfinishedCheckboxes, getStoryFileURL, formatPRDescription, truncatePRBody, createPullRequest, getSourceCodeChanges } from './review.js';
 import * as storyModule from '../core/story.js';
 import * as clientModule from '../core/client.js';
 import * as configModule from '../core/config.js';
 import { ReviewDecision, ReviewSeverity, Config, TDDTestCycle, ReviewIssue, Story } from '../types/index.js';
-import { spawn, execSync } from 'child_process';
+import { spawn, spawnSync, execSync } from 'child_process';
 import fs from 'fs';
 
 // Mock external dependencies
 vi.mock('child_process', () => ({
   spawn: vi.fn(),
+  spawnSync: vi.fn(),
   execSync: vi.fn(),
 }));
 vi.mock('fs');
@@ -1660,5 +1661,384 @@ describe('createPullRequest - Draft PR Support', () => {
 
       expect(result.success).toBe(true);
     });
+  });
+});
+
+describe('getSourceCodeChanges', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('should return source files from git diff output', async () => {
+    const { getSourceCodeChanges } = await import('./review.js');
+    const { spawnSync } = await import('child_process');
+
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 0,
+      stdout: 'src/core/story.ts\nsrc/agents/review.ts\n',
+      stderr: '',
+      pid: 123,
+      output: ['', 'src/core/story.ts\nsrc/agents/review.ts\n', ''],
+      signal: null,
+    } as any);
+
+    const result = getSourceCodeChanges('/test/dir');
+
+    expect(result).toEqual(['src/core/story.ts', 'src/agents/review.ts']);
+    expect(spawnSync).toHaveBeenCalledWith(
+      'git',
+      ['diff', '--name-only', 'HEAD~1'],
+      {
+        cwd: '/test/dir',
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
+  });
+
+  it('should filter out test files', async () => {
+    const { getSourceCodeChanges } = await import('./review.js');
+    const { spawnSync } = await import('child_process');
+
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 0,
+      stdout: 'src/core/story.ts\nsrc/core/story.test.ts\nsrc/agents/review.spec.ts\n',
+      stderr: '',
+      pid: 123,
+      output: ['', 'src/core/story.ts\nsrc/core/story.test.ts\nsrc/agents/review.spec.ts\n', ''],
+      signal: null,
+    } as any);
+
+    const result = getSourceCodeChanges('/test/dir');
+
+    expect(result).toEqual(['src/core/story.ts']);
+  });
+
+  it('should filter out story files', async () => {
+    const { getSourceCodeChanges } = await import('./review.js');
+    const { spawnSync } = await import('child_process');
+
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 0,
+      stdout: 'src/core/story.ts\n.ai-sdlc/stories/S-0001/story.md\n',
+      stderr: '',
+      pid: 123,
+      output: ['', 'src/core/story.ts\n.ai-sdlc/stories/S-0001/story.md\n', ''],
+      signal: null,
+    } as any);
+
+    const result = getSourceCodeChanges('/test/dir');
+
+    expect(result).toEqual(['src/core/story.ts']);
+  });
+
+  it('should handle empty git diff output', async () => {
+    const { getSourceCodeChanges } = await import('./review.js');
+    const { spawnSync } = await import('child_process');
+
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 0,
+      stdout: '',
+      stderr: '',
+      pid: 123,
+      output: ['', '', ''],
+      signal: null,
+    } as any);
+
+    const result = getSourceCodeChanges('/test/dir');
+
+    expect(result).toEqual([]);
+  });
+
+  it('should return unknown if git command fails', async () => {
+    const { getSourceCodeChanges } = await import('./review.js');
+    const { spawnSync } = await import('child_process');
+
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 1,
+      stdout: '',
+      stderr: 'fatal: not a git repository',
+      pid: 123,
+      output: ['', '', 'fatal: not a git repository'],
+      signal: null,
+    } as any);
+
+    const result = getSourceCodeChanges('/test/dir');
+
+    expect(result).toEqual(['unknown']);
+  });
+
+  it('should return unknown if git throws exception', async () => {
+    const { getSourceCodeChanges } = await import('./review.js');
+    const { spawnSync } = await import('child_process');
+
+    vi.mocked(spawnSync).mockImplementation(() => {
+      throw new Error('ENOENT: git command not found');
+    });
+
+    const result = getSourceCodeChanges('/test/dir');
+
+    expect(result).toEqual(['unknown']);
+  });
+
+  it('should only include source file extensions', async () => {
+    const { getSourceCodeChanges } = await import('./review.js');
+    const { spawnSync } = await import('child_process');
+
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 0,
+      stdout: 'src/file.ts\nsrc/file.tsx\nsrc/file.js\nsrc/file.jsx\nREADME.md\npackage.json\n',
+      stderr: '',
+      pid: 123,
+      output: ['', 'src/file.ts\nsrc/file.tsx\nsrc/file.js\nsrc/file.jsx\nREADME.md\npackage.json\n', ''],
+      signal: null,
+    } as any);
+
+    const result = getSourceCodeChanges('/test/dir');
+
+    expect(result).toEqual(['src/file.ts', 'src/file.tsx', 'src/file.js', 'src/file.jsx']);
+  });
+});
+
+describe('Pre-check Gate Logic', () => {
+  const mockStoryPath = '/test/stories/test-story.md';
+  const mockWorkingDir = '/test/project';
+
+  const mockStory = {
+    path: mockStoryPath,
+    slug: 'test-story',
+    frontmatter: {
+      id: 'test-1',
+      title: 'Test Story',
+      priority: 1,
+      status: 'in-progress' as const,
+      type: 'feature' as const,
+      created: '2024-01-01',
+      labels: [],
+      research_complete: true,
+      plan_complete: true,
+      implementation_complete: true,
+      reviews_complete: false,
+      implementation_retry_count: 0,
+    },
+    content: '# Test Story\n\nContent',
+  };
+
+  const mockConfig: Config = {
+    sdlcFolder: '/test/sdlc',
+    stageGates: {
+      requireApprovalBeforeImplementation: false,
+      requireApprovalBeforePR: false,
+      autoMergeOnApproval: false,
+    },
+    refinement: {
+      maxIterations: 3,
+      escalateOnMaxAttempts: 'error',
+      enableCircuitBreaker: true,
+    },
+    reviewConfig: {
+      maxRetries: 3,
+      maxRetriesUpperBound: 10,
+      autoCompleteOnApproval: true,
+      autoRestartOnRejection: true,
+    },
+    implementation: {
+      maxRetries: 3,
+      maxRetriesUpperBound: 10,
+    },
+    defaultLabels: [],
+    theme: 'auto',
+    timeouts: {
+      agentTimeout: 600000,
+      buildTimeout: 120000,
+      testTimeout: 300000,
+    },
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(storyModule.parseStory).mockReturnValue(mockStory);
+    vi.mocked(configModule.loadConfig).mockReturnValue(mockConfig);
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as fs.Stats);
+  });
+
+  it('should return RECOVERY decision when no source changes and retry count < max', async () => {
+    const { spawnSync } = await import('child_process');
+
+    // Mock git diff to return no source files
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 0,
+      stdout: '.ai-sdlc/stories/S-0001/story.md\n',
+      stderr: '',
+      pid: 123,
+      output: ['', '.ai-sdlc/stories/S-0001/story.md\n', ''],
+      signal: null,
+    } as any);
+
+    const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+    expect(result.success).toBe(true);
+    expect(result.passed).toBe(false);
+    expect(result.decision).toBe(ReviewDecision.RECOVERY);
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0].severity).toBe('critical');
+    expect(result.issues[0].category).toBe('implementation');
+    expect(result.issues[0].description).toContain('No source code modifications detected');
+
+    // Verify that implementation_complete was reset to false
+    expect(storyModule.updateStoryField).toHaveBeenCalledWith(
+      expect.anything(),
+      'implementation_complete',
+      false
+    );
+
+    // Verify that last_restart_reason was set
+    expect(storyModule.updateStoryField).toHaveBeenCalledWith(
+      expect.anything(),
+      'last_restart_reason',
+      'No source code changes detected. Implementation wrote documentation only.'
+    );
+
+    // Verify LLM reviews were NOT called
+    expect(clientModule.runAgentQuery).not.toHaveBeenCalled();
+  });
+
+  it('should return FAILED decision when no source changes and retry count >= max', async () => {
+    const { spawnSync } = await import('child_process');
+
+    // Mock story with retry count at max
+    const storyAtMax = {
+      ...mockStory,
+      frontmatter: {
+        ...mockStory.frontmatter,
+        implementation_retry_count: 3,
+      },
+    };
+    vi.mocked(storyModule.parseStory).mockReturnValue(storyAtMax);
+
+    // Mock git diff to return no source files
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 0,
+      stdout: '.ai-sdlc/stories/S-0001/story.md\n',
+      stderr: '',
+      pid: 123,
+      output: ['', '.ai-sdlc/stories/S-0001/story.md\n', ''],
+      signal: null,
+    } as any);
+
+    const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+    expect(result.success).toBe(true);
+    expect(result.passed).toBe(false);
+    expect(result.decision).toBe(ReviewDecision.FAILED);
+    expect(result.severity).toBe(ReviewSeverity.CRITICAL);
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0].severity).toBe('blocker');
+    expect(result.issues[0].category).toBe('implementation');
+    expect(result.issues[0].description).toContain('no source code was modified');
+    expect(result.issues[0].description).toContain('Manual intervention required');
+    expect(result.issues[0].suggestedFix).toBeTruthy();
+
+    // Verify LLM reviews were NOT called
+    expect(clientModule.runAgentQuery).not.toHaveBeenCalled();
+  });
+
+  it('should proceed to normal review flow when source changes exist', async () => {
+    const { spawnSync } = await import('child_process');
+    const { spawn } = await import('child_process');
+
+    // Mock git diff to return source files
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 0,
+      stdout: 'src/core/story.ts\nsrc/agents/review.ts\n',
+      stderr: '',
+      pid: 123,
+      output: ['', 'src/core/story.ts\nsrc/agents/review.ts\n', ''],
+      signal: null,
+    } as any);
+
+    // Mock spawn for build/test commands
+    vi.mocked(spawn).mockImplementation(((command: string, args: string[]) => {
+      const mockProcess: any = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn((event, callback) => {
+          if (event === 'close') {
+            setTimeout(() => callback(0), 10); // Success
+          }
+        }),
+      };
+
+      setTimeout(() => {
+        const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+        if (stdoutCallback) {
+          stdoutCallback(Buffer.from('All tests passed\n'));
+        }
+      }, 5);
+
+      return mockProcess;
+    }) as any);
+
+    // Mock LLM reviews to return approvals
+    vi.mocked(clientModule.runAgentQuery).mockResolvedValue(
+      '{"passed": true, "issues": []}'
+    );
+
+    const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+    // Should proceed to normal review flow (not early return)
+    expect(result.decision).not.toBe(ReviewDecision.RECOVERY);
+
+    // Verify LLM reviews WERE called (3 reviews: code, security, PO)
+    expect(clientModule.runAgentQuery).toHaveBeenCalledTimes(3);
+  });
+
+  it('should fail open when git command fails (assume changes exist)', async () => {
+    const { spawnSync } = await import('child_process');
+    const { spawn } = await import('child_process');
+
+    // Mock git diff to fail
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 1,
+      stdout: '',
+      stderr: 'fatal: not a git repository',
+      pid: 123,
+      output: ['', '', 'fatal: not a git repository'],
+      signal: null,
+    } as any);
+
+    // Mock spawn for build/test commands
+    vi.mocked(spawn).mockImplementation(((command: string, args: string[]) => {
+      const mockProcess: any = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn((event, callback) => {
+          if (event === 'close') {
+            setTimeout(() => callback(0), 10);
+          }
+        }),
+      };
+
+      setTimeout(() => {
+        const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+        if (stdoutCallback) {
+          stdoutCallback(Buffer.from('Success\n'));
+        }
+      }, 5);
+
+      return mockProcess;
+    }) as any);
+
+    // Mock LLM reviews
+    vi.mocked(clientModule.runAgentQuery).mockResolvedValue(
+      '{"passed": true, "issues": []}'
+    );
+
+    const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+    // Should proceed to normal review (fail open, not blocked)
+    expect(result.decision).not.toBe(ReviewDecision.RECOVERY);
+    expect(clientModule.runAgentQuery).toHaveBeenCalled();
   });
 });

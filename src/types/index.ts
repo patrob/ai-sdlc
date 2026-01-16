@@ -628,5 +628,63 @@ export const FOLDER_TO_STATUS: Record<KanbanFolder, StoryStatus> = {
   'done': 'done',
 };
 
+/**
+ * File content for single-task agent context
+ */
+export interface FileContent {
+  path: string;
+  content: string;
+}
+
+/**
+ * Context for single-task agent execution
+ */
+export interface TaskContext {
+  /** Task to execute */
+  task: ImplementationTask;
+  /** Only acceptance criteria relevant to task files */
+  acceptanceCriteria: string[];
+  /** Current content of target files */
+  existingFiles: FileContent[];
+  /** Brief conventions summary. Should be <500 tokens (~2000 characters). Will be truncated if longer. */
+  projectPatterns: string;
+  /** Working directory for execution. Required for isolation in orchestrator scenarios where tasks may run in different worktree paths. */
+  workingDirectory: string;
+}
+
+/**
+ * Options for single-task agent execution
+ */
+export interface SingleTaskAgentOptions {
+  /** Log prompt without execution */
+  dryRun?: boolean;
+  /** Max execution time in milliseconds */
+  timeout?: number;
+  /** Callback for real-time progress updates */
+  onProgress?: (event: any) => void;
+}
+
+/**
+ * Structured result from single-task agent execution
+ */
+export interface AgentTaskResult {
+  /** Overall success/failure */
+  success: boolean;
+  /** Task that was executed */
+  task: ImplementationTask;
+  /** Files modified by agent */
+  filesChanged: string[];
+  /** Build/lint/test results */
+  verificationPassed: boolean;
+  /** Error message if failed */
+  error?: string;
+  /** Raw agent output for debugging */
+  agentOutput?: string;
+  /** Files modified outside declared scope */
+  scopeViolation?: string[];
+  /** Missing files or dependencies reported by agent */
+  missingDependencies?: string[];
+}
+
 // Export workflow state types
 export * from './workflow-state.js';

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { moveToBlocked, parseStory, sanitizeReasonText, unblockStory, getStory, writeStory, findStoryById } from './story.js';
+import { moveToBlocked, parseStory, sanitizeReasonText, unblockStory, getStory, writeStory, findStoryById, sanitizeTitle, extractTitleFromContent, createStory } from './story.js';
 import { BLOCKED_DIR } from '../types/index.js';
 
 describe('moveToBlocked', () => {
@@ -905,5 +905,202 @@ Test content
       finalStory.frontmatter.priority === 100 ||
       finalStory.frontmatter.labels?.includes('test')
     ).toBe(true);
+  });
+});
+
+describe('sanitizeTitle', () => {
+  it('should remove shell metacharacters', () => {
+    expect(sanitizeTitle('Title $(cmd)')).toBe('Title cmd');
+    expect(sanitizeTitle('Title `echo test`')).toBe('Title echo test');
+    expect(sanitizeTitle('Title | pipe')).toBe('Title  pipe');
+    expect(sanitizeTitle('Title & background')).toBe('Title  background');
+    expect(sanitizeTitle('Title ; semicolon')).toBe('Title  semicolon');
+    expect(sanitizeTitle('Title <redirect>')).toBe('Title redirect');
+  });
+
+  it('should remove ANSI escape codes', () => {
+    // CSI sequences (colors, cursor) - text AROUND the codes is preserved
+    expect(sanitizeTitle('\x1B[31mRed Title\x1B[0m')).toBe('Red Title');
+    // OSC sequences (set window title) - entire sequence removed (text is a parameter, not content)
+    expect(sanitizeTitle('\x1B]0;Window Title\x07')).toBe('');
+    // Mixed: visible text with embedded OSC should keep visible text
+    expect(sanitizeTitle('Visible \x1B]0;hidden\x07 Text')).toBe('Visible  Text');
+  });
+
+  it('should remove null bytes and control characters', () => {
+    expect(sanitizeTitle('Title\x00Null')).toBe('TitleNull');
+    expect(sanitizeTitle('Title\x1FControl')).toBe('TitleControl');
+  });
+
+  it('should normalize Unicode', () => {
+    // Combining characters: é can be represented as e + ́
+    const combining = 'e\u0301'; // e + combining acute accent
+    const precomposed = '\u00e9'; // precomposed é
+    expect(sanitizeTitle(combining)).toBe(precomposed);
+  });
+
+  it('should limit length to 200 characters', () => {
+    const longTitle = 'a'.repeat(300);
+    const sanitized = sanitizeTitle(longTitle);
+    expect(sanitized.length).toBe(200);
+  });
+
+  it('should handle empty string', () => {
+    expect(sanitizeTitle('')).toBe('');
+  });
+
+  it('should trim whitespace', () => {
+    expect(sanitizeTitle('  Title  ')).toBe('Title');
+  });
+});
+
+describe('extractTitleFromContent', () => {
+  it('should extract title from H1 heading', () => {
+    const content = '# My Story Title\n\nSome content here.';
+    expect(extractTitleFromContent(content)).toBe('My Story Title');
+  });
+
+  it('should extract title from YAML frontmatter', () => {
+    const content = `---
+title: Frontmatter Title
+status: backlog
+---
+
+# Heading Title
+
+Content here.`;
+    expect(extractTitleFromContent(content)).toBe('Frontmatter Title');
+  });
+
+  it('should prioritize frontmatter over H1', () => {
+    const content = `---
+title: From Frontmatter
+---
+
+# From H1
+
+Content`;
+    expect(extractTitleFromContent(content)).toBe('From Frontmatter');
+  });
+
+  it('should handle frontmatter title with quotes', () => {
+    const content = `---
+title: "Title with Quotes"
+---
+
+Content`;
+    expect(extractTitleFromContent(content)).toBe('Title with Quotes');
+  });
+
+  it('should return null for no title', () => {
+    const content = 'Just plain text without headings.';
+    expect(extractTitleFromContent(content)).toBeNull();
+  });
+
+  it('should return null for empty content', () => {
+    expect(extractTitleFromContent('')).toBeNull();
+    expect(extractTitleFromContent('   ')).toBeNull();
+  });
+
+  it('should handle multiple H1 headings (use first)', () => {
+    const content = `# First Title
+
+Content
+
+# Second Title
+
+More content`;
+    expect(extractTitleFromContent(content)).toBe('First Title');
+  });
+
+  it('should trim whitespace from extracted title', () => {
+    const content = '#   Title with Spaces  \n\nContent';
+    expect(extractTitleFromContent(content)).toBe('Title with Spaces');
+  });
+
+  it('should sanitize extracted title', () => {
+    const content = '# Title $(dangerous)\n\nContent';
+    expect(extractTitleFromContent(content)).toBe('Title dangerous');
+  });
+
+  it('should handle malformed frontmatter gracefully', () => {
+    const content = `---
+not: proper
+yaml
+title missing
+---
+
+# Fallback Title`;
+    expect(extractTitleFromContent(content)).toBe('Fallback Title');
+  });
+});
+
+describe('createStory with custom content', () => {
+  let tempDir: string;
+  let sdlcRoot: string;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-16T12:00:00Z'));
+
+    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-')));
+    sdlcRoot = path.join(tempDir, '.ai-sdlc');
+    fs.mkdirSync(sdlcRoot, { recursive: true });
+
+    const storiesFolder = path.join(sdlcRoot, 'stories');
+    fs.mkdirSync(storiesFolder, { recursive: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should create story with custom content', async () => {
+    const customContent = '# Custom Story\n\nThis is custom content from a file.';
+    const story = await createStory('Custom Title', sdlcRoot, {}, customContent);
+
+    expect(story.content).toBe(customContent);
+    expect(story.frontmatter.title).toBe('Custom Title');
+  });
+
+  it('should create story with default template when no content provided', async () => {
+    const story = await createStory('Default Title', sdlcRoot);
+
+    expect(story.content).toContain('# Default Title');
+    expect(story.content).toContain('## Summary');
+    expect(story.content).toContain('## Acceptance Criteria');
+  });
+
+  it('should strip script tags from custom content', async () => {
+    const maliciousContent = '# Title\n\n<script>alert("xss")</script>\n\nContent';
+    const story = await createStory('Test', sdlcRoot, {}, maliciousContent);
+
+    expect(story.content).not.toContain('<script>');
+    expect(story.content).not.toContain('alert');
+    expect(story.content).toContain('# Title');
+    expect(story.content).toContain('Content');
+  });
+
+  it('should strip iframe tags from custom content', async () => {
+    const maliciousContent = '# Title\n\n<iframe src="evil.com"></iframe>\n\nContent';
+    const story = await createStory('Test', sdlcRoot, {}, maliciousContent);
+
+    expect(story.content).not.toContain('<iframe');
+    expect(story.content).toContain('# Title');
+    expect(story.content).toContain('Content');
+  });
+
+  it('should preserve frontmatter structure with custom content', async () => {
+    const customContent = '# Custom\n\nCustom content here.';
+    const story = await createStory('Title', sdlcRoot, {}, customContent);
+
+    // Verify frontmatter is still present in the written file
+    const fileContent = fs.readFileSync(story.path, 'utf-8');
+    expect(fileContent).toContain('---');
+    expect(fileContent).toContain('title: Title');
+    expect(fileContent).toContain('# Custom');
   });
 });

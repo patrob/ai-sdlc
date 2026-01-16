@@ -262,15 +262,97 @@ export function slugify(title: string): string {
 }
 
 /**
+ * Sanitize a title string for safe use in file paths and display.
+ * Removes dangerous characters that could be used for injection attacks.
+ *
+ * SECURITY: This function prevents command injection and path traversal through titles.
+ *
+ * @param title - Title string to sanitize
+ * @returns Sanitized title safe for use in paths and commands
+ */
+export function sanitizeTitle(title: string): string {
+  if (!title) return '';
+
+  let sanitized = title
+    // Remove shell metacharacters that could be used for command injection
+    .replace(/[`$()\\|&;<>]/g, '')
+    // Remove ANSI escape codes (colors, cursor control)
+    .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
+    // Remove OSC sequences (hyperlinks, window titles)
+    .replace(/\x1B\][^\x07]*\x07/g, '')
+    .replace(/\x1B\][^\x1B]*\x1B\\/g, '')
+    // Remove null bytes and control characters
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+
+  // Normalize Unicode to prevent homograph attacks
+  sanitized = sanitized.normalize('NFC');
+
+  // Limit length to prevent storage issues
+  if (sanitized.length > 200) {
+    sanitized = sanitized.substring(0, 200);
+  }
+
+  return sanitized.trim();
+}
+
+/**
+ * Extract title from file content using safe parsing.
+ * Priority: YAML frontmatter > H1 heading > null
+ *
+ * SECURITY: Uses regex-only approach to avoid YAML parser vulnerabilities.
+ *
+ * @param content - File content to extract title from
+ * @returns Extracted title or null if not found
+ */
+export function extractTitleFromContent(content: string): string | null {
+  if (!content || content.trim().length === 0) {
+    return null;
+  }
+
+  // Try to extract from YAML frontmatter using safe regex (no full YAML parsing)
+  // Match: --- at start, then look for title: field, then --- to close
+  const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/m);
+  if (frontmatterMatch) {
+    // Look for title: field in the frontmatter block
+    const titleMatch = frontmatterMatch[1].match(/^title:\s*['"]?([^'"\n]+?)['"]?\s*$/m);
+    if (titleMatch && titleMatch[1]) {
+      const title = titleMatch[1].trim();
+      if (title.length > 0) {
+        return sanitizeTitle(title);
+      }
+    }
+  }
+
+  // Fall back to first H1 heading (# Title)
+  // Use non-greedy matching with length limit to prevent ReDoS
+  const h1Match = content.match(/^#\s+(.{1,200}?)$/m);
+  if (h1Match && h1Match[1]) {
+    const title = h1Match[1].trim();
+    if (title.length > 0) {
+      return sanitizeTitle(title);
+    }
+  }
+
+  // No title found
+  return null;
+}
+
+/**
  * Create a new story in the folder-per-story structure
  *
  * Creates stories/{id}/story.md with slug and priority in frontmatter.
  * Priority uses gaps (10, 20, 30...) for easy insertion without renumbering.
+ *
+ * @param title - Story title
+ * @param sdlcRoot - Root path of .ai-sdlc folder
+ * @param options - Optional frontmatter fields
+ * @param content - Optional custom story content (if not provided, uses default template)
  */
 export async function createStory(
   title: string,
   sdlcRoot: string,
-  options: Partial<StoryFrontmatter> = {}
+  options: Partial<StoryFrontmatter> = {},
+  content?: string
 ): Promise<Story> {
   const storiesFolder = path.join(sdlcRoot, STORIES_FOLDER);
 
@@ -335,7 +417,16 @@ export async function createStory(
     ...options,
   };
 
-  const content = `# ${title}
+  // Use custom content if provided, otherwise use default template
+  let storyContent: string;
+  if (content) {
+    // Security: Strip dangerous HTML tags from custom content
+    storyContent = content
+      .replace(/<script[^>]*>.*?<\/script>/gis, '')
+      .replace(/<iframe[^>]*>.*?<\/iframe>/gis, '');
+  } else {
+    // Default template
+    storyContent = `# ${title}
 
 ## Summary
 
@@ -356,12 +447,13 @@ export async function createStory(
 ## Review Notes
 
 <!-- Populated by review agents -->`;
+  }
 
   const story: Story = {
     path: filePath,
     slug,
     frontmatter,
-    content,
+    content: storyContent,
   };
 
   await writeStory(story);

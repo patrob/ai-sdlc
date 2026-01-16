@@ -1073,11 +1073,15 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
   // Validate git state before processing actions that modify git
   // Skip protected branch check if worktree mode is active (worktree is on feature branch)
-  // Exclude .ai-sdlc/** from clean check when worktree was created (story file was just updated)
+  // Skip clean check entirely when worktree was just created:
+  // - The worktree starts from a clean base branch
+  // - npm install may modify package-lock.json
+  // - Story file was just updated with worktree_path
+  // - There's no prior user work to protect in a fresh worktree
   if (!options.force && requiresGitValidation(actionsToProcess)) {
     const workingDir = path.dirname(sdlcRoot);
     const gitValidationOptions = worktreeCreated
-      ? { skipBranchCheck: true, excludePatterns: ['.ai-sdlc/**'] }
+      ? { skipBranchCheck: true, skipCleanCheck: true }
       : {};
     const gitValidation = validateGitState(workingDir, gitValidationOptions);
 

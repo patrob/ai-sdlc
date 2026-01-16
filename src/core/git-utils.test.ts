@@ -525,5 +525,54 @@ describe('git-utils', () => {
         'Working directory has uncommitted changes. Commit or stash your changes first.'
       );
     });
+
+    /**
+     * Regression test for S-0052 bug:
+     * When a worktree is freshly created, npm install may modify package-lock.json
+     * or other files. The git validation was failing because excludePatterns only
+     * excluded .ai-sdlc/** but not package-lock.json changes.
+     *
+     * Fix: Use skipCleanCheck: true for fresh worktrees instead of excludePatterns.
+     * This is safe because:
+     * - The worktree starts from a clean base branch
+     * - Any changes are from our own initialization (story updates, npm install)
+     * - There's no prior user work to protect in a fresh worktree
+     */
+    it('passes validation for fresh worktree with npm install changes when skipCleanCheck is true', () => {
+      // Simulates: worktree just created, npm install modified package-lock.json
+      mockSpawnSync
+        .mockReturnValueOnce(createSpawnResult(' M package-lock.json\n M .ai-sdlc/stories/S-0052/story.md\n'))
+        .mockReturnValueOnce(createSpawnResult(''))
+        .mockReturnValueOnce(createSpawnResult('ai-sdlc/S-0052-story-slug\n')) // on feature branch
+        .mockReturnValueOnce(createSpawnResult(''))
+        .mockReturnValueOnce(createSpawnResult('0\t0\n'));
+
+      // This is what commands.ts now passes for fresh worktrees
+      const options: GitValidationOptions = { skipBranchCheck: true, skipCleanCheck: true };
+      const result = validateGitState('/test/dir', options);
+
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('fails validation with only excludePatterns when package-lock.json is modified (pre-fix behavior)', () => {
+      // This test documents the bug: excludePatterns alone didn't handle package-lock.json
+      mockSpawnSync
+        .mockReturnValueOnce(createSpawnResult(' M package-lock.json\n M .ai-sdlc/stories/S-0052/story.md\n'))
+        .mockReturnValueOnce(createSpawnResult(''))
+        .mockReturnValueOnce(createSpawnResult('ai-sdlc/S-0052-story-slug\n'))
+        .mockReturnValueOnce(createSpawnResult(''))
+        .mockReturnValueOnce(createSpawnResult('0\t0\n'));
+
+      // Old approach: excludePatterns only handles .ai-sdlc/**, not package-lock.json
+      const options: GitValidationOptions = { skipBranchCheck: true, excludePatterns: ['.ai-sdlc/**'] };
+      const result = validateGitState('/test/dir', options);
+
+      // Bug: This would fail because package-lock.json isn't excluded
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain(
+        'Working directory has uncommitted changes. Commit or stash your changes first.'
+      );
+    });
   });
 });

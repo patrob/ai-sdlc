@@ -2,7 +2,7 @@
 id: S-0050
 title: Pre-review code change gate with self-healing recovery
 priority: 2
-status: in-progress
+status: done
 type: feature
 created: '2026-01-16'
 labels:

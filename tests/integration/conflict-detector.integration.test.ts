@@ -35,8 +35,9 @@ describe('ConflictDetectorService Integration', () => {
     process.on('SIGTERM', cleanupTestDir);
 
     try {
-      // Initialize git repository
-      spawnSync('git', ['init'], { cwd: testDir });
+      // Initialize git repository with 'main' as default branch
+      // Note: Without -b main, git init may create 'master' branch by default in CI
+      spawnSync('git', ['init', '-b', 'main'], { cwd: testDir });
       spawnSync('git', ['config', 'user.name', 'Test User'], { cwd: testDir });
       spawnSync('git', ['config', 'user.email', 'test@example.com'], { cwd: testDir });
 

@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768580849868-63b4b775",
+  "timestamp": "2026-01-16T16:30:42.422Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "research",
+      "storyId": "S-0014",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0014-enhance-research-agent-with-codebase-first-approac/.ai-sdlc/stories/S-0014/story.md",
+      "completedAt": "2026-01-16T16:30:14.779Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0014",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0014-enhance-research-agent-with-codebase-first-approac/.ai-sdlc/stories/S-0014/story.md",
+      "completedAt": "2026-01-16T16:30:42.422Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0014-enhance-research-agent-with-codebase-first-approac/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0014",
+      "fullSDLC": true
+    },
+    "storyContentHash": "e11011334df989734ab50a00e7112b7986e02b6e27eb2ebf85a05bbe891bb3b2"
+  }
+}

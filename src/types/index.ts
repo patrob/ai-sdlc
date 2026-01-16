@@ -380,6 +380,15 @@ export interface PreFlightResult {
   warnings: string[];
 }
 
+/**
+ * GitHub integration configuration
+ * Controls PR creation behavior
+ */
+export interface GithubConfig {
+  /** Create PRs as drafts by default */
+  createDraftPRs?: boolean;
+}
+
 export interface Config {
   sdlcFolder: string;
   stageGates: StageGateConfig;
@@ -387,6 +396,11 @@ export interface Config {
   reviewConfig: ReviewConfig;
   implementation: ImplementationConfig;
   defaultLabels: string[];
+  /**
+   * GitHub integration configuration.
+   * Controls PR creation and integration behavior.
+   */
+  github?: GithubConfig;
   theme: ThemePreference;
   /** Command to run tests (e.g., 'npm test'). If set, runs before review. */
   testCommand?: string;

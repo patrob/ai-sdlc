@@ -99,11 +99,20 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Publishing version: ${VERSION}"
 
+          # Determine npm tag based on version type
+          if [[ "$VERSION" == *"-beta"* ]]; then
+            echo "tag=beta" >> $GITHUB_OUTPUT
+          elif [[ "$VERSION" == *"-rc"* ]]; then
+            echo "tag=rc" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+
       - name: Set version in package.json
         run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version
 
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag ${{ steps.version.outputs.tag }}
 
       - name: Create GitHub Release
         run: |

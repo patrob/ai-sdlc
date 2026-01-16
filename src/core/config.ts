@@ -82,6 +82,7 @@ export const DEFAULT_CONFIG: Config = {
     maxRetriesUpperBound: 10,
     autoCompleteOnApproval: true,
     autoRestartOnRejection: true,
+    detectTestAntipatterns: true,
   },
   implementation: { ...DEFAULT_IMPLEMENTATION_CONFIG },
   defaultLabels: [],

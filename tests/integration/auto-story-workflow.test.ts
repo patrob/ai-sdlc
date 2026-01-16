@@ -19,7 +19,7 @@ const __dirname = path.dirname(__filename);
 // Test fixture directory
 const TEST_FIXTURE_DIR = path.join(__dirname, '../fixtures/auto-story-test');
 
-describe('--auto --story Full SDLC Workflow', () => {
+describe.sequential('--auto --story Full SDLC Workflow', () => {
   beforeEach(() => {
     // Clean up test fixtures
     if (fs.existsSync(TEST_FIXTURE_DIR)) {
@@ -43,12 +43,12 @@ describe('--auto --story Full SDLC Workflow', () => {
     delete process.env.AI_SDLC_ROOT;
   });
 
-  describe('Flag Validation', () => {
+  describe.sequential('Flag Validation', () => {
     it('should reject conflicting --auto --story --step flags', async () => {
       const sdlcRoot = getSdlcRoot();
 
       // Create test story
-      const story = createStory('Test Story', sdlcRoot);
+      const story = await createStory('Test Story', sdlcRoot);
 
       // Attempt to run with conflicting flags
       let errorThrown = false;
@@ -71,7 +71,7 @@ describe('--auto --story Full SDLC Workflow', () => {
       const sdlcRoot = getSdlcRoot();
 
       // Create test story
-      const story = createStory('Test Story', sdlcRoot);
+      const story = await createStory('Test Story', sdlcRoot);
 
       // This should not throw
       await expect(
@@ -84,7 +84,7 @@ describe('--auto --story Full SDLC Workflow', () => {
     });
   });
 
-  describe('Phase Determination', () => {
+  describe.sequential('Phase Determination', () => {
     it('should skip refine for stories already in ready/', async () => {
       const sdlcRoot = getSdlcRoot();
 
@@ -168,7 +168,7 @@ describe('--auto --story Full SDLC Workflow', () => {
     });
   });
 
-  describe('Story Not Found', () => {
+  describe.sequential('Story Not Found', () => {
     it('should handle non-existent story gracefully', async () => {
       // Try to run with non-existent story
       await run({
@@ -182,12 +182,12 @@ describe('--auto --story Full SDLC Workflow', () => {
     });
   });
 
-  describe('Checkpoint and Resume', () => {
+  describe.sequential('Checkpoint and Resume', () => {
     it('should save fullSDLC flag in checkpoint', async () => {
       const sdlcRoot = getSdlcRoot();
 
       // Create test story
-      const story = createStory('Test Story', sdlcRoot);
+      const story = await createStory('Test Story', sdlcRoot);
 
       // Run with --auto --story (this would normally execute agents)
       // For testing purposes, we'd mock the agents or use dry-run
@@ -201,7 +201,7 @@ describe('--auto --story Full SDLC Workflow', () => {
       const sdlcRoot = getSdlcRoot();
 
       // Create story
-      const story = createStory('Test Story', sdlcRoot);
+      const story = await createStory('Test Story', sdlcRoot);
 
       // Create a mock checkpoint with fullSDLC mode
       // Use story-specific checkpoint location
@@ -246,7 +246,7 @@ describe('--auto --story Full SDLC Workflow', () => {
     });
   });
 
-  describe('All Phases Complete', () => {
+  describe.sequential('All Phases Complete', () => {
     it('should detect when all SDLC phases are complete', async () => {
       const sdlcRoot = getSdlcRoot();
 
@@ -290,8 +290,8 @@ describe('--auto --story Full SDLC Workflow', () => {
   });
 });
 
-describe('Phase Skipping Logic', () => {
-  it('should generate correct action sequence for fresh story', () => {
+describe.sequential('Phase Skipping Logic', () => {
+  it('should generate correct action sequence for fresh story', async () => {
     // Test the generateFullSDLCActions function logic
     const story = {
       path: '/test/backlog/test.md',
@@ -316,7 +316,7 @@ describe('Phase Skipping Logic', () => {
     // This would be tested by importing the function directly
   });
 
-  it('should generate correct action sequence for partially complete story', () => {
+  it('should generate correct action sequence for partially complete story', async () => {
     const story = {
       path: '/test/ready/test.md',
       slug: 'test',

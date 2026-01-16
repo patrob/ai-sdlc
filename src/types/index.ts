@@ -330,6 +330,41 @@ export interface WorktreeInfo {
   exists: boolean;
 }
 
+/**
+ * Severity level for conflict detection between stories
+ */
+export type ConflictSeverity = 'high' | 'medium' | 'low' | 'none';
+
+/**
+ * Analysis of potential conflicts between two stories
+ */
+export interface ConflictAnalysis {
+  /** ID of the first story */
+  storyA: string;
+  /** ID of the second story */
+  storyB: string;
+  /** Files modified by both stories */
+  sharedFiles: string[];
+  /** Directories containing modifications from both stories */
+  sharedDirectories: string[];
+  /** Severity level of the conflict */
+  severity: ConflictSeverity;
+  /** Human-readable recommendation for handling the conflict */
+  recommendation: string;
+}
+
+/**
+ * Result of conflict detection analysis across multiple stories
+ */
+export interface ConflictDetectionResult {
+  /** Pairwise conflict analysis for all story combinations */
+  conflicts: ConflictAnalysis[];
+  /** Whether it's safe to run all stories concurrently (false if any high-severity conflicts) */
+  safeToRunConcurrently: boolean;
+  /** Human-readable summary of the conflict detection results */
+  summary: string;
+}
+
 export interface Config {
   sdlcFolder: string;
   stageGates: StageGateConfig;

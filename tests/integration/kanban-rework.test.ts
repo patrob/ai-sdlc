@@ -6,7 +6,7 @@ import { assessState } from '../../src/core/kanban.js';
 import { createStory, updateStoryStatus, appendReviewHistory, writeStory, parseStory } from '../../src/core/story.js';
 import { ReviewDecision, ReviewSeverity, STORIES_FOLDER } from '../../src/types/index.js';
 
-describe('Kanban Rework Detection', () => {
+describe.sequential('Kanban Rework Detection', () => {
   let testDir: string;
   let sdlcRoot: string;
 
@@ -52,16 +52,16 @@ describe('Kanban Rework Detection', () => {
     fs.rmSync(testDir, { recursive: true, force: true });
   });
 
-  it('should generate rework action when review is rejected', () => {
+  it('should generate rework action when review is rejected', async () => {
     // Create story and move to in-progress
-    let story = createStory('Test Story', sdlcRoot);
-    story = updateStoryStatus(story, 'in-progress');
+    let story = await createStory('Test Story', sdlcRoot);
+    story = await updateStoryStatus(story, 'in-progress');
 
     // Mark implementation complete
     story.frontmatter.implementation_complete = true;
 
     // Add rejected review to history
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -72,7 +72,7 @@ describe('Kanban Rework Detection', () => {
       poReviewPassed: true,
     });
 
-    const assessment = assessState(sdlcRoot);
+    const assessment = await assessState(sdlcRoot);
 
     // Should have a rework action
     const reworkActions = assessment.recommendedActions.filter(a => a.type === 'rework');
@@ -82,16 +82,16 @@ describe('Kanban Rework Detection', () => {
     expect(reworkActions[0].context.targetPhase).toBeDefined();
   });
 
-  it('should not generate rework action when review is approved', () => {
+  it('should not generate rework action when review is approved', async () => {
     // Create story and move to in-progress
-    let story = createStory('Test Story', sdlcRoot);
-    story = updateStoryStatus(story, 'in-progress');
+    let story = await createStory('Test Story', sdlcRoot);
+    story = await updateStoryStatus(story, 'in-progress');
 
     // Mark implementation complete
     story.frontmatter.implementation_complete = true;
 
     // Add approved review to history
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.APPROVED,
       feedback: 'All reviews passed',
@@ -103,9 +103,9 @@ describe('Kanban Rework Detection', () => {
 
     // Mark reviews complete after approval
     story.frontmatter.reviews_complete = true;
-    writeStory(story);
+    await writeStory(story);
 
-    const assessment = assessState(sdlcRoot);
+    const assessment = await assessState(sdlcRoot);
 
     // Should have create_pr action, not rework
     const reworkActions = assessment.recommendedActions.filter(a => a.type === 'rework');
@@ -115,10 +115,10 @@ describe('Kanban Rework Detection', () => {
     expect(prActions).toHaveLength(1);
   });
 
-  it('should trigger circuit breaker after max refinement attempts', () => {
+  it('should trigger circuit breaker after max refinement attempts', async () => {
     // Create story and move to in-progress
-    let story = createStory('Test Story', sdlcRoot);
-    story = updateStoryStatus(story, 'in-progress');
+    let story = await createStory('Test Story', sdlcRoot);
+    story = await updateStoryStatus(story, 'in-progress');
 
     // Mark implementation complete
     story.frontmatter.implementation_complete = true;
@@ -132,7 +132,7 @@ describe('Kanban Rework Detection', () => {
     ];
 
     // Add rejected review
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.CRITICAL,
@@ -143,7 +143,7 @@ describe('Kanban Rework Detection', () => {
       poReviewPassed: false,
     });
 
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Should not generate rework action (circuit breaker moves to blocked directly)
     // Re-parse story to see updated status after assessState
@@ -154,22 +154,22 @@ describe('Kanban Rework Detection', () => {
     expect(updatedStory.frontmatter.blocked_reason).toContain('Max refinement attempts');
   });
 
-  it('should prioritize rework actions higher than normal review', () => {
+  it('should prioritize rework actions higher than normal review', async () => {
     // Create two stories
-    let story1 = createStory('Story 1', sdlcRoot);
-    story1 = updateStoryStatus(story1, 'in-progress');
+    let story1 = await createStory('Story 1', sdlcRoot);
+    story1 = await updateStoryStatus(story1, 'in-progress');
     story1.frontmatter.implementation_complete = true;
     story1.frontmatter.priority = 5;
-    writeStory(story1); // Persist changes to disk
+    await writeStory(story1); // Persist changes to disk
 
-    let story2 = createStory('Story 2', sdlcRoot);
-    story2 = updateStoryStatus(story2, 'in-progress');
+    let story2 = await createStory('Story 2', sdlcRoot);
+    story2 = await updateStoryStatus(story2, 'in-progress');
     story2.frontmatter.implementation_complete = true;
     story2.frontmatter.priority = 1; // Higher base priority
-    writeStory(story2); // Persist changes to disk
+    await writeStory(story2); // Persist changes to disk
 
     // Story 1 has rejected review (needs rework)
-    appendReviewHistory(story1, {
+    await appendReviewHistory(story1, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -183,7 +183,7 @@ describe('Kanban Rework Detection', () => {
     // Story 2 needs initial review
     // (no review history)
 
-    const assessment = assessState(sdlcRoot);
+    const assessment = await assessState(sdlcRoot);
 
     // Rework action should be prioritized (lower priority number = higher priority)
     const reworkAction = assessment.recommendedActions.find(a => a.type === 'rework');
@@ -197,15 +197,15 @@ describe('Kanban Rework Detection', () => {
     expect(reworkAction!.priority).toBeLessThan(reviewAction!.priority);
   });
 
-  it('should track iteration number in rework action context', () => {
-    let story = createStory('Test Story', sdlcRoot);
-    story = updateStoryStatus(story, 'in-progress');
+  it('should track iteration number in rework action context', async () => {
+    let story = await createStory('Test Story', sdlcRoot);
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Set to iteration 2
     story.frontmatter.refinement_count = 2;
 
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.MEDIUM,
@@ -216,7 +216,7 @@ describe('Kanban Rework Detection', () => {
       poReviewPassed: true,
     });
 
-    const assessment = assessState(sdlcRoot);
+    const assessment = await assessState(sdlcRoot);
     const reworkAction = assessment.recommendedActions.find(a => a.type === 'rework');
 
     expect(reworkAction).toBeDefined();
@@ -224,16 +224,16 @@ describe('Kanban Rework Detection', () => {
     expect(reworkAction!.reason).toContain('iteration 3');
   });
 
-  it('should respect per-story max_refinement_attempts override', () => {
-    let story = createStory('Test Story', sdlcRoot);
-    story = updateStoryStatus(story, 'in-progress');
+  it('should respect per-story max_refinement_attempts override', async () => {
+    let story = await createStory('Test Story', sdlcRoot);
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Set custom max to 1
     story.frontmatter.max_refinement_attempts = 1;
     story.frontmatter.refinement_count = 1;
 
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -244,7 +244,7 @@ describe('Kanban Rework Detection', () => {
       poReviewPassed: true,
     });
 
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Should trigger circuit breaker even though default is 3
     // Re-parse story to see updated status after assessState
@@ -255,12 +255,12 @@ describe('Kanban Rework Detection', () => {
     expect(updatedStory.frontmatter.blocked_reason).toContain('Max refinement attempts (1/1)');
   });
 
-  it('should not generate rework for stories without implementation complete', () => {
-    let story = createStory('Test Story', sdlcRoot);
-    story = updateStoryStatus(story, 'in-progress');
+  it('should not generate rework for stories without implementation complete', async () => {
+    let story = await createStory('Test Story', sdlcRoot);
+    story = await updateStoryStatus(story, 'in-progress');
     // implementation_complete is false
 
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -271,7 +271,7 @@ describe('Kanban Rework Detection', () => {
       poReviewPassed: true,
     });
 
-    const assessment = assessState(sdlcRoot);
+    const assessment = await assessState(sdlcRoot);
 
     // Should generate implement action, not rework
     const reworkActions = assessment.recommendedActions.filter(a => a.type === 'rework');

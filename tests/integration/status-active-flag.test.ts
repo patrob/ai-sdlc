@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 // Test fixture directory
 const TEST_FIXTURE_DIR = path.join(__dirname, '../fixtures/status-active-flag-test');
 
-describe('Status Command - Active Flag Integration', () => {
+describe.sequential('Status Command - Active Flag Integration', () => {
   let consoleLogSpy: any;
 
   beforeEach(() => {
@@ -49,7 +49,7 @@ describe('Status Command - Active Flag Integration', () => {
     delete process.env.AI_SDLC_ROOT;
   });
 
-  describe('Default Behavior (No Flag)', () => {
+  describe.sequential('Default Behavior (No Flag)', () => {
     it('should show all columns including done when --active flag is not provided', async () => {
       const sdlcRoot = getSdlcRoot();
 
@@ -123,7 +123,7 @@ reviews_complete: true
     });
   });
 
-  describe('Active Flag Behavior', () => {
+  describe.sequential('Active Flag Behavior', () => {
     it('should hide done column when --active flag is true', async () => {
       const sdlcRoot = getSdlcRoot();
 
@@ -212,7 +212,7 @@ reviews_complete: true
     });
   });
 
-  describe('Edge Cases', () => {
+  describe.sequential('Edge Cases', () => {
     it('should handle empty board with 0 done stories', async () => {
       const sdlcRoot = getSdlcRoot();
 
@@ -304,7 +304,7 @@ reviews_complete: true
     });
   });
 
-  describe('Options Parameter Handling', () => {
+  describe.sequential('Options Parameter Handling', () => {
     it('should handle undefined options parameter', async () => {
       const sdlcRoot = getSdlcRoot();
 
@@ -374,7 +374,7 @@ reviews_complete: true
     });
   });
 
-  describe('Backward Compatibility', () => {
+  describe.sequential('Backward Compatibility', () => {
     it('should maintain default behavior when no options provided', async () => {
       const sdlcRoot = getSdlcRoot();
 

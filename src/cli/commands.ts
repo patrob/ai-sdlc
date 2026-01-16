@@ -723,9 +723,12 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
   // Validate git state before processing actions that modify git
   // Skip protected branch check if worktree mode is active (worktree is on feature branch)
+  // Exclude .ai-sdlc/** from clean check when worktree was created (story file was just updated)
   if (!options.force && requiresGitValidation(actionsToProcess)) {
     const workingDir = path.dirname(sdlcRoot);
-    const gitValidationOptions = worktreeCreated ? { skipBranchCheck: true } : {};
+    const gitValidationOptions = worktreeCreated
+      ? { skipBranchCheck: true, excludePatterns: ['.ai-sdlc/**'] }
+      : {};
     const gitValidation = validateGitState(workingDir, gitValidationOptions);
 
     if (!gitValidation.valid) {

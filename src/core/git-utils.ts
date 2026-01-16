@@ -7,6 +7,8 @@ export interface GitValidationOptions {
   skipBranchCheck?: boolean;
   skipRemoteCheck?: boolean;
   protectedBranches?: string[];
+  /** Glob patterns to exclude from the clean working directory check */
+  excludePatterns?: string[];
 }
 
 export interface GitValidationResult {
@@ -181,8 +183,13 @@ export function validateGitState(
   const warnings: string[] = [];
   const protectedBranches = options.protectedBranches || DEFAULT_PROTECTED_BRANCHES;
 
-  if (!options.skipCleanCheck && !isCleanWorkingDirectory(workingDir)) {
-    errors.push('Working directory has uncommitted changes. Commit or stash your changes first.');
+  if (!options.skipCleanCheck) {
+    const cleanOptions: CleanWorkingDirectoryOptions = options.excludePatterns
+      ? { excludePatterns: options.excludePatterns }
+      : {};
+    if (!isCleanWorkingDirectory(workingDir, cleanOptions)) {
+      errors.push('Working directory has uncommitted changes. Commit or stash your changes first.');
+    }
   }
 
   if (hasUntrackedFiles(workingDir)) {

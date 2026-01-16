@@ -6,7 +6,7 @@ import { assessState } from '../../src/core/kanban.js';
 import { parseStory } from '../../src/core/story.js';
 import { BLOCKED_DIR, STORIES_FOLDER } from '../../src/types/index.js';
 
-describe('Kanban - Block on Max Review Retries Integration', () => {
+describe.sequential('Kanban - Block on Max Review Retries Integration', () => {
   let testDir: string;
   let sdlcRoot: string;
 
@@ -134,7 +134,7 @@ Some implementation details here.
     return filePath;
   }
 
-  it('should move story to blocked folder when max retries reached', () => {
+  it('should move story to blocked folder when max retries reached', async () => {
     // Arrange
     createConfigWithMaxRetries(3);
     const originalPath = createStoryWithReviewRetries(
@@ -148,7 +148,7 @@ Some implementation details here.
     expect(fs.existsSync(originalPath)).toBe(true);
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     // Story file should still exist (not moved in new architecture)
@@ -159,7 +159,7 @@ Some implementation details here.
     expect(story.frontmatter.status).toBe('blocked');
   });
 
-  it('should preserve retry_count in frontmatter after blocking', () => {
+  it('should preserve retry_count in frontmatter after blocking', async () => {
     // Arrange
     createConfigWithMaxRetries(5);
     const storyPath = createStoryWithReviewRetries(
@@ -170,7 +170,7 @@ Some implementation details here.
     );
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     const blockedStory = parseStory(storyPath);
@@ -180,7 +180,7 @@ Some implementation details here.
     expect(blockedStory.frontmatter.status).toBe('blocked');
   });
 
-  it('should set correct frontmatter fields after blocking', () => {
+  it('should set correct frontmatter fields after blocking', async () => {
     // Arrange
     createConfigWithMaxRetries(2);
     const storyPath = createStoryWithReviewRetries(
@@ -191,7 +191,7 @@ Some implementation details here.
     );
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     const blockedStory = parseStory(storyPath);
@@ -214,7 +214,7 @@ Some implementation details here.
     expect(blockedStory.frontmatter.updated).toBeDefined();
   });
 
-  it('should include feedback summary (first 100 chars) in blocked reason', () => {
+  it('should include feedback summary (first 100 chars) in blocked reason', async () => {
     // Arrange
     createConfigWithMaxRetries(3);
     const longFeedback =
@@ -230,7 +230,7 @@ Some implementation details here.
     );
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     const blockedStory = parseStory(storyPath);
@@ -250,7 +250,7 @@ Some implementation details here.
     }
   });
 
-  it('should handle story with no review history', () => {
+  it('should handle story with no review history', async () => {
     // Arrange
     createConfigWithMaxRetries(1);
 
@@ -286,7 +286,7 @@ Implementation content.
     fs.writeFileSync(filePath, content, 'utf-8');
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     const blockedStory = parseStory(filePath);
@@ -295,7 +295,7 @@ Implementation content.
     expect(blockedStory.frontmatter.blocked_reason).toContain('last failure: unknown');
   });
 
-  it('should respect story-specific max_retries over config default', () => {
+  it('should respect story-specific max_retries over config default', async () => {
     // Arrange: Config says 5, but story overrides to 2
     createConfigWithMaxRetries(5);
     const storyPath = createStoryWithReviewRetries(
@@ -306,7 +306,7 @@ Implementation content.
     );
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     const blockedStory = parseStory(storyPath);
@@ -315,7 +315,7 @@ Implementation content.
     expect(blockedStory.frontmatter.blocked_reason).toContain('(2/2)');
   });
 
-  it('should not block stories below max retries', () => {
+  it('should not block stories below max retries', async () => {
     // Arrange
     createConfigWithMaxRetries(5);
     const originalPath = createStoryWithReviewRetries(
@@ -326,7 +326,7 @@ Implementation content.
     );
 
     // Act
-    const result = assessState(sdlcRoot);
+    const result = await assessState(sdlcRoot);
 
     // Assert
     // Story should still exist
@@ -340,7 +340,7 @@ Implementation content.
     expect(result.recommendedActions.some(a => a.type === 'review')).toBe(true);
   });
 
-  it('should handle concurrent file modifications gracefully', () => {
+  it('should handle concurrent file modifications gracefully', async () => {
     // Arrange
     createConfigWithMaxRetries(2);
     const originalPath = createStoryWithReviewRetries(
@@ -355,14 +355,13 @@ Implementation content.
     // so we'll just verify that if the file doesn't exist, we don't crash
 
     // Act & Assert - should not throw
-    expect(() => {
-      // Delete file to simulate concurrent modification
-      fs.unlinkSync(originalPath);
-      assessState(sdlcRoot);
-    }).not.toThrow();
+    // Delete file to simulate concurrent modification
+    fs.unlinkSync(originalPath);
+    // For async functions, use resolves matcher
+    await expect(assessState(sdlcRoot)).resolves.toBeDefined();
   });
 
-  it('should block multiple stories that reach max retries', () => {
+  it('should block multiple stories that reach max retries', async () => {
     // Arrange
     createConfigWithMaxRetries(3);
     const path1 = createStoryWithReviewRetries('story-one', 3, 3, 'First story failure');
@@ -370,7 +369,7 @@ Implementation content.
     const path3 = createStoryWithReviewRetries('story-three', 3, 3, 'Third story failure');
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     const story1 = parseStory(path1);
@@ -382,7 +381,7 @@ Implementation content.
     expect(story3.frontmatter.status).toBe('blocked');
   });
 
-  it('should preserve all original frontmatter fields after blocking', () => {
+  it('should preserve all original frontmatter fields after blocking', async () => {
     // Arrange
     createConfigWithMaxRetries(2);
     const storyPath = createStoryWithReviewRetries(
@@ -393,7 +392,7 @@ Implementation content.
     );
 
     // Act
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Assert
     const blockedStory = parseStory(storyPath);
@@ -416,8 +415,8 @@ Implementation content.
   });
 
   // Security integration tests
-  describe('security - sanitization in blocked reason storage', () => {
-    it('should sanitize ANSI escape sequences in blocked reason stored in frontmatter', () => {
+  describe.sequential('security - sanitization in blocked reason storage', () => {
+    it('should sanitize ANSI escape sequences in blocked reason stored in frontmatter', async () => {
       // Arrange - create story with ANSI codes in feedback
       createConfigWithMaxRetries(2);
 
@@ -467,7 +466,7 @@ Content.
       fs.writeFileSync(filePath, content, 'utf-8');
 
       // Act
-      assessState(sdlcRoot);
+      await assessState(sdlcRoot);
 
       // Assert
       const blockedStory = parseStory(filePath);
@@ -484,7 +483,7 @@ Content.
       expect(blockedReason).toContain('bold yellow');
     });
 
-    it('should sanitize newlines in blocked reason stored in frontmatter', () => {
+    it('should sanitize newlines in blocked reason stored in frontmatter', async () => {
       // Arrange - create story with newlines in feedback
       createConfigWithMaxRetries(2);
 
@@ -530,7 +529,7 @@ Content.
       fs.writeFileSync(filePath, content, 'utf-8');
 
       // Act
-      assessState(sdlcRoot);
+      await assessState(sdlcRoot);
 
       // Assert
       const blockedStory = parseStory(filePath);
@@ -546,7 +545,7 @@ Content.
       expect(blockedReason).toContain('Line three');
     });
 
-    it('should sanitize markdown injection characters in blocked reason', () => {
+    it('should sanitize markdown injection characters in blocked reason', async () => {
       // Arrange
       createConfigWithMaxRetries(2);
 
@@ -592,7 +591,7 @@ Content.
       fs.writeFileSync(filePath, content, 'utf-8');
 
       // Act
-      assessState(sdlcRoot);
+      await assessState(sdlcRoot);
 
       // Assert
       const blockedStory = parseStory(filePath);
@@ -610,7 +609,7 @@ Content.
       expect(blockedReason).toContain('quote');
     });
 
-    it('should handle control characters in feedback gracefully', () => {
+    it('should handle control characters in feedback gracefully', async () => {
       // Arrange
       createConfigWithMaxRetries(2);
 
@@ -656,7 +655,7 @@ Content.
       fs.writeFileSync(filePath, content, 'utf-8');
 
       // Act
-      assessState(sdlcRoot);
+      await assessState(sdlcRoot);
 
       // Assert
       const blockedStory = parseStory(filePath);

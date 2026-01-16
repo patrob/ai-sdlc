@@ -489,8 +489,10 @@ describe('Single-Task Agent Integration Tests', () => {
         workingDirectory: tempDir,
       };
 
-      // Should throw error from git command
-      await expect(runSingleTaskAgent(context)).rejects.toThrow('Failed to get git diff');
+      // Should return error result (consistent with Result Object pattern)
+      const result = await runSingleTaskAgent(context);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Git operation failed');
     });
   });
 

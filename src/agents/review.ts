@@ -4,6 +4,7 @@ import fs from 'fs';
 import { z } from 'zod';
 import { parseStory, writeStory, updateStoryStatus, appendToSection, updateStoryField, isAtMaxRetries, appendReviewHistory, snapshotMaxRetries, getEffectiveMaxRetries } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
+import { getLogger } from '../core/logger.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from '../core/config.js';
 import { Story, AgentResult, ReviewResult, ReviewIssue, ReviewIssueSeverity, ReviewDecision, ReviewSeverity, ReviewAttempt, Config, TDDTestCycle } from '../types/index.js';
 import { sanitizeInput, truncateText } from '../cli/formatting.js';
@@ -661,9 +662,16 @@ export async function runReviewAgent(
   sdlcRoot: string,
   options?: ReviewAgentOptions
 ): Promise<ReviewResult> {
+  const logger = getLogger();
+  const startTime = Date.now();
   const story = parseStory(storyPath);
   const changesMade: string[] = [];
   const workingDir = path.dirname(sdlcRoot);
+
+  logger.info('review', 'Starting review phase', {
+    storyId: story.frontmatter.id,
+    retryCount: story.frontmatter.retry_count || 0,
+  });
 
   // Security: Validate working directory before any operations
   try {
@@ -880,6 +888,14 @@ ${passed ? '✅ **PASSED** - All reviews approved' : '❌ **FAILED** - Issues mu
       // Don't mark reviews_complete, this will trigger rework
     }
 
+    logger.info('review', 'Review phase complete', {
+      storyId: story.frontmatter.id,
+      durationMs: Date.now() - startTime,
+      passed,
+      decision,
+      issueCount: allIssues.length,
+    });
+
     return {
       success: true,
       story: parseStory(storyPath),
@@ -894,6 +910,12 @@ ${passed ? '✅ **PASSED** - All reviews approved' : '❌ **FAILED** - Issues mu
   } catch (error) {
     // Review agent failure - return FAILED decision (doesn't count as retry)
     const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error('review', 'Review phase failed', {
+      storyId: story.frontmatter.id,
+      durationMs: Date.now() - startTime,
+      error: errorMsg,
+    });
+
     return {
       success: false,
       story,

@@ -1,5 +1,6 @@
 import { parseStory, writeStory, appendToSection, updateStoryField } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
+import { getLogger } from '../core/logger.js';
 import { Story, AgentResult } from '../types/index.js';
 import path from 'path';
 import { AgentOptions } from './research.js';
@@ -121,9 +122,16 @@ export async function runPlanningAgent(
   sdlcRoot: string,
   options: AgentOptions = {}
 ): Promise<AgentResult> {
+  const logger = getLogger();
+  const startTime = Date.now();
   const story = parseStory(storyPath);
   const changesMade: string[] = [];
   const workingDir = path.dirname(sdlcRoot);
+
+  logger.info('planning', 'Starting planning phase', {
+    storyId: story.frontmatter.id,
+    hasReworkContext: !!options.reworkContext,
+  });
 
   try {
     // Load config to check if TDD is enabled globally
@@ -136,6 +144,7 @@ export async function runPlanningAgent(
 
     if (story.frontmatter.tdd_enabled ?? tddEnabledInConfig) {
       changesMade.push('TDD mode enabled - plan will use Red-Green-Refactor structure');
+      logger.debug('planning', 'TDD mode enabled for planning');
     }
 
     const planContent = await runAgentQuery({
@@ -153,17 +162,30 @@ export async function runPlanningAgent(
     await updateStoryField(story, 'plan_complete', true);
     changesMade.push('Marked plan_complete: true');
 
+    logger.info('planning', 'Planning phase complete', {
+      storyId: story.frontmatter.id,
+      durationMs: Date.now() - startTime,
+      planLength: planContent.length,
+    });
+
     return {
       success: true,
       story: parseStory(storyPath), // Re-read to get updated content
       changesMade,
     };
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('planning', 'Planning phase failed', {
+      storyId: story.frontmatter.id,
+      durationMs: Date.now() - startTime,
+      error: errorMessage,
+    });
+
     return {
       success: false,
       story,
       changesMade,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage,
     };
   }
 }

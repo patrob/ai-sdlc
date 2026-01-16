@@ -1,5 +1,6 @@
 import { parseStory, writeStory, updateStoryStatus } from '../core/story.js';
 import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
+import { getLogger } from '../core/logger.js';
 import { Story, AgentResult } from '../types/index.js';
 import path from 'path';
 import { AgentOptions } from './research.js';
@@ -30,8 +31,15 @@ export async function runRefinementAgent(
   sdlcRoot: string,
   options: AgentOptions = {}
 ): Promise<AgentResult> {
+  const logger = getLogger();
+  const startTime = Date.now();
   const story = parseStory(storyPath);
   const changesMade: string[] = [];
+
+  logger.info('refinement', 'Starting refinement phase', {
+    storyId: story.frontmatter.id,
+    status: story.frontmatter.status,
+  });
 
   try {
     const prompt = `Please refine this story:
@@ -86,17 +94,31 @@ Format your response as markdown that will replace the story content.`;
     const movedStory = await updateStoryStatus(story, 'ready');
     changesMade.push('Updated status to ready');
 
+    logger.info('refinement', 'Refinement phase complete', {
+      storyId: story.frontmatter.id,
+      durationMs: Date.now() - startTime,
+      newStatus: 'ready',
+      changesCount: changesMade.length,
+    });
+
     return {
       success: true,
       story: movedStory,
       changesMade,
     };
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('refinement', 'Refinement phase failed', {
+      storyId: story.frontmatter.id,
+      durationMs: Date.now() - startTime,
+      error: errorMessage,
+    });
+
     return {
       success: false,
       story,
       changesMade,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage,
     };
   }
 }

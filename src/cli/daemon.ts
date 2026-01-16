@@ -1,6 +1,7 @@
 import chokidar, { FSWatcher } from 'chokidar';
 import path from 'path';
 import { getSdlcRoot, loadConfig } from '../core/config.js';
+import { getLogger } from '../core/logger.js';
 import { assessState } from '../core/kanban.js';
 import { parseStory, getStory } from '../core/story.js';
 import { getThemedChalk } from '../core/theme.js';
@@ -117,6 +118,11 @@ export class DaemonRunner {
    */
   async start(): Promise<void> {
     const c = getThemedChalk(this.config);
+    const logger = getLogger();
+
+    logger.info('daemon', 'Daemon starting', {
+      pollingInterval: this.config.daemon?.pollingInterval || 5000,
+    });
 
     this.logStartup();
 
@@ -588,6 +594,15 @@ export class DaemonRunner {
    */
   private logWorkflowComplete(storyId: string, success: boolean, actionCount: number = 0, elapsedMs: number = 0): void {
     const c = getThemedChalk(this.config);
+    const logger = getLogger();
+
+    logger.info('daemon', 'Story workflow completed', {
+      storyId,
+      success,
+      actionCount,
+      durationMs: elapsedMs,
+    });
+
     if (this.options.verbose) {
       // Verbose: show multi-line output
       if (success) {
@@ -629,8 +644,14 @@ export class DaemonRunner {
    */
   private logShutdown(): void {
     const c = getThemedChalk(this.config);
+    const logger = getLogger();
     const msg = '\n✨ Daemon shutdown complete\n';
     console.log(c?.success?.(msg) || msg);
+
+    logger.info('daemon', 'Daemon shutdown complete', {
+      storiesProcessed: this.stats.done,
+      uptime: Date.now() - this.stats.startTime.getTime(),
+    });
   }
 }
 

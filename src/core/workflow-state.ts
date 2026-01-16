@@ -16,6 +16,7 @@ import {
 } from '../types/workflow-state.js';
 import { STORIES_FOLDER } from '../types/index.js';
 import { sanitizeStoryId } from './story.js';
+import { getLogger } from './logger.js';
 
 const STATE_FILE_NAME = '.workflow-state.json';
 const CURRENT_VERSION: WorkflowStateVersion = '1.0';
@@ -74,8 +75,15 @@ export async function saveWorkflowState(
   sdlcRoot: string,
   storyId?: string
 ): Promise<void> {
+  const logger = getLogger();
   const statePath = getStateFilePath(sdlcRoot, storyId);
   const stateJson = JSON.stringify(state, null, 2);
+
+  logger.debug('workflow-state', 'Saving workflow state', {
+    workflowId: state.workflowId,
+    storyId,
+    actionCount: state.completedActions.length,
+  });
 
   try {
     // Ensure the directory exists (including story subdirectories)
@@ -113,11 +121,13 @@ export async function loadWorkflowState(
   sdlcRoot: string,
   storyId?: string
 ): Promise<WorkflowExecutionState | null> {
+  const logger = getLogger();
   const statePath = getStateFilePath(sdlcRoot, storyId);
 
   try {
     // Check if file exists
     if (!fs.existsSync(statePath)) {
+      logger.debug('workflow-state', 'No workflow state found', { storyId });
       return null;
     }
 
@@ -131,9 +141,17 @@ export async function loadWorkflowState(
       throw new Error(`Invalid state file: ${validation.errors.join(', ')}`);
     }
 
+    logger.debug('workflow-state', 'Loaded workflow state', {
+      workflowId: state.workflowId,
+      storyId,
+      actionCount: state.completedActions.length,
+      ageMs: Date.now() - new Date(state.timestamp).getTime(),
+    });
+
     return state;
   } catch (error) {
     if (error instanceof SyntaxError) {
+      logger.error('workflow-state', 'Corrupted state file', { statePath });
       throw new Error(
         `Corrupted workflow state file at ${statePath}. ` +
         `Delete the file to start fresh: rm "${statePath}"`

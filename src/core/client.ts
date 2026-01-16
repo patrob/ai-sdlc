@@ -1,6 +1,7 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { configureAgentSdkAuth, getApiKey, getCredentialType, CredentialType, getTokenExpirationInfo } from './auth.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from './config.js';
+import { getLogger } from './logger.js';
 import { platform, homedir } from 'os';
 import path from 'path';
 
@@ -83,6 +84,9 @@ function isValidWorkingDirectory(workingDir: string): boolean {
  * CLAUDE.md discovery is handled automatically by the SDK when settingSources includes 'project'.
  */
 export async function runAgentQuery(options: AgentQueryOptions): Promise<string> {
+  const logger = getLogger();
+  const queryStartTime = Date.now();
+
   // Configure authentication
   const authResult = configureAgentSdkAuth();
   if (!authResult.configured) {
@@ -128,6 +132,15 @@ export async function runAgentQuery(options: AgentQueryOptions): Promise<string>
   const config = loadConfig(workingDir);
   const settingSources = config.settingSources || [];
   const timeout = options.timeout ?? config.timeouts?.agentTimeout ?? DEFAULT_TIMEOUTS.agentTimeout;
+
+  // Log query start
+  logger.debug('agent-sdk', 'Starting agent query', {
+    model: options.model || 'claude-sonnet-4-5-20250929',
+    workingDirectory: workingDir,
+    timeoutMs: timeout,
+    authType: authResult.type,
+    promptLength: options.prompt.length,
+  });
 
   const results: string[] = [];
 
@@ -205,9 +218,19 @@ export async function runAgentQuery(options: AgentQueryOptions): Promise<string>
 
           case 'error':
             options.onProgress?.({ type: 'error', message: message.error?.message || 'Agent error' });
-            throw new Error(message.error?.message || 'Agent error');
+            const agentError = new Error(message.error?.message || 'Agent error');
+            logger.error('agent-sdk', 'Agent query error', {
+              durationMs: Date.now() - queryStartTime,
+              error: agentError.message,
+            });
+            throw agentError;
         }
       }
+      const queryDuration = Date.now() - queryStartTime;
+      logger.info('agent-sdk', 'Agent query completed', {
+        durationMs: queryDuration,
+        resultLength: results.join('\n').length,
+      });
       return results.join('\n');
     } finally {
       if (timeoutId) {
@@ -217,7 +240,17 @@ export async function runAgentQuery(options: AgentQueryOptions): Promise<string>
   };
 
   // Race between the agent query and the timeout
-  return Promise.race([processMessages(), timeoutPromise]);
+  try {
+    return await Promise.race([processMessages(), timeoutPromise]);
+  } catch (error) {
+    if (error instanceof AgentTimeoutError) {
+      logger.error('agent-sdk', 'Agent query timed out', {
+        durationMs: Date.now() - queryStartTime,
+        timeoutMs: timeout,
+      });
+    }
+    throw error;
+  }
 }
 
 /**

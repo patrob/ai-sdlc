@@ -25,6 +25,7 @@ import { getTerminalWidth } from './formatting.js';
 import { validateGitState, GitValidationResult } from '../core/git-utils.js';
 import { StoryLogger } from '../core/story-logger.js';
 import { detectConflicts } from '../core/conflict-detector.js';
+import { getLogger } from '../core/logger.js';
 
 /**
  * Initialize the .ai-sdlc folder structure
@@ -495,6 +496,18 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     : undefined;
   let sdlcRoot = getSdlcRoot();
   const c = getThemedChalk(config);
+  const logger = getLogger();
+
+  logger.debug('workflow', 'Run command initiated', {
+    auto: options.auto,
+    dryRun: options.dryRun,
+    continue: options.continue,
+    story: options.story,
+    step: options.step,
+    watch: options.watch,
+    worktree: options.worktree,
+    force: options.force,
+  });
 
   // Migrate global workflow state to story-specific location if needed
   // Only run when NOT continuing (to avoid interrupting resumed workflows)
@@ -1144,15 +1157,24 @@ interface ActionExecutionResult {
 async function executeAction(action: Action, sdlcRoot: string): Promise<ActionExecutionResult> {
   const config = loadConfig();
   const c = getThemedChalk(config);
+  const globalLogger = getLogger();
+  const actionStartTime = Date.now();
+
+  // Log action start to global logger
+  globalLogger.info('action', `Starting action: ${action.type}`, {
+    storyId: action.storyId,
+    actionType: action.type,
+    storyPath: action.storyPath,
+  });
 
   // Initialize per-story logger
   const maxLogs = config.logging?.maxFiles ?? 5;
-  let logger: StoryLogger | null = null;
+  let storyLogger: StoryLogger | null = null;
   let spinner: ReturnType<typeof ora> | null = null;
 
   try {
-    logger = new StoryLogger(action.storyId, sdlcRoot, maxLogs);
-    logger.log('INFO', `Starting action: ${action.type} for story ${action.storyId}`);
+    storyLogger = new StoryLogger(action.storyId, sdlcRoot, maxLogs);
+    storyLogger.log('INFO', `Starting action: ${action.type} for story ${action.storyId}`);
   } catch (error) {
     // If logger initialization fails, continue without logging (console-only)
     console.warn(`Warning: Failed to initialize logger: ${error instanceof Error ? error.message : String(error)}`);
@@ -1166,14 +1188,14 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
       resolvedPath = story.path;
     } catch (error) {
       const errorMsg = `Error: Story not found for action "${action.type}"`;
-      logger?.log('ERROR', errorMsg);
-      logger?.log('ERROR', `  Story ID: ${action.storyId}`);
-      logger?.log('ERROR', `  Original path: ${action.storyPath}`);
+      storyLogger?.log('ERROR', errorMsg);
+      storyLogger?.log('ERROR', `  Story ID: ${action.storyId}`);
+      storyLogger?.log('ERROR', `  Original path: ${action.storyPath}`);
       console.log(c.error(errorMsg));
       console.log(c.dim(`  Story ID: ${action.storyId}`));
       console.log(c.dim(`  Original path: ${action.storyPath}`));
       if (error instanceof Error) {
-        logger?.log('ERROR', `  ${error.message}`);
+        storyLogger?.log('ERROR', `  ${error.message}`);
         console.log(c.dim(`  ${error.message}`));
       }
       return { success: false };
@@ -1181,9 +1203,9 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
 
     // Update action path if it was stale
     if (resolvedPath !== action.storyPath) {
-      logger?.log('WARN', `Note: Story path updated (file was moved)`);
-      logger?.log('WARN', `  From: ${action.storyPath}`);
-      logger?.log('WARN', `  To: ${resolvedPath}`);
+      storyLogger?.log('WARN', `Note: Story path updated (file was moved)`);
+      storyLogger?.log('WARN', `  From: ${action.storyPath}`);
+      storyLogger?.log('WARN', `  To: ${resolvedPath}`);
       console.log(c.warning(`Note: Story path updated (file was moved)`));
       console.log(c.dim(`  From: ${action.storyPath}`));
       console.log(c.dim(`  To: ${resolvedPath}`));
@@ -1309,23 +1331,36 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
     }
 
     // Check if agent succeeded
+    const actionDuration = Date.now() - actionStartTime;
     if (result && !result.success) {
       spinner.fail(c.error(`Failed: ${formatAction(action, true, c)}`));
-      logger?.log('ERROR', `Action failed: ${formatAction(action, false, c)}`);
+      storyLogger?.log('ERROR', `Action failed: ${formatAction(action, false, c)}`);
+      globalLogger.warn('action', `Action failed: ${action.type}`, {
+        storyId: action.storyId,
+        actionType: action.type,
+        durationMs: actionDuration,
+        error: result.error,
+      });
       if (result.error) {
-        logger?.log('ERROR', `  Error: ${result.error}`);
+        storyLogger?.log('ERROR', `  Error: ${result.error}`);
         console.error(c.error(`  Error: ${result.error}`));
       }
       return { success: false };
     }
 
     spinner.succeed(c.success(formatAction(action, true, c)));
-    logger?.log('INFO', `Action completed successfully: ${formatAction(action, false, c)}`);
+    storyLogger?.log('INFO', `Action completed successfully: ${formatAction(action, false, c)}`);
+    globalLogger.info('action', `Action completed: ${action.type}`, {
+      storyId: action.storyId,
+      actionType: action.type,
+      durationMs: actionDuration,
+      changesCount: result?.changesMade?.length ?? 0,
+    });
 
     // Show changes made
     if (result && result.changesMade.length > 0) {
       for (const change of result.changesMade) {
-        logger?.log('INFO', `  → ${change}`);
+        storyLogger?.log('INFO', `  → ${change}`);
         console.log(c.dim(`  → ${change}`));
       }
     }
@@ -1386,13 +1421,20 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
 
     return { success: true };
   } catch (error) {
+    const exceptionDuration = Date.now() - actionStartTime;
     if (spinner) {
       spinner.fail(c.error(`Failed: ${formatAction(action, true, c)}`));
     } else {
       console.error(c.error(`Failed: ${formatAction(action, true, c)}`));
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logger?.log('ERROR', `Exception during action execution: ${errorMessage}`);
+    storyLogger?.log('ERROR', `Exception during action execution: ${errorMessage}`);
+    globalLogger.error('action', `Action exception: ${action.type}`, {
+      storyId: action.storyId,
+      actionType: action.type,
+      durationMs: exceptionDuration,
+      error: errorMessage,
+    });
     console.error(error);
 
     // Show phase checklist with error indication (if file still exists)
@@ -1408,7 +1450,7 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
     return { success: false };
   } finally {
     // Always close logger, even if action fails or throws
-    logger?.close();
+    storyLogger?.close();
   }
 }
 

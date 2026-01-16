@@ -11,6 +11,8 @@ import {
   getCredentialType,
   hasApiKey,
   configureAgentSdkAuth,
+  isTokenExpiringSoon,
+  getTokenExpirationInfo,
 } from './auth.js';
 
 // Mock all the modules we need
@@ -620,6 +622,261 @@ describe('auth', () => {
       expect(result.type).toBe('api_key');
       expect(process.env.ANTHROPIC_API_KEY).toBe('sk-ant-api-test');
       expect(process.env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+    });
+  });
+
+  describe('isTokenExpiringSoon', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    it('should return true when token expires within default buffer (5 minutes)', () => {
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+
+      // Token expires in 3 minutes
+      const expiresAt = '2026-01-15T12:03:00Z';
+      expect(isTokenExpiringSoon(expiresAt)).toBe(true);
+    });
+
+    it('should return false when token expires outside default buffer', () => {
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+
+      // Token expires in 10 minutes
+      const expiresAt = '2026-01-15T12:10:00Z';
+      expect(isTokenExpiringSoon(expiresAt)).toBe(false);
+    });
+
+    it('should respect custom buffer values', () => {
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+
+      // Token expires in 7 minutes
+      const expiresAt = '2026-01-15T12:07:00Z';
+
+      // With 5-minute buffer: false (7 > 5)
+      expect(isTokenExpiringSoon(expiresAt, 5 * 60 * 1000)).toBe(false);
+
+      // With 10-minute buffer: true (7 < 10)
+      expect(isTokenExpiringSoon(expiresAt, 10 * 60 * 1000)).toBe(true);
+    });
+
+    it('should return false for tokens that already expired', () => {
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+
+      // Token expired 1 minute ago
+      const expiresAt = '2026-01-15T11:59:00Z';
+      expect(isTokenExpiringSoon(expiresAt)).toBe(false);
+    });
+
+    it('should return false when expiresAt is undefined', () => {
+      expect(isTokenExpiringSoon(undefined)).toBe(false);
+    });
+
+    it('should return false for malformed dates', () => {
+      expect(isTokenExpiringSoon('invalid-date')).toBe(false);
+      expect(isTokenExpiringSoon('not-a-timestamp')).toBe(false);
+    });
+
+    it('should handle tokens expiring exactly at buffer boundary', () => {
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+
+      // Token expires in exactly 5 minutes
+      const expiresAt = '2026-01-15T12:05:00Z';
+      expect(isTokenExpiringSoon(expiresAt, 5 * 60 * 1000)).toBe(true);
+    });
+  });
+
+  describe('getTokenExpirationInfo', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    it('should return correct expiration info for valid token', () => {
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+        accessToken: 'sk-ant-oat-token',
+        expiresAt: '2026-01-15T12:10:00Z' // 10 minutes from now
+      }));
+
+      const info = getTokenExpirationInfo();
+
+      expect(info.isExpired).toBe(false);
+      expect(info.expiresAt).toEqual(new Date('2026-01-15T12:10:00Z'));
+      expect(info.expiresInMs).toBe(10 * 60 * 1000);
+      expect(info.source).toBe(path.join('/home/testuser', '.claude', '.credentials.json'));
+    });
+
+    it('should detect expired tokens', () => {
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+        accessToken: 'sk-ant-oat-token',
+        expiresAt: '2026-01-15T11:00:00Z' // 1 hour ago
+      }));
+
+      const info = getTokenExpirationInfo();
+
+      expect(info.isExpired).toBe(true);
+      expect(info.expiresAt).toEqual(new Date('2026-01-15T11:00:00Z'));
+      expect(info.expiresInMs).toBe(-60 * 60 * 1000); // negative (already expired)
+      expect(info.source).not.toBeNull();
+    });
+
+    it('should handle missing expiresAt field', () => {
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+        accessToken: 'sk-ant-oat-token'
+        // no expiresAt
+      }));
+
+      const info = getTokenExpirationInfo();
+
+      expect(info.isExpired).toBe(false);
+      expect(info.expiresAt).toBeNull();
+      expect(info.expiresInMs).toBeNull();
+      expect(info.source).toBe(path.join('/home/testuser', '.claude', '.credentials.json'));
+    });
+
+    it('should handle null expiresAt field', () => {
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+        accessToken: 'sk-ant-oat-token',
+        expiresAt: null
+      }));
+
+      const info = getTokenExpirationInfo();
+
+      expect(info.isExpired).toBe(false);
+      expect(info.expiresAt).toBeNull();
+      expect(info.expiresInMs).toBeNull();
+    });
+
+    it('should handle malformed expiresAt date', () => {
+      const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+        accessToken: 'sk-ant-oat-token',
+        expiresAt: 'invalid-date-string'
+      }));
+
+      const info = getTokenExpirationInfo();
+
+      expect(info.isExpired).toBe(false);
+      expect(info.expiresAt).toBeNull();
+      expect(info.expiresInMs).toBeNull();
+      expect(debugSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid date format')
+      );
+    });
+
+    it('should handle credentials file not found', () => {
+      const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+      enoentError.code = 'ENOENT';
+      vi.mocked(readFileSync).mockImplementation(() => { throw enoentError; });
+
+      const info = getTokenExpirationInfo();
+
+      expect(info.isExpired).toBe(false);
+      expect(info.expiresAt).toBeNull();
+      expect(info.expiresInMs).toBeNull();
+      expect(info.source).toBeNull();
+    });
+
+    it('should include credential source path for debugging', () => {
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+        accessToken: 'sk-ant-oat-token',
+        expiresAt: '2026-12-31T23:59:59Z'
+      }));
+
+      const info = getTokenExpirationInfo();
+
+      expect(info.source).toContain('.claude');
+      expect(info.source).toContain('.credentials.json');
+    });
+
+    it('should calculate negative expiresInMs for expired tokens', () => {
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+        accessToken: 'sk-ant-oat-token',
+        expiresAt: '2026-01-15T11:55:00Z' // 5 minutes ago
+      }));
+
+      const info = getTokenExpirationInfo();
+
+      expect(info.expiresInMs).toBe(-5 * 60 * 1000);
+      expect(info.isExpired).toBe(true);
+    });
+
+    it('should handle tokens expiring within clock skew buffer', () => {
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+
+      // Token expires in 15 seconds (within 30-second buffer)
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+        accessToken: 'sk-ant-oat-token',
+        expiresAt: '2026-01-15T12:00:15Z'
+      }));
+
+      const info = getTokenExpirationInfo();
+
+      // Should be considered expired due to 30-second clock skew buffer
+      expect(info.isExpired).toBe(true);
+      expect(info.expiresInMs).toBe(15 * 1000);
+    });
+  });
+
+  describe('isTokenExpired with clock skew buffer', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    it('should return true for tokens expired more than 30 seconds ago', () => {
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+
+      // Mock readFileSync to test via getApiKey
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+        accessToken: 'sk-ant-oat-token',
+        expiresAt: '2026-01-15T11:59:00Z' // 60 seconds ago
+      }));
+
+      const info = getTokenExpirationInfo();
+      expect(info.isExpired).toBe(true);
+    });
+
+    it('should return false for tokens within 30-second clock skew buffer', () => {
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+        accessToken: 'sk-ant-oat-token',
+        expiresAt: '2026-01-15T11:59:45Z' // 15 seconds ago (within 30s buffer)
+      }));
+
+      const info = getTokenExpirationInfo();
+      // Should be considered expired (current time >= expiry - 30s)
+      expect(info.isExpired).toBe(true);
+    });
+
+    it('should return false for future expiration dates', () => {
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+        accessToken: 'sk-ant-oat-token',
+        expiresAt: '2026-01-15T12:10:00Z' // 10 minutes in future
+      }));
+
+      const info = getTokenExpirationInfo();
+      expect(info.isExpired).toBe(false);
+    });
+
+    it('should handle tokens expiring exactly at 30-second boundary', () => {
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+        accessToken: 'sk-ant-oat-token',
+        expiresAt: '2026-01-15T12:00:30Z' // exactly 30 seconds from now
+      }));
+
+      const info = getTokenExpirationInfo();
+      // At boundary: now (12:00:00) >= expiry (12:00:30) - 30s (12:00:00) = true
+      expect(info.isExpired).toBe(true);
     });
   });
 });

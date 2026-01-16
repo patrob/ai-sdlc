@@ -16,7 +16,7 @@ vi.mock('../../src/core/client.js', () => ({
   runAgentQuery: vi.fn(),
 }));
 
-describe('Refinement Loop Integration', () => {
+describe.sequential('Refinement Loop Integration', () => {
   let testDir: string;
   let sdlcRoot: string;
 
@@ -64,15 +64,15 @@ describe('Refinement Loop Integration', () => {
 
   it('should complete full refinement loop: fail → rework → implement → pass', async () => {
     // Step 1: Create story and move to in-progress
-    let story = createStory('Test Feature', sdlcRoot, {
+    let story = await createStory('Test Feature', sdlcRoot, {
       type: 'feature',
       labels: ['test'],
     });
-    story = updateStoryStatus(story, 'in-progress');
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Step 2: Add failed review
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -84,7 +84,7 @@ describe('Refinement Loop Integration', () => {
     });
 
     // Step 3: Assess state - should generate rework action
-    let assessment = assessState(sdlcRoot);
+    let assessment = await assessState(sdlcRoot);
     let reworkAction = assessment.recommendedActions.find(a => a.type === 'rework');
     expect(reworkAction).toBeDefined();
     expect(reworkAction!.context.iteration).toBe(1);
@@ -132,7 +132,7 @@ describe('Refinement Loop Integration', () => {
     story.frontmatter.implementation_complete = true;
 
     // Step 7: Add passing review
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.APPROVED,
       feedback: 'All issues resolved',
@@ -144,10 +144,10 @@ describe('Refinement Loop Integration', () => {
 
     // Mark reviews complete after approval
     story.frontmatter.reviews_complete = true;
-    writeStory(story);
+    await writeStory(story);
 
     // Step 8: Assess state - should generate create_pr action, not rework
-    assessment = assessState(sdlcRoot);
+    assessment = await assessState(sdlcRoot);
     reworkAction = assessment.recommendedActions.find(a => a.type === 'rework');
     const prAction = assessment.recommendedActions.find(a => a.type === 'create_pr');
 
@@ -157,12 +157,12 @@ describe('Refinement Loop Integration', () => {
 
   it('should escalate after multiple failed refinement iterations', async () => {
     // Create story and move to in-progress
-    let story = createStory('Difficult Feature', sdlcRoot);
-    story = updateStoryStatus(story, 'in-progress');
+    let story = await createStory('Difficult Feature', sdlcRoot);
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Iteration 1: First failure
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -173,7 +173,7 @@ describe('Refinement Loop Integration', () => {
       poReviewPassed: true,
     });
 
-    let assessment = assessState(sdlcRoot);
+    let assessment = await assessState(sdlcRoot);
     let reworkAction = assessment.recommendedActions.find(a => a.type === 'rework');
     expect(reworkAction).toBeDefined();
 
@@ -190,7 +190,7 @@ describe('Refinement Loop Integration', () => {
     story.frontmatter.implementation_complete = true;
 
     // Iteration 2: Second failure
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.CRITICAL,
@@ -201,7 +201,7 @@ describe('Refinement Loop Integration', () => {
       poReviewPassed: true,
     });
 
-    assessment = assessState(sdlcRoot);
+    assessment = await assessState(sdlcRoot);
     reworkAction = assessment.recommendedActions.find(a => a.type === 'rework');
     expect(reworkAction).toBeDefined();
     expect(reworkAction!.context.iteration).toBe(2);
@@ -219,7 +219,7 @@ describe('Refinement Loop Integration', () => {
     story.frontmatter.implementation_complete = true;
 
     // Iteration 3: Third failure
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.CRITICAL,
@@ -230,7 +230,7 @@ describe('Refinement Loop Integration', () => {
       poReviewPassed: true,
     });
 
-    assessment = assessState(sdlcRoot);
+    assessment = await assessState(sdlcRoot);
     reworkAction = assessment.recommendedActions.find(a => a.type === 'rework');
     expect(reworkAction).toBeDefined();
     expect(reworkAction!.context.iteration).toBe(3);
@@ -248,7 +248,7 @@ describe('Refinement Loop Integration', () => {
     story.frontmatter.implementation_complete = true;
 
     // Fourth failure: Should trigger circuit breaker
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.CRITICAL,
@@ -259,7 +259,7 @@ describe('Refinement Loop Integration', () => {
       poReviewPassed: false,
     });
 
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Re-parse story to see updated status after assessState
     story = parseStory(story.path);
@@ -270,8 +270,8 @@ describe('Refinement Loop Integration', () => {
   });
 
   it('should track refinement history across multiple iterations', async () => {
-    let story = createStory('Test Story', sdlcRoot);
-    story = updateStoryStatus(story, 'in-progress');
+    let story = await createStory('Test Story', sdlcRoot);
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // First refinement
@@ -310,7 +310,7 @@ describe('Refinement Loop Integration', () => {
   });
 });
 
-describe('Review Agent Pre-check Integration', () => {
+describe.sequential('Review Agent Pre-check Integration', () => {
   let testDir: string;
   let sdlcRoot: string;
 
@@ -368,8 +368,8 @@ describe('Review Agent Pre-check Integration', () => {
 
   it('should block review and skip LLM calls when tests fail', async () => {
     // Setup: Create a story with completed implementation
-    let story = createStory('Feature with Failing Tests', sdlcRoot);
-    story = updateStoryStatus(story, 'in-progress');
+    let story = await createStory('Feature with Failing Tests', sdlcRoot);
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Mock spawn to simulate failed test execution
@@ -428,8 +428,8 @@ describe('Review Agent Pre-check Integration', () => {
 
   it('should proceed with reviews when tests pass', async () => {
     // Setup: Create a story with completed implementation
-    let story = createStory('Feature with Passing Tests', sdlcRoot);
-    story = updateStoryStatus(story, 'in-progress');
+    let story = await createStory('Feature with Passing Tests', sdlcRoot);
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Mock spawn to simulate successful test execution
@@ -472,8 +472,8 @@ describe('Review Agent Pre-check Integration', () => {
 
   it('should truncate large test output in BLOCKER issue', async () => {
     // Setup: Create a story
-    let story = createStory('Feature with Verbose Test Failure', sdlcRoot);
-    story = updateStoryStatus(story, 'in-progress');
+    let story = await createStory('Feature with Verbose Test Failure', sdlcRoot);
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Mock spawn to return very large test output (>10KB)
@@ -518,8 +518,8 @@ describe('Review Agent Pre-check Integration', () => {
 
   it('should handle test timeout gracefully', async () => {
     // Setup: Create a story
-    let story = createStory('Feature with Hanging Tests', sdlcRoot);
-    story = updateStoryStatus(story, 'in-progress');
+    let story = await createStory('Feature with Hanging Tests', sdlcRoot);
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
     // Mock spawn to simulate timeout scenario

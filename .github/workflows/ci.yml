@@ -77,7 +77,8 @@ jobs:
         run: npm publish --provenance --access public --tag alpha
 
   publish-stable:
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Skip alpha tags - alpha versions are auto-published by publish-alpha on push to main
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-alpha')
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -102,10 +103,8 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Publishing version: ${VERSION}"
 
-          # Determine npm tag based on version type
-          if [[ "$VERSION" == *"-alpha"* ]]; then
-            echo "tag=alpha" >> $GITHUB_OUTPUT
-          elif [[ "$VERSION" == *"-beta"* ]]; then
+          # Determine npm tag based on version type (alpha tags are handled by publish-alpha job)
+          if [[ "$VERSION" == *"-beta"* ]]; then
             echo "tag=beta" >> $GITHUB_OUTPUT
           elif [[ "$VERSION" == *"-rc"* ]]; then
             echo "tag=rc" >> $GITHUB_OUTPUT

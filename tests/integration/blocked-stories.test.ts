@@ -6,7 +6,7 @@ import { createStory, updateStoryStatus, parseStory, writeStory, unblockStory, a
 import { assessState } from '../../src/core/kanban.js';
 import { BLOCKED_DIR, STORIES_FOLDER, ReviewDecision, ReviewSeverity } from '../../src/types/index.js';
 
-describe('Blocked Stories Integration', () => {
+describe.sequential('Blocked Stories Integration', () => {
   let testDir: string;
   let sdlcRoot: string;
 
@@ -54,22 +54,22 @@ describe('Blocked Stories Integration', () => {
     }
   });
 
-  it('should move story to blocked folder after max refinements reached', () => {
+  it('should move story to blocked folder after max refinements reached', async () => {
     // Step 1: Create story with max_refinement_attempts: 2
-    let story = createStory('Test Feature', sdlcRoot, {
+    let story = await createStory('Test Feature', sdlcRoot, {
       type: 'feature',
       labels: ['test'],
       max_refinement_attempts: 2,
     });
 
     // Step 2: Update status to in-progress and set implementation_complete
-    story = updateStoryStatus(story, 'in-progress');
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2; // Reached max
     story.frontmatter.current_iteration = 2;
 
     // Add a rejected review (required to trigger circuit breaker)
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -81,7 +81,7 @@ describe('Blocked Stories Integration', () => {
     });
 
     // Step 3: Call assessState - should update story status to blocked
-    const assessment = assessState(sdlcRoot);
+    const assessment = await assessState(sdlcRoot);
 
     // Step 4: Verify story status is blocked (file path stays same in new architecture)
     const blockedStory = parseStory(story.path);
@@ -98,23 +98,23 @@ describe('Blocked Stories Integration', () => {
     expect(assessment.recommendedActions.length).toBe(0);
   });
 
-  it('should handle multiple stories blocked concurrently', () => {
+  it('should handle multiple stories blocked concurrently', async () => {
     // Create 3 stories at max refinements
     const stories = [];
     for (let i = 0; i < 3; i++) {
-      let story = createStory(`Test Feature ${i}`, sdlcRoot, {
+      let story = await createStory(`Test Feature ${i}`, sdlcRoot, {
         type: 'feature',
         labels: ['test'],
         max_refinement_attempts: 2,
       });
 
-      story = updateStoryStatus(story, 'in-progress');
+      story = await updateStoryStatus(story, 'in-progress');
       story.frontmatter.implementation_complete = true;
       story.frontmatter.refinement_count = 2;
       story.frontmatter.current_iteration = 2;
 
       // Add a rejected review (required to trigger circuit breaker)
-      appendReviewHistory(story, {
+      await appendReviewHistory(story, {
         timestamp: new Date().toISOString(),
         decision: ReviewDecision.REJECTED,
         severity: ReviewSeverity.HIGH,
@@ -128,7 +128,7 @@ describe('Blocked Stories Integration', () => {
     }
 
     // Call assessState - should block all 3 stories (update status in frontmatter)
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Verify all stories have blocked status (path stays same in new architecture)
     let blockedCount = 0;
@@ -142,23 +142,23 @@ describe('Blocked Stories Integration', () => {
     expect(blockedCount).toBe(3);
   });
 
-  it('should log clear message when blocking a story', () => {
+  it('should log clear message when blocking a story', async () => {
     // Mock console.log to capture output
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     // Create story at max refinements
-    let story = createStory('Test Feature', sdlcRoot, {
+    let story = await createStory('Test Feature', sdlcRoot, {
       type: 'feature',
       max_refinement_attempts: 2,
     });
 
-    story = updateStoryStatus(story, 'in-progress');
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2;
     story.frontmatter.current_iteration = 2;
 
     // Add a rejected review (required to trigger circuit breaker)
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -170,7 +170,7 @@ describe('Blocked Stories Integration', () => {
     });
 
     // Call assessState
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Verify log message
     expect(logSpy).toHaveBeenCalledWith(
@@ -183,20 +183,20 @@ describe('Blocked Stories Integration', () => {
     logSpy.mockRestore();
   });
 
-  it('should use config default when story max_refinement_attempts not set', () => {
+  it('should use config default when story max_refinement_attempts not set', async () => {
     // Create story without max_refinement_attempts (uses config default of 2)
-    let story = createStory('Test Feature', sdlcRoot, {
+    let story = await createStory('Test Feature', sdlcRoot, {
       type: 'feature',
       labels: ['test'],
     });
 
-    story = updateStoryStatus(story, 'in-progress');
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2; // Reached config default
     story.frontmatter.current_iteration = 2;
 
     // Add a rejected review (required to trigger circuit breaker)
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -208,7 +208,7 @@ describe('Blocked Stories Integration', () => {
     });
 
     // Call assessState
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Verify story has blocked status (path stays same)
     const blockedStory = parseStory(story.path);
@@ -216,20 +216,20 @@ describe('Blocked Stories Integration', () => {
     expect(blockedStory.frontmatter.blocked_reason).toContain('(2/2)');
   });
 
-  it('should not block story when below max refinements', () => {
+  it('should not block story when below max refinements', async () => {
     // Create story with refinement_count below max
-    let story = createStory('Test Feature', sdlcRoot, {
+    let story = await createStory('Test Feature', sdlcRoot, {
       type: 'feature',
       max_refinement_attempts: 2,
     });
 
-    story = updateStoryStatus(story, 'in-progress');
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 1; // Below max
     story.frontmatter.current_iteration = 1;
 
     // Add a rejected review (story still has retries remaining)
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -241,7 +241,7 @@ describe('Blocked Stories Integration', () => {
     });
 
     // Call assessState
-    const assessment = assessState(sdlcRoot);
+    const assessment = await assessState(sdlcRoot);
 
     // Verify story status is still in-progress (not blocked - has retries left)
     const updatedStory = parseStory(story.path);
@@ -253,16 +253,16 @@ describe('Blocked Stories Integration', () => {
     expect(reworkAction).toBeDefined();
   });
 
-  it('should preserve all story content and metadata when blocking', () => {
+  it('should preserve all story content and metadata when blocking', async () => {
     // Create story with various metadata
-    let story = createStory('Test Feature', sdlcRoot, {
+    let story = await createStory('Test Feature', sdlcRoot, {
       type: 'feature',
       labels: ['test', 'important'],
       max_refinement_attempts: 2,
       estimated_effort: 'medium',
     });
 
-    story = updateStoryStatus(story, 'in-progress');
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
     story.frontmatter.research_complete = true;
     story.frontmatter.plan_complete = true;
@@ -274,7 +274,7 @@ describe('Blocked Stories Integration', () => {
     story.content = '# Test Feature\n\nDetailed description\n\n## Acceptance Criteria\n\n- [ ] Criterion 1';
 
     // Add a rejected review (required to trigger circuit breaker)
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -288,7 +288,7 @@ describe('Blocked Stories Integration', () => {
     const originalStory = parseStory(story.path);
 
     // Call assessState
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Parse blocked story (path stays same in new architecture)
     const blockedStory = parseStory(story.path);
@@ -306,24 +306,24 @@ describe('Blocked Stories Integration', () => {
     expect(blockedStory.content).toBe(originalStory.content);
   });
 
-  it('should handle error gracefully and fall back to high-priority action', () => {
+  it('should handle error gracefully and fall back to high-priority action', async () => {
     // Mock console.error to capture errors
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     // Create story and manually make it fail the blocking process
-    let story = createStory('Test Story', sdlcRoot, {
+    let story = await createStory('Test Story', sdlcRoot, {
       type: 'feature',
       max_refinement_attempts: 2,
     });
 
     // Update to in-progress
-    story = updateStoryStatus(story, 'in-progress');
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2;
     story.frontmatter.current_iteration = 2;
 
     // Add a rejected review (required to trigger circuit breaker)
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -338,7 +338,7 @@ describe('Blocked Stories Integration', () => {
     fs.chmodSync(story.path, 0o444);
 
     // Call assessState - should catch error and fall back
-    const assessment = assessState(sdlcRoot);
+    const assessment = await assessState(sdlcRoot);
 
     // Verify error was logged
     expect(errorSpy).toHaveBeenCalled();
@@ -357,9 +357,9 @@ describe('Blocked Stories Integration', () => {
     fs.chmodSync(story.path, 0o644);
   });
 
-  it('should not process stories from blocked folder on daemon watch', () => {
+  it('should not process stories from blocked folder on daemon watch', async () => {
     // Create a story and set it to blocked status
-    let story = createStory('Blocked Test', sdlcRoot, {
+    let story = await createStory('Blocked Test', sdlcRoot, {
       type: 'feature',
       labels: ['test'],
     });
@@ -368,14 +368,14 @@ describe('Blocked Stories Integration', () => {
     story.frontmatter.status = 'blocked';
     story.frontmatter.blocked_reason = 'Manual block for testing';
     story.frontmatter.blocked_at = new Date().toISOString();
-    writeStory(story);
+    await writeStory(story);
 
     // Verify story has blocked status
     const blockedStory = parseStory(story.path);
     expect(blockedStory.frontmatter.status).toBe('blocked');
 
     // Call assessState - should NOT generate any actions for blocked story
-    const assessment = assessState(sdlcRoot);
+    const assessment = await assessState(sdlcRoot);
 
     // Verify no actions are recommended for blocked stories
     const actionsForBlockedStory = assessment.recommendedActions.filter(
@@ -384,28 +384,28 @@ describe('Blocked Stories Integration', () => {
     expect(actionsForBlockedStory).toHaveLength(0);
   });
 
-  it('should verify daemon watches only backlog, ready, and in-progress', () => {
+  it('should verify daemon watches only backlog, ready, and in-progress', async () => {
     // This test verifies stories with blocked status are not processed
     // In new architecture, status is in frontmatter, not folder location
 
     // Create stories with different statuses
-    const backlogStory = createStory('Backlog Story', sdlcRoot, { type: 'feature' });
+    const backlogStory = await createStory('Backlog Story', sdlcRoot, { type: 'feature' });
 
-    let readyStory = createStory('Ready Story', sdlcRoot, { type: 'feature' });
-    readyStory = updateStoryStatus(readyStory, 'ready');
+    let readyStory = await createStory('Ready Story', sdlcRoot, { type: 'feature' });
+    readyStory = await updateStoryStatus(readyStory, 'ready');
 
-    let inProgressStory = createStory('In Progress Story', sdlcRoot, { type: 'feature' });
-    inProgressStory = updateStoryStatus(inProgressStory, 'in-progress');
+    let inProgressStory = await createStory('In Progress Story', sdlcRoot, { type: 'feature' });
+    inProgressStory = await updateStoryStatus(inProgressStory, 'in-progress');
 
     // Create a blocked story
-    let blockedStory = createStory('Blocked Story', sdlcRoot, { type: 'feature' });
+    let blockedStory = await createStory('Blocked Story', sdlcRoot, { type: 'feature' });
     blockedStory.frontmatter.status = 'blocked';
     blockedStory.frontmatter.blocked_reason = 'Testing';
     blockedStory.frontmatter.blocked_at = new Date().toISOString();
-    writeStory(blockedStory);
+    await writeStory(blockedStory);
 
     // Call assessState
-    const assessment = assessState(sdlcRoot);
+    const assessment = await assessState(sdlcRoot);
 
     // Verify that backlog, ready, and in-progress stories could have actions
     const backlogItems = assessment.backlogItems;
@@ -422,21 +422,21 @@ describe('Blocked Stories Integration', () => {
     expect(blockedStoriesInAssessment).toHaveLength(0);
   });
 
-  it('should unblock a story and update status correctly', () => {
+  it('should unblock a story and update status correctly', async () => {
     // Step 1: Create story and update to in-progress
-    let story = createStory('Test Feature', sdlcRoot, {
+    let story = await createStory('Test Feature', sdlcRoot, {
       type: 'feature',
       labels: ['test'],
       max_refinement_attempts: 2,
     });
 
-    story = updateStoryStatus(story, 'in-progress');
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.plan_complete = true;
     story.frontmatter.implementation_complete = true;
     story.frontmatter.refinement_count = 2;
 
     // Add a rejected review (required to trigger circuit breaker)
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -448,7 +448,7 @@ describe('Blocked Stories Integration', () => {
     });
 
     // Step 2: Block the story
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Step 3: Verify story has blocked status (path stays same in new architecture)
     const blockedStory = parseStory(story.path);
@@ -456,7 +456,7 @@ describe('Blocked Stories Integration', () => {
     expect(blockedStory.frontmatter.blocked_reason).toBeDefined();
 
     // Step 4: Unblock the story
-    const unblockedStory = unblockStory(story.frontmatter.id, sdlcRoot);
+    const unblockedStory = await unblockStory(story.frontmatter.id, sdlcRoot);
 
     // Step 5: Verify story status updated to in-progress (implementation_complete = true)
     expect(unblockedStory.frontmatter.status).toBe('in-progress');
@@ -471,21 +471,21 @@ describe('Blocked Stories Integration', () => {
     expect(foundStory?.frontmatter.status).toBe('in-progress');
   });
 
-  it('should unblock story with resetRetries flag', () => {
+  it('should unblock story with resetRetries flag', async () => {
     // Create and block a story
-    let story = createStory('Test Feature', sdlcRoot, {
+    let story = await createStory('Test Feature', sdlcRoot, {
       type: 'feature',
       max_refinement_attempts: 2,
     });
 
-    story = updateStoryStatus(story, 'in-progress');
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.plan_complete = true;
     story.frontmatter.implementation_complete = true;
     story.frontmatter.retry_count = 5;
     story.frontmatter.refinement_count = 2;
 
     // Add a rejected review (required to trigger circuit breaker)
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -497,28 +497,28 @@ describe('Blocked Stories Integration', () => {
     });
 
     // Block it
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Unblock with resetRetries
-    const unblockedStory = unblockStory(story.frontmatter.id, sdlcRoot, { resetRetries: true });
+    const unblockedStory = await unblockStory(story.frontmatter.id, sdlcRoot, { resetRetries: true });
 
     expect(unblockedStory.frontmatter.retry_count).toBe(0);
     expect(unblockedStory.frontmatter.refinement_count).toBe(0);
   });
 
-  it('should unblock story to ready when plan is complete but implementation is not', () => {
+  it('should unblock story to ready when plan is complete but implementation is not', async () => {
     // Create and block a story with plan_complete = true
     // Note: This test uses max_retries circuit breaker since implementation_complete=false
-    let story = createStory('Test Feature', sdlcRoot);
+    let story = await createStory('Test Feature', sdlcRoot);
 
-    story = updateStoryStatus(story, 'in-progress');
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.plan_complete = true;
     story.frontmatter.implementation_complete = false;
     story.frontmatter.retry_count = 2;
     story.frontmatter.max_retries = 2;
 
     // Add a review history (for max retries circuit breaker)
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -529,21 +529,21 @@ describe('Blocked Stories Integration', () => {
       poReviewPassed: false,
     });
 
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Unblock
-    const unblockedStory = unblockStory(story.frontmatter.id, sdlcRoot);
+    const unblockedStory = await unblockStory(story.frontmatter.id, sdlcRoot);
 
     // Should update status to ready (plan_complete = true, implementation_complete = false)
     expect(unblockedStory.frontmatter.status).toBe('ready');
   });
 
-  it('should unblock story to backlog when no phases are complete', () => {
+  it('should unblock story to backlog when no phases are complete', async () => {
     // Create and block a story with all phases incomplete
     // Note: This test uses max_retries circuit breaker since implementation_complete=false
-    let story = createStory('Test Feature', sdlcRoot);
+    let story = await createStory('Test Feature', sdlcRoot);
 
-    story = updateStoryStatus(story, 'in-progress');
+    story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.research_complete = false;
     story.frontmatter.plan_complete = false;
     story.frontmatter.implementation_complete = false;
@@ -551,7 +551,7 @@ describe('Blocked Stories Integration', () => {
     story.frontmatter.max_retries = 2;
 
     // Add a review history (for max retries circuit breaker)
-    appendReviewHistory(story, {
+    await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
@@ -562,10 +562,10 @@ describe('Blocked Stories Integration', () => {
       poReviewPassed: false,
     });
 
-    assessState(sdlcRoot);
+    await assessState(sdlcRoot);
 
     // Unblock
-    const unblockedStory = unblockStory(story.frontmatter.id, sdlcRoot);
+    const unblockedStory = await unblockStory(story.frontmatter.id, sdlcRoot);
 
     // Should update status to backlog (no phases complete)
     expect(unblockedStory.frontmatter.status).toBe('backlog');

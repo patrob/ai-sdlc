@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 // Test fixture directory
 const TEST_FIXTURE_DIR = path.join(__dirname, '../fixtures/status-kanban-test');
 
-describe('Status Command - Kanban Layout Integration', () => {
+describe.sequential('Status Command - Kanban Layout Integration', () => {
   let consoleLogSpy: any;
   let originalColumns: number | undefined;
 
@@ -56,7 +56,7 @@ describe('Status Command - Kanban Layout Integration', () => {
     delete process.env.AI_SDLC_ROOT;
   });
 
-  describe('Kanban Layout on Wide Terminal', () => {
+  describe.sequential('Kanban Layout on Wide Terminal', () => {
     beforeEach(() => {
       // Set wide terminal width
       process.stdout.columns = 120;
@@ -279,7 +279,7 @@ reviews_complete: false
     });
   });
 
-  describe('Vertical Layout Fallback on Narrow Terminal', () => {
+  describe.sequential('Vertical Layout Fallback on Narrow Terminal', () => {
     beforeEach(() => {
       // Set narrow terminal width
       process.stdout.columns = 70;
@@ -338,7 +338,7 @@ reviews_complete: false
     });
   });
 
-  describe('Kanban Layout with Active Flag', () => {
+  describe.sequential('Kanban Layout with Active Flag', () => {
     beforeEach(() => {
       process.stdout.columns = 120;
     });
@@ -423,7 +423,7 @@ reviews_complete: true
     });
   });
 
-  describe('Edge Cases', () => {
+  describe.sequential('Edge Cases', () => {
     beforeEach(() => {
       process.stdout.columns = 120;
     });
@@ -488,7 +488,7 @@ reviews_complete: false
     });
   });
 
-  describe('Recommended Actions Display', () => {
+  describe.sequential('Recommended Actions Display', () => {
     beforeEach(() => {
       process.stdout.columns = 120;
     });

@@ -435,12 +435,15 @@ export interface AgentResult {
  *   1 = Abstract concepts only, 5 = Copy-paste code examples or step-by-step instructions
  * - Relevance: How closely does this match the story requirements?
  *   1 = Tangentially related, 5 = Directly addresses a story acceptance criterion
+ * - parsingSucceeded: Indicates whether scores were successfully parsed from LLM output
+ *   true = scores came from LLM, false = default scores applied due to parsing failure
  */
 export interface FARScore {
   factuality: 1 | 2 | 3 | 4 | 5;
   actionability: 1 | 2 | 3 | 4 | 5;
   relevance: 1 | 2 | 3 | 4 | 5;
   justification: string;
+  parsingSucceeded: boolean;
 }
 
 /**

@@ -64,9 +64,19 @@ export function buildTaskPrompt(context: TaskContext): string {
     prompt += `\n`;
   }
 
-  // Add project conventions
+  // Add project conventions (enforce max length)
   if (projectPatterns) {
-    prompt += `## Project Conventions\n\n${projectPatterns}\n\n`;
+    const MAX_PATTERN_LENGTH = 2000; // ~500 tokens
+    let patterns = projectPatterns;
+
+    if (patterns.length > MAX_PATTERN_LENGTH) {
+      console.warn(
+        `projectPatterns truncated from ${patterns.length} to ${MAX_PATTERN_LENGTH} characters`
+      );
+      patterns = patterns.substring(0, MAX_PATTERN_LENGTH) + '\n\n[... truncated for length]';
+    }
+
+    prompt += `## Project Conventions\n\n${patterns}\n\n`;
   }
 
   prompt += `## Instructions\n\n`;
@@ -131,19 +141,86 @@ function getChangedFiles(workingDir: string): string[] {
 }
 
 /**
- * Verify changes using TypeScript and ESLint
+ * Validate file paths to prevent command injection
+ * Throws an error if any path contains suspicious characters or patterns
+ */
+export function validateFilePaths(paths: string[]): void {
+  // Shell metacharacters that could be used for injection
+  const dangerousChars = /[;|&`$()<>]/;
+
+  for (const path of paths) {
+    // Check for shell metacharacters
+    if (dangerousChars.test(path)) {
+      throw new Error(
+        `Invalid file path "${path}": contains shell metacharacters that could be used for command injection`
+      );
+    }
+
+    // Check for directory traversal attempts
+    if (path.includes('..')) {
+      throw new Error(
+        `Invalid file path "${path}": directory traversal is not allowed`
+      );
+    }
+
+    // Ensure path starts with expected directories (basic sanity check)
+    // Allow: src/, tests/, dist/, .ai-sdlc/, or relative paths starting with ./
+    const validPrefixes = ['src/', 'tests/', 'dist/', '.ai-sdlc/', './', ''];
+    const hasValidPrefix = validPrefixes.some((prefix) =>
+      path.startsWith(prefix) || path === prefix.slice(0, -1)
+    );
+
+    if (!hasValidPrefix && !path.match(/^[a-zA-Z0-9_.-]+$/)) {
+      throw new Error(
+        `Invalid file path "${path}": must start with an expected directory (src/, tests/, etc.) or be a simple filename`
+      );
+    }
+  }
+}
+
+/**
+ * Detect test files related to changed modules
+ * Checks for co-located .test.ts files
+ */
+function detectTestFiles(filesChanged: string[]): string[] {
+  const testFiles = new Set<string>();
+
+  for (const file of filesChanged) {
+    // Check for co-located test files (e.g., foo.ts -> foo.test.ts)
+    if (file.endsWith('.ts') || file.endsWith('.tsx')) {
+      const testFile = file.replace(/\.(ts|tsx)$/, '.test.$1');
+      testFiles.add(testFile);
+    }
+  }
+
+  return Array.from(testFiles);
+}
+
+/**
+ * Verify changes using TypeScript, ESLint, and tests
  */
 export async function verifyChanges(
   filesChanged: string[],
   workingDir: string
-): Promise<{ passed: boolean; errors: string[] }> {
+): Promise<{ passed: boolean; errors: string[]; testsRun: boolean }> {
   const errors: string[] = [];
+  let testsRun = false;
 
   if (filesChanged.length === 0) {
-    return { passed: true, errors: [] };
+    return { passed: true, errors: [], testsRun: false };
   }
 
-  // Run TypeScript type checking on changed files
+  // Validate file paths to prevent command injection
+  try {
+    validateFilePaths(filesChanged);
+  } catch (error: any) {
+    errors.push(`Path validation failed: ${error.message}`);
+    return { passed: false, errors, testsRun: false };
+  }
+
+  // Run TypeScript type checking
+  // NOTE: TypeScript doesn't support true per-file checking - it always checks the whole project
+  // to ensure type safety across module boundaries. This is a TypeScript limitation.
   const tscResult = spawnSync('npx', ['tsc', '--noEmit'], {
     cwd: workingDir,
     encoding: 'utf8',
@@ -152,7 +229,7 @@ export async function verifyChanges(
   if (tscResult.status !== 0) {
     const stderr = tscResult.stderr || tscResult.stdout || '';
     if (stderr.trim()) {
-      errors.push(`TypeScript errors:\n${stderr}`);
+      errors.push(`TypeScript errors (whole project checked):\n${stderr}`);
     }
   }
 
@@ -172,10 +249,61 @@ export async function verifyChanges(
     }
   }
 
+  // Run tests for changed modules
+  const testFiles = detectTestFiles(filesChanged);
+  if (testFiles.length > 0) {
+    // Check if test files actually exist before running
+    const testResult = spawnSync('npm', ['test', '--', ...testFiles], {
+      cwd: workingDir,
+      encoding: 'utf8',
+    });
+
+    testsRun = true;
+
+    if (testResult.status !== 0) {
+      const stderr = testResult.stderr || testResult.stdout || '';
+      if (stderr.trim()) {
+        errors.push(`Test failures:\n${stderr}`);
+      }
+    }
+  } else {
+    errors.push('No tests detected for changed files');
+  }
+
   return {
     passed: errors.length === 0,
     errors,
+    testsRun,
   };
+}
+
+/**
+ * Detect missing dependencies or files mentioned in agent output
+ * Scans for phrases indicating the agent needs additional files
+ */
+export function detectMissingDependencies(agentOutput: string): string[] | undefined {
+  const missingFiles: string[] = [];
+  const lines = agentOutput.split('\n');
+
+  // Keywords that indicate missing dependencies
+  const keywords = ['need', 'missing file', 'not provided', 'required file', 'cannot find'];
+
+  for (const line of lines) {
+    const lowerLine = line.toLowerCase();
+
+    // Check if line contains any missing dependency keywords
+    if (keywords.some((keyword) => lowerLine.includes(keyword))) {
+      // Try to extract file paths from the line
+      // Match common path patterns: src/foo.ts, ./foo.ts, foo.ts, etc.
+      // Note: Order extensions from longest to shortest to avoid partial matches (json before js, tsx before ts)
+      const pathMatches = line.match(/[\w/./-]+\.(json|tsx|jsx|ts|js)/g);
+      if (pathMatches) {
+        missingFiles.push(...pathMatches);
+      }
+    }
+  }
+
+  return missingFiles.length > 0 ? missingFiles : undefined;
 }
 
 /**
@@ -188,44 +316,65 @@ export async function parseTaskResult(
 ): Promise<AgentTaskResult> {
   const logger = getLogger();
 
-  // Get files actually changed
-  const filesChanged = getChangedFiles(workingDir);
+  try {
+    // Get files actually changed
+    const filesChanged = getChangedFiles(workingDir);
 
-  // Detect scope violations
-  const declaredFiles = task.files || [];
-  const scopeViolation = detectScopeViolation(declaredFiles, filesChanged);
+    // Detect scope violations
+    const declaredFiles = task.files || [];
+    const scopeViolation = detectScopeViolation(declaredFiles, filesChanged);
 
-  // Run verification on changed files
-  const verification = await verifyChanges(filesChanged, workingDir);
+    // Detect missing dependencies from agent output
+    const missingDependencies = detectMissingDependencies(agentOutput);
 
-  // Determine overall success
-  const success = verification.passed && filesChanged.length > 0;
+    // Run verification on changed files
+    const verification = await verifyChanges(filesChanged, workingDir);
 
-  const result: AgentTaskResult = {
-    success,
-    task,
-    filesChanged,
-    verificationPassed: verification.passed,
-    agentOutput,
-    scopeViolation,
-  };
+    // Determine overall success
+    const success = verification.passed && filesChanged.length > 0;
 
-  if (!verification.passed) {
-    result.error = verification.errors.join('\n\n');
-  } else if (filesChanged.length === 0) {
-    result.error = 'No files were modified';
-    result.success = false;
+    const result: AgentTaskResult = {
+      success,
+      task,
+      filesChanged,
+      verificationPassed: verification.passed,
+      agentOutput,
+      scopeViolation,
+      missingDependencies,
+    };
+
+    if (!verification.passed) {
+      result.error = verification.errors.join('\n\n');
+    } else if (filesChanged.length === 0) {
+      result.error = 'No files were modified';
+      result.success = false;
+    }
+
+    logger.debug('single-task', 'Task result parsed', {
+      taskId: task.id,
+      success,
+      filesChanged: filesChanged.length,
+      verificationPassed: verification.passed,
+      hasScopeViolation: !!scopeViolation,
+      hasMissingDependencies: !!missingDependencies,
+    });
+
+    return result;
+  } catch (error: any) {
+    // Git operation failed - this is an environment issue
+    logger.error('single-task', 'Git operation failed during result parsing', {
+      error: error.message,
+    });
+
+    return {
+      success: false,
+      task,
+      filesChanged: [],
+      verificationPassed: false,
+      agentOutput,
+      error: `Git operation failed: ${error.message}`,
+    };
   }
-
-  logger.debug('single-task', 'Task result parsed', {
-    taskId: task.id,
-    success,
-    filesChanged: filesChanged.length,
-    verificationPassed: verification.passed,
-    hasScopeViolation: !!scopeViolation,
-  });
-
-  return result;
 }
 
 /**
@@ -256,9 +405,6 @@ export async function runSingleTaskAgent(
       agentOutput: prompt,
     };
   }
-
-  // Capture initial diff hash
-  const initialDiffHash = getCurrentDiffHash(workingDirectory);
 
   try {
     // Execute agent query

@@ -603,9 +603,9 @@ export interface TaskContext {
   acceptanceCriteria: string[];
   /** Current content of target files */
   existingFiles: FileContent[];
-  /** Brief conventions summary (max 500 tokens) */
+  /** Brief conventions summary. Should be <500 tokens (~2000 characters). Will be truncated if longer. */
   projectPatterns: string;
-  /** Working directory for execution */
+  /** Working directory for execution. Required for isolation in orchestrator scenarios where tasks may run in different worktree paths. */
   workingDirectory: string;
 }
 
@@ -639,6 +639,8 @@ export interface AgentTaskResult {
   agentOutput?: string;
   /** Files modified outside declared scope */
   scopeViolation?: string[];
+  /** Missing files or dependencies reported by agent */
+  missingDependencies?: string[];
 }
 
 // Export workflow state types

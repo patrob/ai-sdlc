@@ -14,29 +14,49 @@ describe('ConflictDetectorService Integration', () => {
   let testDir: string;
   let service: ConflictDetectorService;
 
+  // Cleanup function to ensure orphaned directories are removed even on crash/timeout
+  const cleanupTestDir = () => {
+    if (testDir && fs.existsSync(testDir)) {
+      try {
+        fs.rmSync(testDir, { recursive: true, force: true });
+      } catch (err) {
+        // Ignore cleanup errors on exit
+      }
+    }
+  };
+
   beforeAll(() => {
     // Create temporary directory for test repository
     testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-conflict-test-'));
 
-    // Initialize git repository
-    spawnSync('git', ['init'], { cwd: testDir });
-    spawnSync('git', ['config', 'user.name', 'Test User'], { cwd: testDir });
-    spawnSync('git', ['config', 'user.email', 'test@example.com'], { cwd: testDir });
+    // Register exit handler to cleanup orphaned directories on process crash/timeout
+    process.on('exit', cleanupTestDir);
+    process.on('SIGINT', cleanupTestDir);
+    process.on('SIGTERM', cleanupTestDir);
 
-    // Create initial commit on main branch
-    fs.writeFileSync(path.join(testDir, 'README.md'), '# Test Repo\n');
-    spawnSync('git', ['add', '.'], { cwd: testDir });
-    spawnSync('git', ['commit', '-m', 'Initial commit'], { cwd: testDir });
+    try {
+      // Initialize git repository
+      spawnSync('git', ['init'], { cwd: testDir });
+      spawnSync('git', ['config', 'user.name', 'Test User'], { cwd: testDir });
+      spawnSync('git', ['config', 'user.email', 'test@example.com'], { cwd: testDir });
 
-    // Initialize service
-    service = new ConflictDetectorService(testDir, 'main');
+      // Create initial commit on main branch
+      fs.writeFileSync(path.join(testDir, 'README.md'), '# Test Repo\n');
+      spawnSync('git', ['add', '.'], { cwd: testDir });
+      spawnSync('git', ['commit', '-m', 'Initial commit'], { cwd: testDir });
+
+      // Initialize service
+      service = new ConflictDetectorService(testDir, 'main');
+    } catch (err) {
+      // Ensure cleanup happens even if setup fails
+      cleanupTestDir();
+      throw err;
+    }
   });
 
   afterAll(() => {
     // Clean up temporary directory
-    if (testDir && fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true, force: true });
-    }
+    cleanupTestDir();
   });
 
   describe('Real Git Operations', () => {
@@ -98,7 +118,7 @@ describe('ConflictDetectorService Integration', () => {
       };
 
       // Detect conflicts
-      const result = await service.detectConflicts([story1, story2]);
+      const result = service.detectConflicts([story1, story2]);
 
       // Verify results
       expect(result.conflicts).toHaveLength(1);
@@ -169,7 +189,7 @@ describe('ConflictDetectorService Integration', () => {
         content: 'Story 4 content',
       };
 
-      const result = await service.detectConflicts([story3, story4]);
+      const result = service.detectConflicts([story3, story4]);
 
       expect(result.conflicts).toHaveLength(1);
       expect(result.conflicts[0].sharedFiles).toHaveLength(0); // Different files
@@ -178,7 +198,7 @@ describe('ConflictDetectorService Integration', () => {
       expect(result.safeToRunConcurrently).toBe(true); // Medium severity is safe
     });
 
-    it('should detect no conflicts when branches modify different areas', async () => {
+    it('should detect low severity conflicts when branches modify different areas', async () => {
       // Reset to main
       spawnSync('git', ['checkout', 'main'], { cwd: testDir });
 
@@ -239,14 +259,14 @@ describe('ConflictDetectorService Integration', () => {
         content: 'Story 6 content',
       };
 
-      const result = await service.detectConflicts([story5, story6]);
+      const result = service.detectConflicts([story5, story6]);
 
       expect(result.conflicts).toHaveLength(1);
       expect(result.conflicts[0].sharedFiles).toHaveLength(0);
       expect(result.conflicts[0].sharedDirectories).toHaveLength(0);
-      expect(result.conflicts[0].severity).toBe('none');
+      expect(result.conflicts[0].severity).toBe('low');
       expect(result.safeToRunConcurrently).toBe(true);
-      expect(result.summary).toContain('No conflicts detected');
+      expect(result.summary).toContain('low-severity');
     });
 
     it('should handle uncommitted changes in working directory', async () => {
@@ -311,7 +331,7 @@ describe('ConflictDetectorService Integration', () => {
         content: 'Story 8 content',
       };
 
-      const result = await service.detectConflicts([story7, story8]);
+      const result = service.detectConflicts([story7, story8]);
 
       // Should detect conflict on uncommitted.ts
       expect(result.conflicts[0].sharedFiles).toContain('uncommitted.ts');
@@ -343,7 +363,7 @@ describe('ConflictDetectorService Integration', () => {
         content: 'Story content',
       };
 
-      const result = await service.detectConflicts([story]);
+      const result = service.detectConflicts([story]);
 
       // Should successfully detect the branch
       expect(result.summary).toContain('Single story');

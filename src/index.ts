@@ -8,7 +8,7 @@ import { hasApiKey } from './core/auth.js';
 import { loadConfig, saveConfig, DEFAULT_LOGGING_CONFIG, getSdlcRoot } from './core/config.js';
 import { getThemedChalk } from './core/theme.js';
 import { ThemePreference, LogConfig } from './types/index.js';
-import { initLogger } from './core/logger.js';
+import { initLogger, getLogger } from './core/logger.js';
 import { getLatestLogPath, readLastLines, tailLog } from './core/story-logger.js';
 import fs from 'fs';
 import path from 'path';
@@ -116,6 +116,23 @@ program
     }
 
     initLogger(process.cwd(), logConfig);
+
+    // Log startup information
+    const logger = getLogger();
+    logger.info('cli', 'ai-sdlc started', {
+      version: packageJson.version,
+      command: 'run',
+      options: {
+        auto: options.auto,
+        dryRun: options.dryRun,
+        continue: options.continue,
+        story: options.story,
+        step: options.step,
+        worktree: options.worktree,
+        watch: options.watch,
+        logLevel: logConfig.level,
+      },
+    });
 
     // Validate --worktree requires --story
     if (options.worktree && !options.story) {

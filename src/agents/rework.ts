@@ -8,6 +8,7 @@ import {
   getRefinementCount,
 } from '../core/story.js';
 import { loadConfig } from '../core/config.js';
+import { getLogger } from '../core/logger.js';
 import { AgentResult, ReviewResult, ReworkContext } from '../types/index.js';
 
 /**
@@ -21,10 +22,18 @@ export async function runReworkAgent(
   sdlcRoot: string,
   context: ReworkContext
 ): Promise<AgentResult> {
+  const logger = getLogger();
+  const startTime = Date.now();
   const story = parseStory(storyPath);
   const changesMade: string[] = [];
   const workingDir = path.dirname(sdlcRoot);
   const config = loadConfig(workingDir);
+
+  logger.info('rework', 'Starting rework phase', {
+    storyId: story.frontmatter.id,
+    targetPhase: context.targetPhase,
+    refinementCount: getRefinementCount(story),
+  });
 
   try {
     const { reviewFeedback, targetPhase } = context;
@@ -67,6 +76,13 @@ export async function runReworkAgent(
       changesMade.push('Cleared previous error');
     }
 
+    logger.info('rework', 'Rework phase complete', {
+      storyId: story.frontmatter.id,
+      durationMs: Date.now() - startTime,
+      targetPhase: context.targetPhase,
+      refinementIteration: getRefinementCount(story),
+    });
+
     return {
       success: true,
       story: parseStory(storyPath), // Reload to get fresh state
@@ -74,6 +90,12 @@ export async function runReworkAgent(
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error('rework', 'Rework phase failed', {
+      storyId: story.frontmatter.id,
+      durationMs: Date.now() - startTime,
+      error: errorMsg,
+    });
+
     return {
       success: false,
       story,

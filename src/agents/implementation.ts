@@ -11,6 +11,7 @@ import {
   getEffectiveMaxImplementationRetries,
 } from '../core/story.js';
 import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
+import { getLogger } from '../core/logger.js';
 import { Story, AgentResult, TDDTestCycle, TDDConfig } from '../types/index.js';
 import { AgentOptions } from './research.js';
 import { loadConfig, DEFAULT_TDD_CONFIG } from '../core/config.js';
@@ -936,10 +937,17 @@ export async function runImplementationAgent(
   sdlcRoot: string,
   options: AgentOptions = {}
 ): Promise<AgentResult> {
+  const logger = getLogger();
+  const startTime = Date.now();
   let story = parseStory(storyPath);
   let currentStoryPath = storyPath;
   const changesMade: string[] = [];
   const workingDir = path.dirname(sdlcRoot);
+
+  logger.info('implementation', 'Starting implementation phase', {
+    storyId: story.frontmatter.id,
+    retryCount: story.frontmatter.implementation_retry_count || 0,
+  });
 
   try {
     // Security: Validate working directory before git operations
@@ -1107,17 +1115,30 @@ export async function runImplementationAgent(
     await updateStoryField(updatedStory, 'implementation_complete', true);
     changesMade.push('Marked implementation_complete: true');
 
+    logger.info('implementation', 'Implementation phase complete', {
+      storyId: story.frontmatter.id,
+      durationMs: Date.now() - startTime,
+      changesCount: changesMade.length,
+    });
+
     return {
       success: true,
       story: parseStory(currentStoryPath),
       changesMade,
     };
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('implementation', 'Implementation phase failed', {
+      storyId: story.frontmatter.id,
+      durationMs: Date.now() - startTime,
+      error: errorMessage,
+    });
+
     return {
       success: false,
       story,
       changesMade,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage,
     };
   }
 }

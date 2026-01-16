@@ -4,10 +4,10 @@ import fs from 'fs';
 import path from 'path';
 import * as readline from 'readline';
 import { getSdlcRoot, loadConfig, initConfig, validateWorktreeBasePath, DEFAULT_WORKTREE_CONFIG } from '../core/config.js';
-import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug } from '../core/kanban.js';
-import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory } from '../core/story.js';
+import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoriesByStatus } from '../core/kanban.js';
+import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId } from '../core/story.js';
 import { GitWorktreeService } from '../core/worktree.js';
-import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext, WorktreeInfo } from '../types/index.js';
+import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext, WorktreeInfo, PreFlightResult } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
 import {
   saveWorkflowState,
@@ -23,6 +23,8 @@ import { migrateToFolderPerStory } from './commands/migrate.js';
 import { generateReviewSummary } from '../agents/review.js';
 import { getTerminalWidth } from './formatting.js';
 import { validateGitState, GitValidationResult } from '../core/git-utils.js';
+import { StoryLogger } from '../core/story-logger.js';
+import { detectConflicts } from '../core/conflict-detector.js';
 
 /**
  * Initialize the .ai-sdlc folder structure
@@ -295,6 +297,190 @@ function displayGitValidationResult(result: GitValidationResult, c: any): void {
     for (const warning of result.warnings) {
       console.log(c.warning(`  - ${warning}`));
     }
+  }
+}
+
+// ANSI escape sequence patterns for sanitization
+const ANSI_CSI_PATTERN = /\x1B\[[0-9;]*[a-zA-Z]/g;
+const ANSI_OSC_BEL_PATTERN = /\x1B\][^\x07]*\x07/g;
+const ANSI_OSC_ESC_PATTERN = /\x1B\][^\x1B]*\x1B\\/g;
+const ANSI_SINGLE_CHAR_PATTERN = /\x1B./g;
+const CONTROL_CHARS_PATTERN = /[\x00-\x1F\x7F-\x9F]/g;
+
+/**
+ * Sanitize a string for safe display in the terminal.
+ * Strips ANSI escape sequences (CSI, OSC, single-char), control characters,
+ * and truncates extremely long strings to prevent DoS attacks.
+ *
+ * This uses the same comprehensive ANSI stripping patterns as sanitizeReasonText
+ * from src/core/story.ts for consistency.
+ *
+ * @param str - The string to sanitize
+ * @returns Sanitized string safe for terminal display (max 500 chars)
+ */
+function sanitizeForDisplay(str: string): string {
+  const cleaned = str
+    .replace(ANSI_CSI_PATTERN, '')       // CSI sequences (e.g., \x1B[31m)
+    .replace(ANSI_OSC_BEL_PATTERN, '')   // OSC with BEL terminator (e.g., \x1B]...\x07)
+    .replace(ANSI_OSC_ESC_PATTERN, '')   // OSC with ESC\ terminator (e.g., \x1B]...\x1B\\)
+    .replace(ANSI_SINGLE_CHAR_PATTERN, '') // Single-char escapes (e.g., \x1BH)
+    .replace(CONTROL_CHARS_PATTERN, ''); // Control characters (0x00-0x1F, 0x7F-0x9F)
+
+  // Truncate extremely long strings (DoS protection)
+  return cleaned.length > 500 ? cleaned.slice(0, 497) + '...' : cleaned;
+}
+
+/**
+ * Perform pre-flight conflict check before starting work on a story in a worktree.
+ * Warns about potential file conflicts with active stories and prompts for confirmation.
+ *
+ * **Race Condition (TOCTOU):** Multiple users can pass this check simultaneously
+ * before branches are created. This is an accepted risk - the window is small
+ * (~100ms) and git will catch conflicts during merge/PR creation. Adding file
+ * locks would significantly increase complexity for minimal security gain.
+ *
+ * **Security Notes:**
+ * - sdlcRoot is normalized and validated (absolute path, no null bytes, max 1024 chars)
+ * - All display output is sanitized to prevent terminal injection attacks
+ * - Story IDs are validated with sanitizeStoryId() then stripped with sanitizeForDisplay()
+ * - Error messages are generic to prevent information leakage
+ *
+ * @param targetStory - The story to check for conflicts
+ * @param sdlcRoot - Root directory of the .ai-sdlc folder (must be absolute, validated)
+ * @param options - Command options (force flag)
+ * @param options.force - Skip conflict check if true
+ * @returns PreFlightResult indicating whether to proceed and any warnings
+ * @throws Error if sdlcRoot is invalid (not absolute, null bytes, too long)
+ */
+export async function preFlightConflictCheck(
+  targetStory: Story,
+  sdlcRoot: string,
+  options: { force?: boolean }
+): Promise<PreFlightResult> {
+  const config = loadConfig();
+  const c = getThemedChalk(config);
+
+  // Skip if --force flag
+  if (options.force) {
+    console.log(c.warning('⚠️  Skipping conflict check (--force)'));
+    return { proceed: true, warnings: ['Conflict check skipped'] };
+  }
+
+  // Validate sdlcRoot parameter (normalize first to prevent bypass attacks)
+  const normalizedPath = path.normalize(sdlcRoot);
+
+  if (!path.isAbsolute(normalizedPath)) {
+    throw new Error('Invalid project path');
+  }
+  if (normalizedPath.includes('\0')) {
+    throw new Error('Invalid project path');
+  }
+  if (normalizedPath.length > 1024) {
+    throw new Error('Invalid project path');
+  }
+
+  // Check if target story is already in-progress
+  if (targetStory.frontmatter.status === 'in-progress') {
+    console.log(c.error('❌ Story is already in-progress'));
+    return { proceed: false, warnings: ['Story already in progress'] };
+  }
+
+  try {
+    // Query for all in-progress stories (excluding target)
+    // Use normalizedPath for all subsequent operations
+    const activeStories = findStoriesByStatus(normalizedPath, 'in-progress')
+      .filter(s => s.frontmatter.id !== targetStory.frontmatter.id);
+
+    if (activeStories.length === 0) {
+      console.log(c.success('✓ Conflict check: No overlapping files with active stories'));
+      return { proceed: true, warnings: [] };
+    }
+
+    // Run conflict detection (use normalizedPath)
+    const workingDir = path.dirname(normalizedPath);
+    const result = detectConflicts([targetStory, ...activeStories], workingDir, 'main');
+
+    // Filter conflicts involving target story
+    const relevantConflicts = result.conflicts.filter(
+      conflict => conflict.storyA === targetStory.frontmatter.id || conflict.storyB === targetStory.frontmatter.id
+    );
+
+    // Filter out 'none' severity conflicts (keep all displayable conflicts including low)
+    const displayableConflicts = relevantConflicts.filter(conflict => conflict.severity !== 'none');
+
+    if (displayableConflicts.length === 0) {
+      console.log(c.success('✓ Conflict check: No overlapping files with active stories'));
+      return { proceed: true, warnings: [] };
+    }
+
+    // Sort conflicts by severity (high -> medium -> low)
+    const severityOrder = { high: 0, medium: 1, low: 2, none: 3 };
+    const sortedConflicts = displayableConflicts.sort((a, b) =>
+      severityOrder[a.severity] - severityOrder[b.severity]
+    );
+
+    // Display conflicts
+    console.log();
+    console.log(c.warning('⚠️  Potential conflicts detected:'));
+    console.log();
+
+    for (const conflict of sortedConflicts) {
+      const otherStoryId = conflict.storyA === targetStory.frontmatter.id ? conflict.storyB : conflict.storyA;
+
+      // Two-stage sanitization: validate structure, then strip for display
+      try {
+        const validatedTargetId = sanitizeStoryId(targetStory.frontmatter.id);
+        const validatedOtherId = sanitizeStoryId(otherStoryId);
+        const sanitizedTargetId = sanitizeForDisplay(validatedTargetId);
+        const sanitizedOtherId = sanitizeForDisplay(validatedOtherId);
+        console.log(c.warning(`   ${sanitizedTargetId} may conflict with ${sanitizedOtherId}:`));
+      } catch (error) {
+        // If validation fails, show generic error (defensive)
+        console.log(c.warning(`   Story may have conflicting changes (invalid ID format)`));
+      }
+
+      // Display shared files
+      for (const file of conflict.sharedFiles) {
+        const severityLabel = conflict.severity === 'high' ? c.error('High') :
+                              conflict.severity === 'medium' ? c.warning('Medium') :
+                              c.info('Low');
+        const sanitizedFile = sanitizeForDisplay(file);
+        console.log(`   - ${severityLabel}: ${sanitizedFile} (both stories modify this file)`);
+      }
+
+      // Display shared directories
+      for (const dir of conflict.sharedDirectories) {
+        const severityLabel = conflict.severity === 'high' ? c.error('High') :
+                              conflict.severity === 'medium' ? c.warning('Medium') :
+                              c.info('Low');
+        const sanitizedDir = sanitizeForDisplay(dir);
+        console.log(`   - ${severityLabel}: ${sanitizedDir} (both stories modify files in this directory)`);
+      }
+
+      console.log();
+      const sanitizedRecommendation = sanitizeForDisplay(conflict.recommendation);
+      console.log(c.dim(`   Recommendation: ${sanitizedRecommendation}`));
+      console.log();
+    }
+
+    // Non-interactive mode: default to declining
+    if (!process.stdin.isTTY) {
+      console.log(c.dim('Non-interactive mode: conflicts require --force to proceed'));
+      return { proceed: false, warnings: ['Conflicts detected'] };
+    }
+
+    // Interactive mode: prompt user
+    const shouldContinue = await confirmRemoval('Continue anyway?');
+    return {
+      proceed: shouldContinue,
+      warnings: shouldContinue ? ['User confirmed with conflicts'] : ['Conflicts detected']
+    };
+
+  } catch (error) {
+    // Fail-open: allow proceeding if conflict detection fails
+    console.log(c.warning('⚠️  Conflict detection unavailable'));
+    console.log(c.dim('Proceeding without conflict check...'));
+    return { proceed: true, warnings: ['Conflict detection failed'] };
   }
 }
 
@@ -640,6 +826,20 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
   }
 
   if (shouldUseWorktree && options.story && targetStory) {
+    // PRE-FLIGHT CHECK: Run conflict detection before creating worktree
+    const preFlightResult = await preFlightConflictCheck(targetStory, sdlcRoot, options);
+
+    if (!preFlightResult.proceed) {
+      console.log(c.error('❌ Aborting. Complete active stories first or use --force.'));
+      return;
+    }
+
+    // Log warnings if user proceeded despite conflicts (skip internal flag messages)
+    if (preFlightResult.warnings.length > 0 && !preFlightResult.warnings.includes('Conflict check skipped')) {
+      preFlightResult.warnings.forEach(w => console.log(c.dim(`  ⚠ ${w}`)));
+      console.log();
+    }
+
     const workingDir = path.dirname(sdlcRoot);
 
     // Check if story already has an existing worktree (resume scenario)
@@ -945,65 +1145,87 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
   const config = loadConfig();
   const c = getThemedChalk(config);
 
-  // Resolve story by ID to get current path (handles moves between folders)
-  let resolvedPath: string;
+  // Initialize per-story logger
+  const maxLogs = config.logging?.maxFiles ?? 5;
+  let logger: StoryLogger | null = null;
+  let spinner: ReturnType<typeof ora> | null = null;
+
   try {
-    const story = getStory(sdlcRoot, action.storyId);
-    resolvedPath = story.path;
+    logger = new StoryLogger(action.storyId, sdlcRoot, maxLogs);
+    logger.log('INFO', `Starting action: ${action.type} for story ${action.storyId}`);
   } catch (error) {
-    console.log(c.error(`Error: Story not found for action "${action.type}"`));
-    console.log(c.dim(`  Story ID: ${action.storyId}`));
-    console.log(c.dim(`  Original path: ${action.storyPath}`));
-    if (error instanceof Error) {
-      console.log(c.dim(`  ${error.message}`));
-    }
-    return { success: false };
+    // If logger initialization fails, continue without logging (console-only)
+    console.warn(`Warning: Failed to initialize logger: ${error instanceof Error ? error.message : String(error)}`);
   }
-
-  // Update action path if it was stale
-  if (resolvedPath !== action.storyPath) {
-    console.log(c.warning(`Note: Story path updated (file was moved)`));
-    console.log(c.dim(`  From: ${action.storyPath}`));
-    console.log(c.dim(`  To: ${resolvedPath}`));
-    action.storyPath = resolvedPath;
-  }
-
-  // Store phase completion state BEFORE action execution (to detect transitions)
-  const storyBeforeAction = parseStory(action.storyPath);
-  const prevPhaseState = {
-    research_complete: storyBeforeAction.frontmatter.research_complete,
-    plan_complete: storyBeforeAction.frontmatter.plan_complete,
-    implementation_complete: storyBeforeAction.frontmatter.implementation_complete,
-    reviews_complete: storyBeforeAction.frontmatter.reviews_complete,
-    status: storyBeforeAction.frontmatter.status,
-  };
-
-  const spinner = ora(formatAction(action, true, c)).start();
-  const baseText = formatAction(action, true, c);
-
-  // Create agent progress callback for real-time updates
-  const onAgentProgress = (event: { type: string; toolName?: string; sessionId?: string }) => {
-    switch (event.type) {
-      case 'session_start':
-        spinner.text = `${baseText} ${c.dim('(session started)')}`;
-        break;
-      case 'tool_start':
-        // Show which tool is being executed
-        const toolName = event.toolName || 'unknown';
-        const shortName = toolName.replace(/^(mcp__|Mcp)/, '').substring(0, 30);
-        spinner.text = `${baseText} ${c.dim(`→ ${shortName}`)}`;
-        break;
-      case 'tool_end':
-        // Keep showing the action, tool completed
-        spinner.text = baseText;
-        break;
-      case 'completion':
-        spinner.text = `${baseText} ${c.dim('(completing...)')}`;
-        break;
-    }
-  };
 
   try {
+    // Resolve story by ID to get current path (handles moves between folders)
+    let resolvedPath: string;
+    try {
+      const story = getStory(sdlcRoot, action.storyId);
+      resolvedPath = story.path;
+    } catch (error) {
+      const errorMsg = `Error: Story not found for action "${action.type}"`;
+      logger?.log('ERROR', errorMsg);
+      logger?.log('ERROR', `  Story ID: ${action.storyId}`);
+      logger?.log('ERROR', `  Original path: ${action.storyPath}`);
+      console.log(c.error(errorMsg));
+      console.log(c.dim(`  Story ID: ${action.storyId}`));
+      console.log(c.dim(`  Original path: ${action.storyPath}`));
+      if (error instanceof Error) {
+        logger?.log('ERROR', `  ${error.message}`);
+        console.log(c.dim(`  ${error.message}`));
+      }
+      return { success: false };
+    }
+
+    // Update action path if it was stale
+    if (resolvedPath !== action.storyPath) {
+      logger?.log('WARN', `Note: Story path updated (file was moved)`);
+      logger?.log('WARN', `  From: ${action.storyPath}`);
+      logger?.log('WARN', `  To: ${resolvedPath}`);
+      console.log(c.warning(`Note: Story path updated (file was moved)`));
+      console.log(c.dim(`  From: ${action.storyPath}`));
+      console.log(c.dim(`  To: ${resolvedPath}`));
+      action.storyPath = resolvedPath;
+    }
+
+    // Store phase completion state BEFORE action execution (to detect transitions)
+    const storyBeforeAction = parseStory(action.storyPath);
+    const prevPhaseState = {
+      research_complete: storyBeforeAction.frontmatter.research_complete,
+      plan_complete: storyBeforeAction.frontmatter.plan_complete,
+      implementation_complete: storyBeforeAction.frontmatter.implementation_complete,
+      reviews_complete: storyBeforeAction.frontmatter.reviews_complete,
+      status: storyBeforeAction.frontmatter.status,
+    };
+
+    spinner = ora(formatAction(action, true, c)).start();
+    const baseText = formatAction(action, true, c);
+
+    // Create agent progress callback for real-time updates
+    const onAgentProgress = (event: { type: string; toolName?: string; sessionId?: string }) => {
+      if (!spinner) return; // Guard against null spinner
+      switch (event.type) {
+        case 'session_start':
+          spinner.text = `${baseText} ${c.dim('(session started)')}`;
+          break;
+        case 'tool_start':
+          // Show which tool is being executed
+          const toolName = event.toolName || 'unknown';
+          const shortName = toolName.replace(/^(mcp__|Mcp)/, '').substring(0, 30);
+          spinner.text = `${baseText} ${c.dim(`→ ${shortName}`)}`;
+          break;
+        case 'tool_end':
+          // Keep showing the action, tool completed
+          spinner.text = baseText;
+          break;
+        case 'completion':
+          spinner.text = `${baseText} ${c.dim('(completing...)')}`;
+          break;
+      }
+    };
+
     // Import and run the appropriate agent
     let result;
 
@@ -1032,6 +1254,7 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
         const { runReviewAgent } = await import('../agents/review.js');
         result = await runReviewAgent(action.storyPath, sdlcRoot, {
           onVerificationProgress: (phase, status, message) => {
+            if (!spinner) return; // Guard against null spinner
             const phaseLabel = phase === 'build' ? 'Building' : 'Testing';
             switch (status) {
               case 'starting':
@@ -1088,17 +1311,21 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
     // Check if agent succeeded
     if (result && !result.success) {
       spinner.fail(c.error(`Failed: ${formatAction(action, true, c)}`));
+      logger?.log('ERROR', `Action failed: ${formatAction(action, false, c)}`);
       if (result.error) {
+        logger?.log('ERROR', `  Error: ${result.error}`);
         console.error(c.error(`  Error: ${result.error}`));
       }
       return { success: false };
     }
 
     spinner.succeed(c.success(formatAction(action, true, c)));
+    logger?.log('INFO', `Action completed successfully: ${formatAction(action, false, c)}`);
 
     // Show changes made
     if (result && result.changesMade.length > 0) {
       for (const change of result.changesMade) {
+        logger?.log('INFO', `  → ${change}`);
         console.log(c.dim(`  → ${change}`));
       }
     }
@@ -1159,7 +1386,13 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
 
     return { success: true };
   } catch (error) {
-    spinner.fail(c.error(`Failed: ${formatAction(action, true, c)}`));
+    if (spinner) {
+      spinner.fail(c.error(`Failed: ${formatAction(action, true, c)}`));
+    } else {
+      console.error(c.error(`Failed: ${formatAction(action, true, c)}`));
+    }
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger?.log('ERROR', `Exception during action execution: ${errorMessage}`);
     console.error(error);
 
     // Show phase checklist with error indication (if file still exists)
@@ -1167,12 +1400,15 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
       const story = parseStory(action.storyPath);
       console.log(c.dim(`  Progress: ${renderPhaseChecklist(story, c)}`));
       // Update story with error
-      story.frontmatter.last_error = error instanceof Error ? error.message : String(error);
+      story.frontmatter.last_error = errorMessage;
     } catch {
       // File may have been moved - skip progress display
     }
     // Don't throw - let the workflow continue if in auto mode
     return { success: false };
+  } finally {
+    // Always close logger, even if action fails or throws
+    logger?.close();
   }
 }
 
@@ -1808,12 +2044,16 @@ export async function migrate(options: { dryRun?: boolean; backup?: boolean; for
  * Helper function to prompt for removal confirmation
  */
 async function confirmRemoval(message: string): Promise<boolean> {
+  // Sanitize message to prevent terminal injection attacks
+  // Use consistent sanitizeForDisplay() for all terminal output
+  const sanitizedMessage = sanitizeForDisplay(message);
+
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
   return new Promise((resolve) => {
-    rl.question(message + ' (y/N): ', (answer) => {
+    rl.question(sanitizedMessage + ' (y/N): ', (answer) => {
       rl.close();
       resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
     });

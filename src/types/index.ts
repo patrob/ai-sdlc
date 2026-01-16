@@ -305,6 +305,11 @@ export interface LogConfig {
 }
 
 /**
+ * Log levels for per-story logging
+ */
+export type LogLevel = 'INFO' | 'AGENT' | 'ERROR' | 'WARN' | 'DEBUG';
+
+/**
  * File locking options for atomic story updates
  */
 export interface LockOptions {
@@ -363,6 +368,16 @@ export interface ConflictDetectionResult {
   safeToRunConcurrently: boolean;
   /** Human-readable summary of the conflict detection results */
   summary: string;
+}
+
+/**
+ * Result of pre-flight conflict check before starting story work
+ */
+export interface PreFlightResult {
+  /** Whether to proceed with story execution */
+  proceed: boolean;
+  /** Warning messages to display to the user */
+  warnings: string[];
 }
 
 export interface Config {

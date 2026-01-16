@@ -26,6 +26,20 @@ interface CredentialFile {
 export type CredentialType = 'api_key' | 'oauth_token' | 'none';
 
 /**
+ * Token expiration information
+ */
+export interface TokenExpirationInfo {
+  /** Whether the token is currently expired (with clock skew buffer) */
+  isExpired: boolean;
+  /** Expiration date (null if not available or invalid) */
+  expiresAt: Date | null;
+  /** Milliseconds until expiration (null if not available or invalid) */
+  expiresInMs: number | null;
+  /** Source file path for debugging (null if not from file) */
+  source: string | null;
+}
+
+/**
  * Validate that homedir() returns a legitimate user home directory
  * Prevents attacks via manipulated HOME environment variable
  */
@@ -123,6 +137,10 @@ function getCredentialsFromFile(): CredentialFile | null {
 /**
  * Check if a token is expired based on ISO8601 expiresAt date
  * Returns false if date is invalid or missing (assume token is valid)
+ *
+ * Includes a 30-second clock skew buffer to handle minor time differences
+ * between client and server clocks. A token is considered expired if:
+ * current_time >= expiry_time - 30_seconds
  */
 function isTokenExpired(expiresAt: string | undefined): boolean {
   if (!expiresAt) {
@@ -136,9 +154,118 @@ function isTokenExpired(expiresAt: string | undefined): boolean {
       return false; // Invalid date, skip expiration check
     }
 
-    return Date.now() >= expiry.getTime();
+    // 30-second clock skew buffer (30000ms)
+    const CLOCK_SKEW_BUFFER_MS = 30000;
+    return Date.now() >= expiry.getTime() - CLOCK_SKEW_BUFFER_MS;
   } catch {
     return false; // Parse error, skip expiration check
+  }
+}
+
+/**
+ * Check if a token expires within the given buffer period
+ * Returns false if date is invalid or missing
+ *
+ * @param expiresAt - ISO 8601 date string
+ * @param bufferMs - Time buffer in milliseconds (default: 5 minutes)
+ *
+ * @example
+ * // Check if token expires in next 5 minutes
+ * isTokenExpiringSoon('2026-01-15T12:05:00Z') // true if current time is after 12:00:00
+ *
+ * // Check with custom buffer (10 minutes)
+ * isTokenExpiringSoon('2026-01-15T12:10:00Z', 10 * 60 * 1000) // true if current time is after 12:00:00
+ */
+export function isTokenExpiringSoon(expiresAt: string | undefined, bufferMs: number = 5 * 60 * 1000): boolean {
+  if (!expiresAt) {
+    return false; // No expiration date, assume not expiring soon
+  }
+
+  try {
+    const expiry = new Date(expiresAt);
+    // Check if date is valid (not NaN)
+    if (isNaN(expiry.getTime())) {
+      return false; // Invalid date, skip check
+    }
+
+    const expiresInMs = expiry.getTime() - Date.now();
+    return expiresInMs > 0 && expiresInMs <= bufferMs;
+  } catch {
+    return false; // Parse error, skip check
+  }
+}
+
+/**
+ * Get token expiration information from credentials file
+ * Returns null fields if expiresAt is missing or unparseable
+ *
+ * @returns TokenExpirationInfo with expiration details
+ *
+ * @example
+ * const info = getTokenExpirationInfo();
+ * if (info.isExpired) {
+ *   console.error('Token expired. Please run `claude login`');
+ * } else if (info.expiresInMs && info.expiresInMs < 5 * 60 * 1000) {
+ *   console.warn('Token expires soon');
+ * }
+ */
+export function getTokenExpirationInfo(): TokenExpirationInfo {
+  const credentials = getCredentialsFromFile();
+
+  // If no credentials file, return null fields
+  if (!credentials) {
+    return {
+      isExpired: false,
+      expiresAt: null,
+      expiresInMs: null,
+      source: null,
+    };
+  }
+
+  const credentialPath = path.join(homedir(), '.claude', '.credentials.json');
+  const expiresAtStr = credentials.expiresAt;
+
+  // If no expiresAt field, return null expiration fields
+  if (!expiresAtStr) {
+    return {
+      isExpired: false,
+      expiresAt: null,
+      expiresInMs: null,
+      source: credentialPath,
+    };
+  }
+
+  try {
+    const expiry = new Date(expiresAtStr);
+
+    // Check if date is valid
+    if (isNaN(expiry.getTime())) {
+      console.debug(`Invalid date format in expiresAt: ${expiresAtStr}`);
+      return {
+        isExpired: false,
+        expiresAt: null,
+        expiresInMs: null,
+        source: credentialPath,
+      };
+    }
+
+    const expiresInMs = expiry.getTime() - Date.now();
+    const isExpired = isTokenExpired(expiresAtStr);
+
+    return {
+      isExpired,
+      expiresAt: expiry,
+      expiresInMs,
+      source: credentialPath,
+    };
+  } catch (error) {
+    console.debug(`Error parsing expiresAt: ${error}`);
+    return {
+      isExpired: false,
+      expiresAt: null,
+      expiresInMs: null,
+      source: credentialPath,
+    };
   }
 }
 

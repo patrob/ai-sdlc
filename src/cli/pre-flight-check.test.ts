@@ -17,7 +17,9 @@ vi.mock('../core/config.js', () => ({
     implementation: { autoCommit: false },
     defaultLabels: [],
   })),
-  getThemedChalk: vi.fn((config) => ({
+}));
+vi.mock('../core/theme.js', () => ({
+  getThemedChalk: vi.fn(() => ({
     success: (s: string) => s,
     warning: (s: string) => s,
     error: (s: string) => s,
@@ -53,11 +55,20 @@ function createMockStory(id: string, status: string = 'to-do'): Story {
 describe('preFlightConflictCheck', () => {
   const targetStory = createMockStory('S-0002', 'to-do');
   const sdlcRoot = '/test/.ai-sdlc';
+  let originalIsTTY: boolean | undefined;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Mock process.stdin.isTTY to simulate interactive mode by default
-    Object.defineProperty(process.stdin, 'isTTY', { value: true, writable: true });
+    // Store original value and mock process.stdin.isTTY to simulate interactive mode by default
+    originalIsTTY = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, 'isTTY', { value: true, writable: true, configurable: true });
+  });
+
+  afterEach(() => {
+    // Restore original value
+    if (originalIsTTY !== undefined) {
+      Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, writable: true, configurable: true });
+    }
   });
 
   it('returns proceed=true when --force flag is provided', async () => {
@@ -312,7 +323,7 @@ describe('preFlightConflictCheck', () => {
     vi.mocked(conflictDetectorModule.detectConflicts).mockReturnValue(mockConflictResult);
 
     // Simulate non-interactive to avoid prompt
-    Object.defineProperty(process.stdin, 'isTTY', { value: false, writable: true });
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, writable: true, configurable: true });
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     await preFlightConflictCheck(targetStory, sdlcRoot, {});
@@ -323,6 +334,252 @@ describe('preFlightConflictCheck', () => {
     expect(logs).toContain('src/api/user.ts');
     // Should NOT show conflict between S-0001 and S-0003 (not involving target)
     expect(logs).not.toContain('src/api/admin.ts');
+
+    consoleSpy.mockRestore();
+  });
+
+  it('throws error when sdlcRoot contains null bytes', async () => {
+    const invalidRoot = '/test/.ai-sdlc\0malicious';
+    await expect(preFlightConflictCheck(targetStory, invalidRoot, {})).rejects.toThrow('null bytes');
+  });
+
+  it('throws error when sdlcRoot is not absolute path', async () => {
+    const relativeRoot = 'relative/path/.ai-sdlc';
+    await expect(preFlightConflictCheck(targetStory, relativeRoot, {})).rejects.toThrow('absolute path');
+  });
+
+  it('throws error when sdlcRoot path is too long', async () => {
+    const longRoot = '/' + 'a'.repeat(1025);
+    await expect(preFlightConflictCheck(targetStory, longRoot, {})).rejects.toThrow('maximum length');
+  });
+
+  it('returns error when target story is already in-progress', async () => {
+    const inProgressStory = createMockStory('S-0002', 'in-progress');
+    const result = await preFlightConflictCheck(inProgressStory, sdlcRoot, {});
+
+    expect(result.proceed).toBe(false);
+    expect(result.warnings).toContain('Story already in progress');
+  });
+
+  it('sanitizes malicious story IDs with ANSI escape codes', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const maliciousStory = createMockStory('S-0001', 'in-progress');
+    // Story ID with ANSI code (will be sanitized by sanitizeStoryId)
+    maliciousStory.frontmatter.id = 'S-0001\x1b[31mMALICIOUS\x1b[0m';
+    vi.mocked(kanbanModule.findStoriesByStatus).mockReturnValue([maliciousStory]);
+
+    const mockConflictResult: ConflictDetectionResult = {
+      conflicts: [
+        {
+          storyA: 'S-0001\x1b[31mMALICIOUS\x1b[0m',
+          storyB: 'S-0002',
+          sharedFiles: ['src/api/user.ts'],
+          sharedDirectories: [],
+          severity: 'high',
+          recommendation: 'Run sequentially',
+        },
+      ],
+      safeToRunConcurrently: false,
+      summary: 'High severity conflict',
+    };
+
+    vi.mocked(conflictDetectorModule.detectConflicts).mockReturnValue(mockConflictResult);
+
+    // Simulate non-interactive to avoid prompt
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, writable: true, configurable: true });
+
+    await preFlightConflictCheck(targetStory, sdlcRoot, {});
+
+    const logs = consoleSpy.mock.calls.map(call => call[0]).join('\n');
+    // ANSI codes should be stripped (sanitizeStoryId removes special chars)
+    expect(logs).not.toContain('\x1b[31m');
+    expect(logs).not.toContain('\x1b[0m');
+
+    consoleSpy.mockRestore();
+  });
+
+  it('sanitizes file paths containing ANSI codes in conflict display', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const activeStory = createMockStory('S-0001', 'in-progress');
+    vi.mocked(kanbanModule.findStoriesByStatus).mockReturnValue([activeStory]);
+
+    const mockConflictResult: ConflictDetectionResult = {
+      conflicts: [
+        {
+          storyA: 'S-0001',
+          storyB: 'S-0002',
+          sharedFiles: ['src/api/\x1b[31mmalicious\x1b[0m.ts'],
+          sharedDirectories: [],
+          severity: 'high',
+          recommendation: 'Run sequentially',
+        },
+      ],
+      safeToRunConcurrently: false,
+      summary: 'High severity conflict',
+    };
+
+    vi.mocked(conflictDetectorModule.detectConflicts).mockReturnValue(mockConflictResult);
+
+    // Simulate non-interactive to avoid prompt
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, writable: true, configurable: true });
+
+    await preFlightConflictCheck(targetStory, sdlcRoot, {});
+
+    const logs = consoleSpy.mock.calls.map(call => call[0]).join('\n');
+    // ANSI codes should be stripped from file paths
+    expect(logs).not.toContain('\x1b[31m');
+    expect(logs).not.toContain('\x1b[0m');
+
+    consoleSpy.mockRestore();
+  });
+
+  it('sanitizes directory paths containing control characters', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const activeStory = createMockStory('S-0001', 'in-progress');
+    vi.mocked(kanbanModule.findStoriesByStatus).mockReturnValue([activeStory]);
+
+    const mockConflictResult: ConflictDetectionResult = {
+      conflicts: [
+        {
+          storyA: 'S-0001',
+          storyB: 'S-0002',
+          sharedFiles: [],
+          sharedDirectories: ['src/\x00api/'],
+          severity: 'medium',
+          recommendation: 'Monitor for conflicts',
+        },
+      ],
+      safeToRunConcurrently: false,
+      summary: 'Medium severity conflict',
+    };
+
+    vi.mocked(conflictDetectorModule.detectConflicts).mockReturnValue(mockConflictResult);
+
+    // Simulate non-interactive to avoid prompt
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, writable: true, configurable: true });
+
+    await preFlightConflictCheck(targetStory, sdlcRoot, {});
+
+    const logs = consoleSpy.mock.calls.map(call => call[0]).join('\n');
+    // Control characters should be stripped from directory paths
+    expect(logs).not.toContain('\x00');
+
+    consoleSpy.mockRestore();
+  });
+
+  it('sanitizes malicious recommendations from conflict detector', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const activeStory = createMockStory('S-0001', 'in-progress');
+    vi.mocked(kanbanModule.findStoriesByStatus).mockReturnValue([activeStory]);
+
+    const mockConflictResult: ConflictDetectionResult = {
+      conflicts: [
+        {
+          storyA: 'S-0001',
+          storyB: 'S-0002',
+          sharedFiles: ['src/api/user.ts'],
+          sharedDirectories: [],
+          severity: 'high',
+          recommendation: 'Run \x1b[31msequentially\x1b[0m to avoid conflicts',
+        },
+      ],
+      safeToRunConcurrently: false,
+      summary: 'High severity conflict',
+    };
+
+    vi.mocked(conflictDetectorModule.detectConflicts).mockReturnValue(mockConflictResult);
+
+    // Simulate non-interactive to avoid prompt
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, writable: true, configurable: true });
+
+    await preFlightConflictCheck(targetStory, sdlcRoot, {});
+
+    const logs = consoleSpy.mock.calls.map(call => call[0]).join('\n');
+    // ANSI codes should be stripped from recommendations
+    expect(logs).not.toContain('\x1b[31m');
+    expect(logs).not.toContain('\x1b[0m');
+
+    consoleSpy.mockRestore();
+  });
+
+  it('does not display raw error message when conflict detection fails', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const activeStory = createMockStory('S-0001', 'in-progress');
+    vi.mocked(kanbanModule.findStoriesByStatus).mockReturnValue([activeStory]);
+    vi.mocked(conflictDetectorModule.detectConflicts).mockImplementation(() => {
+      throw new Error('Sensitive error with secrets: API_KEY=abc123');
+    });
+
+    const result = await preFlightConflictCheck(targetStory, sdlcRoot, {});
+
+    expect(result.proceed).toBe(true);
+    expect(result.warnings).toContain('Conflict detection failed');
+
+    const logs = consoleSpy.mock.calls.map(call => call[0]).join('\n');
+    expect(logs).toContain('Conflict detection unavailable');
+    expect(logs).toContain('Proceeding without conflict check');
+    // Raw error message with sensitive info should NOT be displayed
+    expect(logs).not.toContain('API_KEY=abc123');
+    expect(logs).not.toContain('Sensitive error');
+
+    consoleSpy.mockRestore();
+  });
+
+  it('displays multiple conflicts sorted by severity (high, medium, low)', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const activeStory1 = createMockStory('S-0001', 'in-progress');
+    const activeStory2 = createMockStory('S-0003', 'in-progress');
+    const activeStory3 = createMockStory('S-0004', 'in-progress');
+    vi.mocked(kanbanModule.findStoriesByStatus).mockReturnValue([activeStory1, activeStory2, activeStory3]);
+
+    const mockConflictResult: ConflictDetectionResult = {
+      conflicts: [
+        {
+          storyA: 'S-0001',
+          storyB: 'S-0002',
+          sharedFiles: [],
+          sharedDirectories: ['tests/'],
+          severity: 'low',
+          recommendation: 'Safe to proceed',
+        },
+        {
+          storyA: 'S-0003',
+          storyB: 'S-0002',
+          sharedFiles: ['src/api/user.ts'],
+          sharedDirectories: [],
+          severity: 'high',
+          recommendation: 'Run sequentially',
+        },
+        {
+          storyA: 'S-0004',
+          storyB: 'S-0002',
+          sharedFiles: [],
+          sharedDirectories: ['src/api/'],
+          severity: 'medium',
+          recommendation: 'Monitor for conflicts',
+        },
+      ],
+      safeToRunConcurrently: false,
+      summary: 'Multiple conflicts',
+    };
+
+    vi.mocked(conflictDetectorModule.detectConflicts).mockReturnValue(mockConflictResult);
+
+    // Simulate non-interactive to avoid prompt
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, writable: true, configurable: true });
+
+    await preFlightConflictCheck(targetStory, sdlcRoot, {});
+
+    const logs = consoleSpy.mock.calls.map(call => call[0]).join('\n');
+
+    // Find positions of each conflict in the log output
+    const highPos = logs.indexOf('S-0003');
+    const mediumPos = logs.indexOf('S-0004');
+    const lowPos = logs.indexOf('S-0001');
+
+    // Verify they appear in order: high -> medium -> low
+    expect(highPos).toBeLessThan(mediumPos);
+    expect(mediumPos).toBeLessThan(lowPos);
 
     consoleSpy.mockRestore();
   });

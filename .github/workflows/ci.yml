@@ -114,7 +114,7 @@ jobs:
           fi
 
       - name: Set version in package.json
-        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Publish to npm
         run: npm publish --provenance --access public --tag ${{ steps.version.outputs.tag }}

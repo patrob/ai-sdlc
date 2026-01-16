@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768602216645-a50716c2",
+  "timestamp": "2026-01-16T22:26:59.836Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0018",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0018-review-agent-test-alignment-check/.ai-sdlc/stories/S-0018/story.md",
+      "completedAt": "2026-01-16T22:24:05.738Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0018",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0018-review-agent-test-alignment-check/.ai-sdlc/stories/S-0018/story.md",
+      "completedAt": "2026-01-16T22:26:28.852Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0018",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0018-review-agent-test-alignment-check/.ai-sdlc/stories/S-0018/story.md",
+      "completedAt": "2026-01-16T22:26:59.836Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0018-review-agent-test-alignment-check/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0018",
+      "fullSDLC": true
+    },
+    "storyContentHash": "64e56add71971742bd726193ab1d299afc2cc146cf330235477c64e67f232851"
+  }
+}

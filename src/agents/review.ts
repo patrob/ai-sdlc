@@ -331,7 +331,7 @@ Output your review as a JSON object with this structure:
   "issues": [
     {
       "severity": "blocker" | "critical" | "major" | "minor",
-      "category": "code_quality" | "security" | "requirements" | "testing" | etc,
+      "category": "code_quality" | "security" | "requirements" | "testing" | "test_alignment" | etc,
       "description": "Detailed description of the issue",
       "file": "path/to/file.ts" (if applicable),
       "line": 42 (if applicable),
@@ -342,7 +342,7 @@ Output your review as a JSON object with this structure:
 }
 
 Severity guidelines:
-- blocker: Must be fixed before merging (security holes, broken functionality)
+- blocker: Must be fixed before merging (security holes, broken functionality, test misalignment)
 - critical: Should be fixed before merging (major bugs, poor practices)
 - major: Should be addressed soon (code quality, maintainability)
 - minor: Nice to have improvements (style, optimizations)
@@ -383,6 +383,56 @@ Evaluate:
 - Are edge cases and error scenarios handled?
 - Is documentation adequate for users and maintainers?
 - Does the implementation align with the story goals?
+
+## Test-Implementation Alignment (BLOCKER category)
+
+**CRITICAL PRE-REVIEW REQUIREMENT**: Tests have already been executed and passed. However, passing tests don't guarantee correctness if they verify outdated behavior.
+
+During code review, you MUST verify test alignment:
+
+1. **For each changed production file, identify its test file**
+   - Check if tests exist for modified functions/modules
+   - Read the test assertions carefully
+
+2. **Verify tests match NEW behavior, not OLD**
+   - Do test assertions expect the current implementation behavior?
+   - If production code changed from sync to async, do tests use await?
+   - If function signature changed, do tests call it correctly?
+   - If return values changed, do tests expect the new values?
+
+3. **Flag misalignment as BLOCKER**
+   - If tests reference changed code but still expect old behavior:
+     - This is a **BLOCKER** severity issue
+     - Category MUST be: \`"test_alignment"\`
+     - Specify which test files need updating and why
+     - Provide example of correct assertion for new behavior
+
+**Example of misaligned test (BLOCKER):**
+\`\`\`typescript
+// Production code changed from sync to async
+async function loadConfig(): Promise<Config> {
+  return await fetchConfig();
+}
+
+// Test still expects sync behavior - MISSING await (BLOCKER)
+test('loads config', () => {
+  const config = loadConfig(); // ❌ Missing await! Returns Promise<Config>, not Config
+  expect(config.port).toBe(3000); // ❌ Checking Promise.port, not config.port
+});
+
+// Correct aligned test:
+test('loads config', async () => {
+  const config = await loadConfig(); // ✅ Awaits async function
+  expect(config.port).toBe(3000);     // ✅ Checks actual config
+});
+\`\`\`
+
+**When to flag test_alignment issues:**
+- Tests verify old function signatures that no longer exist
+- Tests expect old return value formats that changed
+- Tests miss new error conditions introduced
+- Tests pass but don't exercise the new code paths
+- Mock expectations don't match the new implementation calls
 
 ## CRITICAL DEDUPLICATION INSTRUCTIONS:
 

@@ -22,6 +22,17 @@ export type ReviewIssueSeverity = 'blocker' | 'critical' | 'major' | 'minor';
  * The optional `perspectives` field tracks which review perspectives
  * (code quality, security, or product owner) flagged this issue.
  * Used by unified review to indicate multi-perspective issues.
+ *
+ * Common category values:
+ * - 'build': Build failures
+ * - 'testing': Test execution failures (tests fail to run or fail assertions)
+ * - 'test_alignment': Tests pass but verify outdated behavior (not aligned with new implementation)
+ * - 'tdd_violation': TDD cycle violations
+ * - 'test_antipattern': Test code duplication or other test anti-patterns
+ * - 'implementation': Missing or incomplete source code changes
+ * - 'security': Security vulnerabilities and risks
+ * - 'code_quality': Code quality and maintainability concerns
+ * - 'requirements': Product owner / requirements concerns
  */
 export interface ReviewIssue {
   severity: ReviewIssueSeverity;

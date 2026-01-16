@@ -18,6 +18,10 @@ export type ReviewIssueSeverity = 'blocker' | 'critical' | 'major' | 'minor';
 
 /**
  * Individual issue identified during review
+ *
+ * The optional `perspectives` field tracks which review perspectives
+ * (code quality, security, or product owner) flagged this issue.
+ * Used by unified review to indicate multi-perspective issues.
  */
 export interface ReviewIssue {
   severity: ReviewIssueSeverity;
@@ -26,6 +30,13 @@ export interface ReviewIssue {
   file?: string;
   line?: number;
   suggestedFix?: string;
+  /**
+   * Which review perspectives flagged this issue.
+   * - 'code': Code quality and maintainability concerns
+   * - 'security': Security vulnerabilities and risks
+   * - 'po': Product owner / requirements concerns
+   */
+  perspectives?: ('code' | 'security' | 'po')[];
 }
 
 /**

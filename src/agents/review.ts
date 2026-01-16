@@ -114,6 +114,8 @@ const ReviewIssueSchema = z.object({
   file: z.string().nullish().transform(v => v ?? undefined),
   line: z.number().int().positive().nullish().transform(v => v ?? undefined),
   suggestedFix: z.string().max(5000).nullish().transform(v => v ?? undefined),
+  // Perspectives field for unified review (optional for backward compatibility)
+  perspectives: z.array(z.enum(['code', 'security', 'po'])).optional(),
 });
 
 const ReviewResponseSchema = z.object({
@@ -333,7 +335,8 @@ Output your review as a JSON object with this structure:
       "description": "Detailed description of the issue",
       "file": "path/to/file.ts" (if applicable),
       "line": 42 (if applicable),
-      "suggestedFix": "How to fix this issue"
+      "suggestedFix": "How to fix this issue",
+      "perspectives": ["code", "security", "po"] (which perspectives this issue relates to)
     }
   ]
 }
@@ -347,6 +350,71 @@ Severity guidelines:
 If no issues found, return: {"passed": true, "issues": []}
 `;
 
+/**
+ * Unified Review Prompt - combines code, security, and product owner perspectives
+ * into a single collaborative review to eliminate duplicate issues.
+ */
+const UNIFIED_REVIEW_PROMPT = `You are a senior engineering team conducting a comprehensive collaborative review.
+
+You must evaluate the implementation from THREE perspectives simultaneously, but produce ONE unified set of issues:
+
+## Perspective 1: Code Quality (Senior Developer)
+Evaluate:
+- Code quality and maintainability
+- Following best practices and design patterns
+- Potential bugs or logic errors
+- Test coverage adequacy and test quality
+- Error handling completeness
+- Performance considerations
+
+## Perspective 2: Security (Security Engineer)
+Evaluate:
+- OWASP Top 10 vulnerabilities
+- Input validation and sanitization
+- Authentication and authorization issues
+- Data exposure risks
+- Command injection vulnerabilities
+- Secure coding practices
+
+## Perspective 3: Requirements (Product Owner)
+Evaluate:
+- Does it meet the acceptance criteria stated in the story?
+- Is the user experience appropriate and intuitive?
+- Are edge cases and error scenarios handled?
+- Is documentation adequate for users and maintainers?
+- Does the implementation align with the story goals?
+
+## CRITICAL DEDUPLICATION INSTRUCTIONS:
+
+1. **DO NOT repeat the same underlying issue from different perspectives**
+   - If multiple perspectives notice the same problem, list it ONCE
+   - Use the \`perspectives\` array to indicate which perspectives it affects
+
+2. **Prioritize by actual impact, not by how many perspectives notice it**
+   - A issue seen by all 3 perspectives is still just ONE issue
+   - Focus on the distinct, actionable problems that need fixing
+
+3. **If the fundamental problem is "no implementation exists" or "functionality completely missing":**
+   - Report this as ONE blocker issue, not three separate issues
+   - Use perspectives: ["code", "security", "po"] to show all perspectives agree
+
+4. **Combine related issues into single, comprehensive descriptions:**
+   - Instead of: "No tests" (code) + "Untested security" (security) + "No validation tests" (po)
+   - Write: "No tests exist for the implementation" with perspectives: ["code", "security", "po"]
+
+5. **Each issue should have a clear, single suggested fix**
+   - Avoid vague suggestions like "improve everything"
+   - Be specific and actionable
+
+${REVIEW_OUTPUT_FORMAT}
+
+Remember: Your goal is to produce a clean, deduplicated list of actual distinct problems, not to maximize issue count.`;
+
+/**
+ * Legacy prompts - kept for reference only
+ * @deprecated These are replaced by UNIFIED_REVIEW_PROMPT which combines all three perspectives.
+ * The unified prompt reduces LLM calls from 3 to 1 and eliminates duplicate issues.
+ */
 const CODE_REVIEW_PROMPT = `You are a senior code reviewer. Review the implementation for:
 1. Code quality and maintainability
 2. Following best practices
@@ -355,6 +423,9 @@ const CODE_REVIEW_PROMPT = `You are a senior code reviewer. Review the implement
 
 ${REVIEW_OUTPUT_FORMAT}`;
 
+/**
+ * @deprecated Use UNIFIED_REVIEW_PROMPT instead
+ */
 const SECURITY_REVIEW_PROMPT = `You are a security specialist. Review the implementation for:
 1. OWASP Top 10 vulnerabilities
 2. Input validation issues
@@ -363,6 +434,9 @@ const SECURITY_REVIEW_PROMPT = `You are a security specialist. Review the implem
 
 ${REVIEW_OUTPUT_FORMAT}`;
 
+/**
+ * @deprecated Use UNIFIED_REVIEW_PROMPT instead
+ */
 const PO_REVIEW_PROMPT = `You are a product owner validating the implementation. Check:
 1. Does it meet the acceptance criteria?
 2. Is the user experience appropriate?
@@ -406,6 +480,7 @@ function parseReviewResponse(response: string, reviewType: string): { passed: bo
       file: issue.file,
       line: issue.line,
       suggestedFix: issue.suggestedFix,
+      perspectives: issue.perspectives,
     }));
 
     return {
@@ -476,7 +551,48 @@ function determineReviewSeverity(issues: ReviewIssue[]): ReviewSeverity {
 }
 
 /**
+ * Derive individual perspective pass/fail status from issues
+ *
+ * For backward compatibility with ReviewAttempt structure, determines whether
+ * each perspective (code, security, po) would pass based on issues flagged
+ * for that perspective.
+ *
+ * A perspective fails if it has any blocker or critical issues.
+ *
+ * @param issues - Array of review issues with perspectives field
+ * @returns Object with pass/fail status for each perspective
+ */
+export function deriveIndividualPassFailFromPerspectives(issues: ReviewIssue[]): {
+  codeReviewPassed: boolean;
+  securityReviewPassed: boolean;
+  poReviewPassed: boolean;
+} {
+  // Check if any blocker/critical issues exist for each perspective
+  const codeIssues = issues.filter(i =>
+    i.perspectives?.includes('code') &&
+    (i.severity === 'blocker' || i.severity === 'critical')
+  );
+
+  const securityIssues = issues.filter(i =>
+    i.perspectives?.includes('security') &&
+    (i.severity === 'blocker' || i.severity === 'critical')
+  );
+
+  const poIssues = issues.filter(i =>
+    i.perspectives?.includes('po') &&
+    (i.severity === 'blocker' || i.severity === 'critical')
+  );
+
+  return {
+    codeReviewPassed: codeIssues.length === 0,
+    securityReviewPassed: securityIssues.length === 0,
+    poReviewPassed: poIssues.length === 0,
+  };
+}
+
+/**
  * Aggregate issues from multiple reviews and determine overall pass/fail
+ * @deprecated No longer used with unified review. Kept for reference only.
  */
 function aggregateReviews(
   codeResult: { passed: boolean; issues: ReviewIssue[] },
@@ -500,6 +616,7 @@ function aggregateReviews(
 
 /**
  * Format issues for display in review notes
+ * Shows perspectives (code, security, po) when available
  */
 function formatIssuesForDisplay(issues: ReviewIssue[]): string {
   if (issues.length === 0) {
@@ -522,7 +639,12 @@ function formatIssuesForDisplay(issues: ReviewIssue[]): string {
     output += `\n#### ${icon} ${severity.toUpperCase()} (${issueList.length})\n\n`;
 
     for (const issue of issueList) {
-      output += `**${issue.category}**: ${issue.description}\n`;
+      // Format perspectives indicator if present
+      const perspectivesTag = issue.perspectives && issue.perspectives.length > 0
+        ? ` [${issue.perspectives.join(', ')}]`
+        : '';
+
+      output += `**${issue.category}**${perspectivesTag}: ${issue.description}\n`;
       if (issue.file) {
         output += `  - File: \`${issue.file}\`${issue.line ? `:${issue.line}` : ''}\n`;
       }
@@ -907,8 +1029,8 @@ export async function runReviewAgent(
       };
     }
 
-    // Verification passed - proceed with all reviews in parallel, passing verification context
-    changesMade.push('Verification passed - proceeding with code/security/PO reviews');
+    // Verification passed - proceed with unified collaborative review
+    changesMade.push('Verification passed - proceeding with unified collaborative review');
 
     // Run test pattern detection if enabled
     let testPatternIssues: ReviewIssue[] = [];
@@ -928,16 +1050,16 @@ export async function runReviewAgent(
       }
     }
 
-    const [codeReview, securityReview, poReview] = await Promise.all([
-      runSubReview(story, CODE_REVIEW_PROMPT, 'Code Review', workingDir, verificationContext),
-      runSubReview(story, SECURITY_REVIEW_PROMPT, 'Security Review', workingDir, verificationContext),
-      runSubReview(story, PO_REVIEW_PROMPT, 'Product Owner Review', workingDir, verificationContext),
-    ]);
+    const unifiedReviewResponse = await runSubReview(
+      story,
+      UNIFIED_REVIEW_PROMPT,
+      'Unified Collaborative Review',
+      workingDir,
+      verificationContext
+    );
 
-    // Parse each review response into structured issues
-    const codeResult = parseReviewResponse(codeReview, 'Code Review');
-    const securityResult = parseReviewResponse(securityReview, 'Security Review');
-    const poResult = parseReviewResponse(poReview, 'Product Owner Review');
+    // Parse unified review response into structured issues
+    const unifiedResult = parseReviewResponse(unifiedReviewResponse, 'Unified Review');
 
     // TDD Validation: Check TDD cycle completeness if TDD was enabled for this story
     const tddEnabled = story.frontmatter.tdd_enabled ?? config.tdd?.enabled ?? false;
@@ -945,52 +1067,58 @@ export async function runReviewAgent(
       const tddViolations = validateTDDCycles(story.frontmatter.tdd_test_history);
       if (tddViolations.length > 0) {
         const tddIssues = generateTDDIssues(tddViolations);
-        codeResult.issues.push(...tddIssues);
-        codeResult.passed = false;
+        unifiedResult.issues.push(...tddIssues);
+        unifiedResult.passed = false;
         changesMade.push(`TDD validation: ${tddViolations.length} violation(s) detected`);
       } else {
         changesMade.push('TDD validation: All cycles completed correctly');
       }
     }
 
-    // Add test pattern issues to code result (they're code-quality related)
+    // Add test pattern issues to unified result (they're code-quality related)
     if (testPatternIssues.length > 0) {
-      codeResult.issues.push(...testPatternIssues);
-      codeResult.passed = false;
+      unifiedResult.issues.push(...testPatternIssues);
+      unifiedResult.passed = false;
     }
 
-    // Add verification issues to code result (they're code-quality related)
-    codeResult.issues.unshift(...verificationIssues);
+    // Add verification issues to unified result (they're code-quality related)
+    unifiedResult.issues.unshift(...verificationIssues);
     if (verificationIssues.length > 0) {
-      codeResult.passed = false;
+      unifiedResult.passed = false;
     }
 
-    // Aggregate all issues and determine overall pass/fail
-    const { passed, allIssues, severity } = aggregateReviews(codeResult, securityResult, poResult);
+    // Determine overall pass/fail from unified review
+    const allIssues = unifiedResult.issues;
+    const blockerCount = allIssues.filter(i => i.severity === 'blocker').length;
+    const criticalCount = allIssues.filter(i => i.severity === 'critical').length;
+    const passed = blockerCount === 0 && criticalCount < 2;
+    const severity = determineReviewSeverity(allIssues);
 
-    // Compile review notes with structured format
+    // Derive individual perspective pass/fail for backward compatibility
+    const { codeReviewPassed, securityReviewPassed, poReviewPassed } =
+      deriveIndividualPassFailFromPerspectives(allIssues);
+
+    // Compile review notes with structured format for unified review
     const reviewNotes = `
-### Code Review
-${formatIssuesForDisplay(codeResult.issues)}
+### Unified Collaborative Review
 
-### Security Review
-${formatIssuesForDisplay(securityResult.issues)}
+${formatIssuesForDisplay(allIssues)}
 
-### Product Owner Review
-${formatIssuesForDisplay(poResult.issues)}
+### Perspective Summary
+- Code Quality: ${codeReviewPassed ? '✅ Passed' : '❌ Failed'}
+- Security: ${securityReviewPassed ? '✅ Passed' : '❌ Failed'}
+- Requirements (PO): ${poReviewPassed ? '✅ Passed' : '❌ Failed'}
 
 ### Overall Result
 ${passed ? '✅ **PASSED** - All reviews approved' : '❌ **FAILED** - Issues must be addressed'}
 
 ---
-*Reviews completed: ${new Date().toISOString().split('T')[0]}*
+*Review completed: ${new Date().toISOString().split('T')[0]}*
 `;
 
     // Append reviews to story
     await appendToSection(story, 'Review Notes', reviewNotes);
-    changesMade.push('Added code review notes');
-    changesMade.push('Added security review notes');
-    changesMade.push('Added product owner review notes');
+    changesMade.push('Added unified collaborative review notes');
 
     // Determine decision
     const decision = passed ? ReviewDecision.APPROVED : ReviewDecision.REJECTED;
@@ -1002,9 +1130,9 @@ ${passed ? '✅ **PASSED** - All reviews approved' : '❌ **FAILED** - Issues mu
       ...(passed ? {} : { severity }),
       feedback: passed ? 'All reviews passed' : formatIssuesForDisplay(allIssues),
       blockers: allIssues.filter(i => i.severity === 'blocker').map(i => i.description),
-      codeReviewPassed: codeResult.passed,
-      securityReviewPassed: securityResult.passed,
-      poReviewPassed: poResult.passed,
+      codeReviewPassed,
+      securityReviewPassed,
+      poReviewPassed,
     };
 
     // Append to review history

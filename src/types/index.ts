@@ -365,6 +365,16 @@ export interface ConflictDetectionResult {
   summary: string;
 }
 
+/**
+ * Result of pre-flight conflict check before starting story work
+ */
+export interface PreFlightResult {
+  /** Whether to proceed with story execution */
+  proceed: boolean;
+  /** Warning messages to display to the user */
+  warnings: string[];
+}
+
 export interface Config {
   sdlcFolder: string;
   stageGates: StageGateConfig;

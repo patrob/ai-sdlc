@@ -4,10 +4,10 @@ import fs from 'fs';
 import path from 'path';
 import * as readline from 'readline';
 import { getSdlcRoot, loadConfig, initConfig, validateWorktreeBasePath, DEFAULT_WORKTREE_CONFIG } from '../core/config.js';
-import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug } from '../core/kanban.js';
+import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoriesByStatus } from '../core/kanban.js';
 import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory } from '../core/story.js';
 import { GitWorktreeService } from '../core/worktree.js';
-import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext, WorktreeInfo } from '../types/index.js';
+import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext, WorktreeInfo, PreFlightResult } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
 import {
   saveWorkflowState,
@@ -23,6 +23,7 @@ import { migrateToFolderPerStory } from './commands/migrate.js';
 import { generateReviewSummary } from '../agents/review.js';
 import { getTerminalWidth } from './formatting.js';
 import { validateGitState, GitValidationResult } from '../core/git-utils.js';
+import { detectConflicts } from '../core/conflict-detector.js';
 
 /**
  * Initialize the .ai-sdlc folder structure
@@ -295,6 +296,107 @@ function displayGitValidationResult(result: GitValidationResult, c: any): void {
     for (const warning of result.warnings) {
       console.log(c.warning(`  - ${warning}`));
     }
+  }
+}
+
+/**
+ * Perform pre-flight conflict check before starting work on a story in a worktree.
+ * Warns about potential file conflicts with active stories and prompts for confirmation.
+ *
+ * @param targetStory - The story to check for conflicts
+ * @param sdlcRoot - Root directory of the .ai-sdlc folder
+ * @param options - Command options (force flag)
+ * @returns PreFlightResult indicating whether to proceed and any warnings
+ */
+export async function preFlightConflictCheck(
+  targetStory: Story,
+  sdlcRoot: string,
+  options: { force?: boolean }
+): Promise<PreFlightResult> {
+  const config = loadConfig();
+  const c = getThemedChalk(config);
+
+  // Skip if --force flag
+  if (options.force) {
+    console.log(c.warning('⚠️  Skipping conflict check (--force)'));
+    return { proceed: true, warnings: ['Conflict check skipped'] };
+  }
+
+  try {
+    // Query for all in-progress stories (excluding target)
+    const activeStories = findStoriesByStatus(sdlcRoot, 'in-progress')
+      .filter(s => s.frontmatter.id !== targetStory.frontmatter.id);
+
+    if (activeStories.length === 0) {
+      console.log(c.success('✓ Conflict check: No overlapping files with active stories'));
+      return { proceed: true, warnings: [] };
+    }
+
+    // Run conflict detection
+    const workingDir = path.dirname(sdlcRoot);
+    const result = detectConflicts([targetStory, ...activeStories], workingDir, 'main');
+
+    // Filter conflicts involving target story
+    const relevantConflicts = result.conflicts.filter(
+      conflict => conflict.storyA === targetStory.frontmatter.id || conflict.storyB === targetStory.frontmatter.id
+    );
+
+    // Filter out 'none' severity conflicts
+    const significantConflicts = relevantConflicts.filter(conflict => conflict.severity !== 'none');
+
+    if (significantConflicts.length === 0) {
+      console.log(c.success('✓ Conflict check: No overlapping files with active stories'));
+      return { proceed: true, warnings: [] };
+    }
+
+    // Display conflicts
+    console.log();
+    console.log(c.warning('⚠️  Potential conflicts detected:'));
+    console.log();
+
+    for (const conflict of significantConflicts) {
+      const otherStoryId = conflict.storyA === targetStory.frontmatter.id ? conflict.storyB : conflict.storyA;
+      console.log(c.warning(`   ${targetStory.frontmatter.id} may conflict with ${otherStoryId}:`));
+
+      // Display shared files
+      for (const file of conflict.sharedFiles) {
+        const severityLabel = conflict.severity === 'high' ? c.error('High') :
+                              conflict.severity === 'medium' ? c.warning('Medium') :
+                              c.dim('Low');
+        console.log(`   - ${severityLabel}: ${file} (modified by both)`);
+      }
+
+      // Display shared directories
+      for (const dir of conflict.sharedDirectories) {
+        const severityLabel = conflict.severity === 'high' ? c.error('High') :
+                              conflict.severity === 'medium' ? c.warning('Medium') :
+                              c.dim('Low');
+        console.log(`   - ${severityLabel}: ${dir} (same directory)`);
+      }
+
+      console.log();
+      console.log(c.dim(`   Recommendation: ${conflict.recommendation}`));
+      console.log();
+    }
+
+    // Non-interactive mode: default to declining
+    if (!process.stdin.isTTY) {
+      console.log(c.dim('Non-interactive mode: conflicts require --force to proceed'));
+      return { proceed: false, warnings: ['Conflicts detected'] };
+    }
+
+    // Interactive mode: prompt user
+    const shouldContinue = await confirmRemoval('Continue anyway?');
+    return {
+      proceed: shouldContinue,
+      warnings: shouldContinue ? ['User confirmed with conflicts'] : ['Conflicts detected']
+    };
+
+  } catch (error) {
+    // Fail-open: allow proceeding if conflict detection fails
+    console.log(c.warning('⚠️  Conflict detection unavailable'));
+    console.log(c.dim('Proceeding without conflict check...'));
+    return { proceed: true, warnings: ['Conflict detection failed'] };
   }
 }
 
@@ -640,6 +742,20 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
   }
 
   if (shouldUseWorktree && options.story && targetStory) {
+    // PRE-FLIGHT CHECK: Run conflict detection before creating worktree
+    const preFlightResult = await preFlightConflictCheck(targetStory, sdlcRoot, options);
+
+    if (!preFlightResult.proceed) {
+      console.log(c.error('❌ Aborting. Complete active stories first or use --force.'));
+      return;
+    }
+
+    // Log warnings if user proceeded despite conflicts
+    if (preFlightResult.warnings.length > 0 && preFlightResult.warnings[0] !== 'Conflict check skipped') {
+      preFlightResult.warnings.forEach(w => console.log(c.dim(`  ⚠ ${w}`)));
+      console.log();
+    }
+
     const workingDir = path.dirname(sdlcRoot);
 
     // Check if story already has an existing worktree (resume scenario)

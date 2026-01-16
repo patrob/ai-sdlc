@@ -85,7 +85,7 @@ program
   .option('--max-iterations <number>', 'Maximum retry iterations (default: infinite)')
   .option('--watch', 'Run in daemon mode, continuously processing backlog')
   .option('-v, --verbose', 'Show detailed daemon output (use with --watch)')
-  .option('--force', 'Skip git validation checks (use with caution)')
+  .option('--force', 'Skip git validation and conflict checks (use with caution)')
   .option('--worktree', 'Create isolated git worktree for story execution (requires --story)')
   .option('--no-worktree', 'Disable worktree even when enabled in config')
   .option('--log-level <level>', 'Set log verbosity (debug, info, warn, error)', 'info')

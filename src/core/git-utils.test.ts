@@ -8,6 +8,7 @@ import {
   validateGitState,
   GitValidationResult,
   GitValidationOptions,
+  CleanWorkingDirectoryOptions,
 } from './git-utils.js';
 
 vi.mock('child_process', () => ({
@@ -74,6 +75,115 @@ describe('git-utils', () => {
       const result = isCleanWorkingDirectory('/test/dir');
 
       expect(result).toBe(false);
+    });
+
+    describe('with excludePatterns', () => {
+      it('returns true when all changes are in excluded paths', () => {
+        // Changes only in .ai-sdlc/ directory
+        mockSpawnSync.mockReturnValue(
+          createSpawnResult(' M .ai-sdlc/stories/S-0001/story.md\n M .ai-sdlc/config.json\n')
+        );
+
+        const options: CleanWorkingDirectoryOptions = {
+          excludePatterns: ['.ai-sdlc/**'],
+        };
+        const result = isCleanWorkingDirectory('/test/dir', options);
+
+        expect(result).toBe(true);
+      });
+
+      it('returns false when there are non-excluded changes', () => {
+        // Mix of .ai-sdlc changes and source code changes
+        mockSpawnSync.mockReturnValue(
+          createSpawnResult(' M .ai-sdlc/stories/S-0001/story.md\n M src/index.ts\n')
+        );
+
+        const options: CleanWorkingDirectoryOptions = {
+          excludePatterns: ['.ai-sdlc/**'],
+        };
+        const result = isCleanWorkingDirectory('/test/dir', options);
+
+        expect(result).toBe(false);
+      });
+
+      it('returns true when directory is completely clean even with exclude patterns', () => {
+        mockSpawnSync.mockReturnValue(createSpawnResult(''));
+
+        const options: CleanWorkingDirectoryOptions = {
+          excludePatterns: ['.ai-sdlc/**'],
+        };
+        const result = isCleanWorkingDirectory('/test/dir', options);
+
+        expect(result).toBe(true);
+      });
+
+      it('handles multiple exclude patterns', () => {
+        mockSpawnSync.mockReturnValue(
+          createSpawnResult(' M .ai-sdlc/stories/story.md\n M node_modules/pkg/file.js\n')
+        );
+
+        const options: CleanWorkingDirectoryOptions = {
+          excludePatterns: ['.ai-sdlc/**', 'node_modules/**'],
+        };
+        const result = isCleanWorkingDirectory('/test/dir', options);
+
+        expect(result).toBe(true);
+      });
+
+      it('handles quoted paths in git status output', () => {
+        // Git quotes paths with special characters
+        mockSpawnSync.mockReturnValue(createSpawnResult(' M ".ai-sdlc/stories/S-0001/story.md"\n'));
+
+        const options: CleanWorkingDirectoryOptions = {
+          excludePatterns: ['.ai-sdlc/**'],
+        };
+        const result = isCleanWorkingDirectory('/test/dir', options);
+
+        expect(result).toBe(true);
+      });
+
+      it('handles staged and unstaged changes in excluded paths', () => {
+        // M = staged, second M = unstaged, A = added, ? = untracked
+        mockSpawnSync.mockReturnValue(
+          createSpawnResult(
+            'M  .ai-sdlc/stories/S-0001/story.md\n' +
+              ' M .ai-sdlc/config.json\n' +
+              'A  .ai-sdlc/stories/S-0002/story.md\n'
+          )
+        );
+
+        const options: CleanWorkingDirectoryOptions = {
+          excludePatterns: ['.ai-sdlc/**'],
+        };
+        const result = isCleanWorkingDirectory('/test/dir', options);
+
+        expect(result).toBe(true);
+      });
+
+      it('correctly excludes nested paths', () => {
+        mockSpawnSync.mockReturnValue(
+          createSpawnResult(' M .ai-sdlc/stories/in-progress/S-0001/story.md\n')
+        );
+
+        const options: CleanWorkingDirectoryOptions = {
+          excludePatterns: ['.ai-sdlc/**'],
+        };
+        const result = isCleanWorkingDirectory('/test/dir', options);
+
+        expect(result).toBe(true);
+      });
+
+      it('only excludes exact pattern matches', () => {
+        // .ai-sdlc-backup should NOT be excluded by .ai-sdlc/**
+        mockSpawnSync.mockReturnValue(createSpawnResult(' M .ai-sdlc-backup/file.txt\n'));
+
+        const options: CleanWorkingDirectoryOptions = {
+          excludePatterns: ['.ai-sdlc/**'],
+        };
+        const result = isCleanWorkingDirectory('/test/dir', options);
+
+        expect(result).toBe(false);
+      });
     });
   });
 

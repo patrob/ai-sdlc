@@ -94,10 +94,42 @@ describe('GitWorktreeService', () => {
     });
 
     it('returns valid:false with error message for dirty working directory', () => {
-      // Mock isCleanWorkingDirectory to return false (uncommitted changes)
+      // Mock isCleanWorkingDirectory to return false (uncommitted changes in source code)
       vi.spyOn(cp, 'spawnSync').mockReturnValue({
         status: 0,
         stdout: 'M src/file.ts\n',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.validateCanCreateWorktree();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Uncommitted changes');
+    });
+
+    it('returns valid:true when only .ai-sdlc files are modified', () => {
+      // Story files in .ai-sdlc/ should be excluded from the clean check
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: ' M .ai-sdlc/stories/S-0001/story.md\n M .ai-sdlc/config.json\n',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.validateCanCreateWorktree();
+      expect(result.valid).toBe(true);
+      expect(result.error).toBeUndefined();
+    });
+
+    it('returns valid:false when both .ai-sdlc and source files are modified', () => {
+      // Source code changes should still block, even with .ai-sdlc changes
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: ' M .ai-sdlc/stories/S-0001/story.md\n M src/index.ts\n',
         stderr: '',
         output: [],
         pid: 0,

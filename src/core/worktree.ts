@@ -1,8 +1,11 @@
 import { spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import path from 'path';
-import { isCleanWorkingDirectory } from './git-utils.js';
+import { isCleanWorkingDirectory, CleanWorkingDirectoryOptions } from './git-utils.js';
 import { WorktreeInfo } from '../types/index.js';
+
+/** Default patterns to exclude from working directory cleanliness checks */
+const DEFAULT_EXCLUDE_PATTERNS = ['.ai-sdlc/**'];
 
 /**
  * Options for creating a git worktree
@@ -108,9 +111,15 @@ export class GitWorktreeService {
   /**
    * Validate that a worktree can be created
    * Checks for uncommitted changes in the working directory
+   * Note: Changes in .ai-sdlc/ directory are excluded since they're expected
+   * during normal workflow (story file updates, etc.)
    */
   validateCanCreateWorktree(): WorktreeValidationResult {
-    if (!isCleanWorkingDirectory(this.projectRoot)) {
+    const cleanCheckOptions: CleanWorkingDirectoryOptions = {
+      excludePatterns: DEFAULT_EXCLUDE_PATTERNS,
+    };
+
+    if (!isCleanWorkingDirectory(this.projectRoot, cleanCheckOptions)) {
       return {
         valid: false,
         error: ERROR_MESSAGES.UNCOMMITTED_CHANGES,

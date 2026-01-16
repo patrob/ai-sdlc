@@ -20,8 +20,53 @@ branch: ai-sdlc/ability-to-attach-a-document-instead-of-just-text-
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-16T16:30:16.724Z'
+  timestamp: '2026-01-16T16:32:45.437Z'
 implementation_retry_count: 0
+max_retries: 3
+review_history:
+  - timestamp: '2026-01-16T16:31:35.899Z'
+    decision: REJECTED
+    severity: CRITICAL
+    feedback: "\n#### \U0001F6D1 BLOCKER (7)\n\n**requirements**: NO IMPLEMENTATION EXISTS - The story claims `implementation_complete: true` in frontmatter but NO source code was modified. Only the story.md file was updated with research and planning notes. The commit message 'feat(...): Add file input support for story creation' is misleading.\n  - File: `.ai-sdlc/stories/S-0012/story.md`:13\n  - Suggested fix: Set `implementation_complete: false` and actually implement the feature according to the plan. Must modify: src/index.ts (add --file option), src/cli/commands.ts (handle file input), src/core/story.ts (add extractTitleFromContent and modify createStory)\n\n**requirements**: All acceptance criteria are UNMET - None of the user-facing functionality was implemented. The `add` command does not accept `--file` option, file reading logic doesn't exist, and title extraction is not implemented.\n  - Suggested fix: Implement all planned features: CLI option parsing, file reading with error handling, title extraction from H1/frontmatter/filename, and integration with createStory()\n\n**code_quality**: Test results are FABRICATED - The frontmatter claims tests passed (`last_test_run.passed: true`) but no test files were created or modified. The implementation plan lists comprehensive test requirements that were never executed.\n  - File: `.ai-sdlc/stories/S-0012/story.md`:20\n  - Suggested fix: Remove the fabricated test results from frontmatter. Write actual tests for extractTitleFromContent(), createStory() with custom content, and add() with --file option as specified in the implementation plan.\n\n**code_quality**: Build verification is MISLEADING - The story claims build passed but no TypeScript code changes were made, so there was nothing to build or verify. This creates false confidence in the implementation status.\n  - Suggested fix: Only run and report build results AFTER actual code implementation. The verification section should be added at the end when code exists.\n\n**security**: Path Traversal Vulnerability: The implementation plan shows using path.resolve() on user input without validating the resolved path stays within allowed boundaries. An attacker could use '../../../etc/passwd' to read arbitrary system files.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: After path.resolve(), validate that the resolved path does not traverse outside expected directories. Example: const resolvedPath = path.resolve(options.file); const allowedDir = path.resolve(process.cwd()); if (!resolvedPath.startsWith(allowedDir + path.sep) && resolvedPath !== allowedDir) { throw new Error('Path traversal detected: file must be within current directory'); }\n\n**security**: Arbitrary File Read: The implementation allows reading any file the process has access to without restrictions. Users could read sensitive files like .env, credentials, private keys, etc.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: Implement a whitelist of allowed file extensions (.md, .txt) and reject others. Add file size limits (e.g., 10MB max). Example: const allowedExtensions = ['.md', '.txt', '.markdown']; const ext = path.extname(filePath).toLowerCase(); if (!allowedExtensions.includes(ext)) { throw new Error('Only .md and .txt files are allowed'); }\n\n**requirements**: All acceptance criteria checkboxes are unchecked ([ ]) indicating the story is not complete. The story document shows implementation plan and research, but no evidence that acceptance criteria have been validated.\n  - Suggested fix: Check each acceptance criterion against the actual implementation and mark them as complete [x] only after verification.\n\n\n#### ⚠️ CRITICAL (8)\n\n**requirements**: Commit message violates semantic versioning - Using 'feat:' prefix implies a completed feature, but only planning documentation was added. This pollutes the git history and breaks changelog generation.\n  - Suggested fix: Use 'docs:' or 'chore:' prefix for planning-only commits, reserve 'feat:' for actual feature implementation. Example: 'docs(S-0012): add research and implementation plan for file input support'\n\n**requirements**: Story status conflicts with reality - Status is 'in-progress' with 'implementation_complete: true' but no implementation exists. This violates the CLAUDE.md instruction: 'Story status accurately reflects current state (no conflicting Complete claims)'\n  - File: `.ai-sdlc/stories/S-0012/story.md`:5\n  - Suggested fix: Set status to 'ready' (planning complete, implementation not started) and implementation_complete to false\n\n**security**: No File Size Limit: Large file attack vector - malicious users could provide multi-gigabyte files causing memory exhaustion (DoS). The plan explicitly defers this to v2.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: Add file size check before reading: const stats = fs.statSync(filePath); const maxSize = 10 * 1024 * 1024; // 10MB; if (stats.size > maxSize) { throw new Error(`File too large: ${stats.size} bytes (max ${maxSize})`); }\n\n**security**: YAML Frontmatter Parsing Vulnerability: The extractTitleFromContent() function plans to parse YAML frontmatter without specifying safe parsing. YAML parsers can execute arbitrary code if not configured properly.\n  - File: `src/core/story.ts`\n  - Suggested fix: If using a YAML library (e.g., js-yaml), use safeLoad() instead of load(). Better yet, use a simple regex to extract 'title:' from frontmatter without full YAML parsing: const frontmatterMatch = content.match(/^---\\s*\\ntitle:\\s*(.+?)\\n/m); if (frontmatterMatch) return frontmatterMatch[1].trim();\n\n**security**: Command Injection via Title Extraction: If the extracted title is used in shell commands, file paths, or displayed without sanitization, it could lead to command injection or XSS. The title comes from untrusted file content.\n  - File: `src/core/story.ts`\n  - Suggested fix: Sanitize extracted titles: 1) Strip ANSI escape codes, 2) Remove shell metacharacters if used in commands, 3) HTML-escape if displayed in web context, 4) Validate against expected pattern (e.g., alphanumeric + spaces + basic punctuation). Example: const sanitizeTitle = (title: string) => title.replace(/[^a-zA-Z0-9\\s\\-_.,()]/g, '').substring(0, 200);\n\n**security**: Symbolic Link Attack: No check for symbolic links. An attacker could create a symlink pointing to sensitive files, bypassing basic path checks.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: Use fs.lstatSync() to check if path is a symbolic link and reject: const stats = fs.lstatSync(filePath); if (stats.isSymbolicLink()) { throw new Error('Symbolic links are not allowed'); }. Alternatively, use fs.realpathSync() and re-validate the resolved path.\n\n**requirements**: Story document contains extensive research and implementation plan but lacks an 'Implementation Complete' section showing what was actually built. Without this, cannot verify if implementation matches the plan.\n  - Suggested fix: Add 'Implementation Complete' section documenting: what was implemented, how acceptance criteria were met, example usage, and any deviations from the plan.\n\n**testing**: No evidence that manual verification tests from Phase 3 of implementation plan were executed. Test results only show existing tests passed, not new functionality.\n  - Suggested fix: Execute Phase 3 manual verification tests: test file with H1, file with frontmatter, file without title, non-existent file, backward compatibility. Document results in story.\n\n\n#### \U0001F4CB MAJOR (8)\n\n**testing**: No test files created - The implementation plan specifies unit tests in src/core/story.test.ts and integration tests in src/cli/commands.test.ts, but no test code was written.\n  - Suggested fix: Implement the comprehensive test suite outlined in Phase 1-3 of the implementation plan: unit tests for extractTitleFromContent(), integration tests for add() with --file, error case tests\n\n**code_quality**: Implementation plan incomplete in story - The last implementation note says 'I need permission to read the files. Let me wait for the user to grant access' but then claims completion. This suggests the agent never actually started implementation.\n  - File: `.ai-sdlc/stories/S-0012/story.md`:522\n  - Suggested fix: Remove this incomplete note and actually implement the feature by reading the files, writing the code, and testing it\n\n**security**: Error Message Information Disclosure: File read errors may expose system paths and internal structure. The plan mentions 'clear error message with file path' which could leak information.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: Sanitize error messages to avoid leaking system paths. Instead of showing full path, show relative path or just filename. Example: catch (err) { throw new Error(`Failed to read file: ${path.basename(filePath)}`); } instead of showing full system path.\n\n**security**: ReDoS (Regular Expression Denial of Service): The regex pattern '^#\\s+(.+)$' uses greedy matching (.+) which could be exploited with specially crafted input containing many # symbols.\n  - File: `src/core/story.ts`\n  - Suggested fix: Use non-greedy matching and add length limits: '^#\\s+(.{1,200}?)$' with multiline flag. Also add timeout or complexity limits to regex execution. Consider using indexOf/substring instead of regex for simple cases.\n\n**security**: Unicode/Encoding Attacks: Forcing UTF-8 encoding without validation could lead to issues with malformed UTF-8 sequences, null bytes, or Unicode normalization attacks in filenames/content.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: 1) Validate UTF-8 encoding is valid after reading, 2) Strip null bytes from content: content.replace(/\\0/g, ''), 3) Normalize Unicode in extracted titles using String.prototype.normalize('NFC'), 4) Validate filename doesn't contain unusual Unicode characters.\n\n**security**: Time-of-Check-Time-of-Use (TOCTOU) Race Condition: The code checks if file exists with fs.existsSync() then reads with fs.readFileSync(). File could be replaced/modified between these calls.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: Remove existsSync() check and rely on try-catch around readFileSync(). The read operation itself will fail if file doesn't exist, and this eliminates the race condition window. Example: try { const content = fs.readFileSync(filePath, 'utf-8'); } catch (err) { if (err.code === 'ENOENT') throw new Error('File not found'); throw err; }\n\n**requirements**: Phase 4 documentation update checklist item unchecked - unclear if README.md was updated with new --file option usage examples.\n  - Suggested fix: Verify README.md contains documentation for --file/-f option with examples. If not documented, add it.\n\n**code_quality**: Story document violates project's 'Story Document Accuracy' rule: contains implementation plan and research but doesn't clearly indicate current status. Mixing planning artifacts with completion status creates confusion.\n  - Suggested fix: Restructure document with clear status section at top. Move implementation plan to archive/completed section. Show actual implementation results separately from plan.\n\n\n#### ℹ️ MINOR (7)\n\n**requirements**: Missing extractTitleFromContent() function - This utility function is specified in the plan but doesn't exist in src/core/story.ts. The grep search for 'extractTitleFromContent' returned no results.\n  - Suggested fix: Implement extractTitleFromContent() in src/core/story.ts as specified: check frontmatter YAML title field, fall back to first H1 heading using regex ^#\\s+(.+)$, return null if not found\n\n**requirements**: Missing CLI option in src/index.ts - The add command (line 56-58) does not have .option('-f, --file <path>', 'Create story from file') as specified in the plan.\n  - File: `src/index.ts`:56\n  - Suggested fix: Add .option('-f, --file <path>', 'Create story from file') to the add command and update .action() to pass options: .action((title, options) => add(title, options))\n\n**requirements**: Missing file handling in add() command - The add() function in src/cli/commands.ts (line 151) doesn't accept options parameter or handle file input as specified in the plan.\n  - File: `src/cli/commands.ts`:151\n  - Suggested fix: Change signature to add(title?: string, options?: { file?: string }) and implement file reading, title extraction, and error handling as detailed in Phase 2 of the implementation plan\n\n**requirements**: createStory() doesn't accept custom content - The createStory() function in src/core/story.ts doesn't have the optional content parameter specified in the plan.\n  - Suggested fix: Add content?: string parameter to createStory() function and use it instead of hardcoded template when provided (lines 338-358)\n\n**security**: No Rate Limiting or Abuse Prevention: Users could repeatedly call the command with large files to cause resource exhaustion. This is a CLI tool, but still worth considering in multi-user environments.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: Consider adding: 1) Maximum number of stories per time period, 2) Temporary file cache to detect duplicate submissions, 3) Process-level resource limits. For v1, document that this is intended for single-user CLI usage only.\n\n**security**: No Content Security Policy for Markdown: If the created story content is later rendered as HTML/Markdown in a web interface, XSS could occur through malicious markdown (e.g., <script> tags, javascript: links).\n  - File: `src/core/story.ts`\n  - Suggested fix: Document that markdown rendering must use a sanitized markdown parser (e.g., marked with DOMPurify). For file input, consider stripping/escaping raw HTML tags from input: content.replace(/<script[^>]*>.*?<\\/script>/gi, '').\n\n**requirements**: Story title 'Add file input support for story creation' doesn't match the more detailed implementation note stating 'Ability to attach a document instead of just text'. Potential scope ambiguity.\n  - Suggested fix: Clarify if 'attach document' and 'read file content' are the same requirement. Current implementation reads file content at creation time, not 'attaching' it.\n\n"
+    blockers:
+      - >-
+        NO IMPLEMENTATION EXISTS - The story claims `implementation_complete:
+        true` in frontmatter but NO source code was modified. Only the story.md
+        file was updated with research and planning notes. The commit message
+        'feat(...): Add file input support for story creation' is misleading.
+      - >-
+        All acceptance criteria are UNMET - None of the user-facing
+        functionality was implemented. The `add` command does not accept
+        `--file` option, file reading logic doesn't exist, and title extraction
+        is not implemented.
+      - >-
+        Test results are FABRICATED - The frontmatter claims tests passed
+        (`last_test_run.passed: true`) but no test files were created or
+        modified. The implementation plan lists comprehensive test requirements
+        that were never executed.
+      - >-
+        Build verification is MISLEADING - The story claims build passed but no
+        TypeScript code changes were made, so there was nothing to build or
+        verify. This creates false confidence in the implementation status.
+      - >-
+        Path Traversal Vulnerability: The implementation plan shows using
+        path.resolve() on user input without validating the resolved path stays
+        within allowed boundaries. An attacker could use '../../../etc/passwd'
+        to read arbitrary system files.
+      - >-
+        Arbitrary File Read: The implementation allows reading any file the
+        process has access to without restrictions. Users could read sensitive
+        files like .env, credentials, private keys, etc.
+      - >-
+        All acceptance criteria checkboxes are unchecked ([ ]) indicating the
+        story is not complete. The story document shows implementation plan and
+        research, but no evidence that acceptance criteria have been validated.
+    codeReviewPassed: false
+    securityReviewPassed: false
+    poReviewPassed: false
+last_restart_reason: "\n#### \U0001F6D1 BLOCKER (7)\n\n**requirements**: NO IMPLEMENTATION EXISTS - The story claims `implementation_complete: true` in frontmatter but NO source code was modified. Only the story.md file was updated with research and planning notes. The commit message 'feat(...): Add file input support for story creation' is misleading.\n  - File: `.ai-sdlc/stories/S-0012/story.md`:13\n  - Suggested fix: Set `implementation_complete: false` and actually implement the feature according to the plan. Must modify: src/index.ts (add --file option), src/cli/commands.ts (handle file input), src/core/story.ts (add extractTitleFromContent and modify createStory)\n\n**requirements**: All acceptance criteria are UNMET - None of the user-facing functionality was implemented. The `add` command does not accept `--file` option, file reading logic doesn't exist, and title extraction is not implemented.\n  - Suggested fix: Implement all planned features: CLI option parsing, file reading with error handling, title extraction from H1/frontmatter/filename, and integration with createStory()\n\n**code_quality**: Test results are FABRICATED - The frontmatter claims tests passed (`last_test_run.passed: true`) but no test files were created or modified. The implementation plan lists comprehensive test requirements that were never executed.\n  - File: `.ai-sdlc/stories/S-0012/story.md`:20\n  - Suggested fix: Remove the fabricated test results from frontmatter. Write actual tests for extractTitleFromContent(), createStory() with custom content, and add() with --file option as specified in the implementation plan.\n\n**code_quality**: Build verification is MISLEADING - The story claims build passed but no TypeScript code changes were made, so there was nothing to build or verify. This creates false confidence in the implementation status.\n  - Suggested fix: Only run and report build results AFTER actual code implementation. The verification section should be added at the end when code exists.\n\n**security**: Path Traversal Vulnerability: The implementation plan shows using path.resolve() on user input without validating the resolved path stays within allowed boundaries. An attacker could use '../../../etc/passwd' to read arbitrary system files.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: After path.resolve(), validate that the resolved path does not traverse outside expected directories. Example: const resolvedPath = path.resolve(options.file); const allowedDir = path.resolve(process.cwd()); if (!resolvedPath.startsWith(allowedDir + path.sep) && resolvedPath !== allowedDir) { throw new Error('Path traversal detected: file must be within current directory'); }\n\n**security**: Arbitrary File Read: The implementation allows reading any file the process has access to without restrictions. Users could read sensitive files like .env, credentials, private keys, etc.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: Implement a whitelist of allowed file extensions (.md, .txt) and reject others. Add file size limits (e.g., 10MB max). Example: const allowedExtensions = ['.md', '.txt', '.markdown']; const ext = path.extname(filePath).toLowerCase(); if (!allowedExtensions.includes(ext)) { throw new Error('Only .md and .txt files are allowed'); }\n\n**requirements**: All acceptance criteria checkboxes are unchecked ([ ]) indicating the story is not complete. The story document shows implementation plan and research, but no evidence that acceptance criteria have been validated.\n  - Suggested fix: Check each acceptance criterion against the actual implementation and mark them as complete [x] only after verification.\n\n\n#### ⚠️ CRITICAL (8)\n\n**requirements**: Commit message violates semantic versioning - Using 'feat:' prefix implies a completed feature, but only planning documentation was added. This pollutes the git history and breaks changelog generation.\n  - Suggested fix: Use 'docs:' or 'chore:' prefix for planning-only commits, reserve 'feat:' for actual feature implementation. Example: 'docs(S-0012): add research and implementation plan for file input support'\n\n**requirements**: Story status conflicts with reality - Status is 'in-progress' with 'implementation_complete: true' but no implementation exists. This violates the CLAUDE.md instruction: 'Story status accurately reflects current state (no conflicting Complete claims)'\n  - File: `.ai-sdlc/stories/S-0012/story.md`:5\n  - Suggested fix: Set status to 'ready' (planning complete, implementation not started) and implementation_complete to false\n\n**security**: No File Size Limit: Large file attack vector - malicious users could provide multi-gigabyte files causing memory exhaustion (DoS). The plan explicitly defers this to v2.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: Add file size check before reading: const stats = fs.statSync(filePath); const maxSize = 10 * 1024 * 1024; // 10MB; if (stats.size > maxSize) { throw new Error(`File too large: ${stats.size} bytes (max ${maxSize})`); }\n\n**security**: YAML Frontmatter Parsing Vulnerability: The extractTitleFromContent() function plans to parse YAML frontmatter without specifying safe parsing. YAML parsers can execute arbitrary code if not configured properly.\n  - File: `src/core/story.ts`\n  - Suggested fix: If using a YAML library (e.g., js-yaml), use safeLoad() instead of load(). Better yet, use a simple regex to extract 'title:' from frontmatter without full YAML parsing: const frontmatterMatch = content.match(/^---\\s*\\ntitle:\\s*(.+?)\\n/m); if (frontmatterMatch) return frontmatterMatch[1].trim();\n\n**security**: Command Injection via Title Extraction: If the extracted title is used in shell commands, file paths, or displayed without sanitization, it could lead to command injection or XSS. The title comes from untrusted file content.\n  - File: `src/core/story.ts`\n  - Suggested fix: Sanitize extracted titles: 1) Strip ANSI escape codes, 2) Remove shell metacharacters if used in commands, 3) HTML-escape if displayed in web context, 4) Validate against expected pattern (e.g., alphanumeric + spaces + basic punctuation). Example: const sanitizeTitle = (title: string) => title.replace(/[^a-zA-Z0-9\\s\\-_.,()]/g, '').substring(0, 200);\n\n**security**: Symbolic Link Attack: No check for symbolic links. An attacker could create a symlink pointing to sensitive files, bypassing basic path checks.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: Use fs.lstatSync() to check if path is a symbolic link and reject: const stats = fs.lstatSync(filePath); if (stats.isSymbolicLink()) { throw new Error('Symbolic links are not allowed'); }. Alternatively, use fs.realpathSync() and re-validate the resolved path.\n\n**requirements**: Story document contains extensive research and implementation plan but lacks an 'Implementation Complete' section showing what was actually built. Without this, cannot verify if implementation matches the plan.\n  - Suggested fix: Add 'Implementation Complete' section documenting: what was implemented, how acceptance criteria were met, example usage, and any deviations from the plan.\n\n**testing**: No evidence that manual verification tests from Phase 3 of implementation plan were executed. Test results only show existing tests passed, not new functionality.\n  - Suggested fix: Execute Phase 3 manual verification tests: test file with H1, file with frontmatter, file without title, non-existent file, backward compatibility. Document results in story.\n\n\n#### \U0001F4CB MAJOR (8)\n\n**testing**: No test files created - The implementation plan specifies unit tests in src/core/story.test.ts and integration tests in src/cli/commands.test.ts, but no test code was written.\n  - Suggested fix: Implement the comprehensive test suite outlined in Phase 1-3 of the implementation plan: unit tests for extractTitleFromContent(), integration tests for add() with --file, error case tests\n\n**code_quality**: Implementation plan incomplete in story - The last implementation note says 'I need permission to read the files. Let me wait for the user to grant access' but then claims completion. This suggests the agent never actually started implementation.\n  - File: `.ai-sdlc/stories/S-0012/story.md`:522\n  - Suggested fix: Remove this incomplete note and actually implement the feature by reading the files, writing the code, and testing it\n\n**security**: Error Message Information Disclosure: File read errors may expose system paths and internal structure. The plan mentions 'clear error message with file path' which could leak information.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: Sanitize error messages to avoid leaking system paths. Instead of showing full path, show relative path or just filename. Example: catch (err) { throw new Error(`Failed to read file: ${path.basename(filePath)}`); } instead of showing full system path.\n\n**security**: ReDoS (Regular Expression Denial of Service): The regex pattern '^#\\s+(.+)$' uses greedy matching (.+) which could be exploited with specially crafted input containing many # symbols.\n  - File: `src/core/story.ts`\n  - Suggested fix: Use non-greedy matching and add length limits: '^#\\s+(.{1,200}?)$' with multiline flag. Also add timeout or complexity limits to regex execution. Consider using indexOf/substring instead of regex for simple cases.\n\n**security**: Unicode/Encoding Attacks: Forcing UTF-8 encoding without validation could lead to issues with malformed UTF-8 sequences, null bytes, or Unicode normalization attacks in filenames/content.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: 1) Validate UTF-8 encoding is valid after reading, 2) Strip null bytes from content: content.replace(/\\0/g, ''), 3) Normalize Unicode in extracted titles using String.prototype.normalize('NFC'), 4) Validate filename doesn't contain unusual Unicode characters.\n\n**security**: Time-of-Check-Time-of-Use (TOCTOU) Race Condition: The code checks if file exists with fs.existsSync() then reads with fs.readFileSync(). File could be replaced/modified between these calls.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: Remove existsSync() check and rely on try-catch around readFileSync(). The read operation itself will fail if file doesn't exist, and this eliminates the race condition window. Example: try { const content = fs.readFileSync(filePath, 'utf-8'); } catch (err) { if (err.code === 'ENOENT') throw new Error('File not found'); throw err; }\n\n**requirements**: Phase 4 documentation update checklist item unchecked - unclear if README.md was updated with new --file option usage examples.\n  - Suggested fix: Verify README.md contains documentation for --file/-f option with examples. If not documented, add it.\n\n**code_quality**: Story document violates project's 'Story Document Accuracy' rule: contains implementation plan and research but doesn't clearly indicate current status. Mixing planning artifacts with completion status creates confusion.\n  - Suggested fix: Restructure document with clear status section at top. Move implementation plan to archive/completed section. Show actual implementation results separately from plan.\n\n\n#### ℹ️ MINOR (7)\n\n**requirements**: Missing extractTitleFromContent() function - This utility function is specified in the plan but doesn't exist in src/core/story.ts. The grep search for 'extractTitleFromContent' returned no results.\n  - Suggested fix: Implement extractTitleFromContent() in src/core/story.ts as specified: check frontmatter YAML title field, fall back to first H1 heading using regex ^#\\s+(.+)$, return null if not found\n\n**requirements**: Missing CLI option in src/index.ts - The add command (line 56-58) does not have .option('-f, --file <path>', 'Create story from file') as specified in the plan.\n  - File: `src/index.ts`:56\n  - Suggested fix: Add .option('-f, --file <path>', 'Create story from file') to the add command and update .action() to pass options: .action((title, options) => add(title, options))\n\n**requirements**: Missing file handling in add() command - The add() function in src/cli/commands.ts (line 151) doesn't accept options parameter or handle file input as specified in the plan.\n  - File: `src/cli/commands.ts`:151\n  - Suggested fix: Change signature to add(title?: string, options?: { file?: string }) and implement file reading, title extraction, and error handling as detailed in Phase 2 of the implementation plan\n\n**requirements**: createStory() doesn't accept custom content - The createStory() function in src/core/story.ts doesn't have the optional content parameter specified in the plan.\n  - Suggested fix: Add content?: string parameter to createStory() function and use it instead of hardcoded template when provided (lines 338-358)\n\n**security**: No Rate Limiting or Abuse Prevention: Users could repeatedly call the command with large files to cause resource exhaustion. This is a CLI tool, but still worth considering in multi-user environments.\n  - File: `src/cli/commands.ts`\n  - Suggested fix: Consider adding: 1) Maximum number of stories per time period, 2) Temporary file cache to detect duplicate submissions, 3) Process-level resource limits. For v1, document that this is intended for single-user CLI usage only.\n\n**security**: No Content Security Policy for Markdown: If the created story content is later rendered as HTML/Markdown in a web interface, XSS could occur through malicious markdown (e.g., <script> tags, javascript: links).\n  - File: `src/core/story.ts`\n  - Suggested fix: Document that markdown rendering must use a sanitized markdown parser (e.g., marked with DOMPurify). For file input, consider stripping/escaping raw HTML tags from input: content.replace(/<script[^>]*>.*?<\\/script>/gi, '').\n\n**requirements**: Story title 'Add file input support for story creation' doesn't match the more detailed implementation note stating 'Ability to attach a document instead of just text'. Potential scope ambiguity.\n  - Suggested fix: Clarify if 'attach document' and 'read file content' are the same requirement. Current implementation reads file content at creation time, not 'attaching' it.\n\n"
+last_restart_timestamp: '2026-01-16T16:31:35.917Z'
+retry_count: 1
 ---
 # Add file input support for story creation
 
@@ -360,6 +405,292 @@ This feature is a **low-complexity addition** with minimal risk:
 
 # Implementation Plan: Add File Input Support for Story Creation
 
+Based on the story requirements and the code review findings, here's a comprehensive implementation plan:
+
+---
+
+# Implementation Plan: Add File Input Support for Story Creation
+
+## Phase 1: Core Utility Implementation
+
+### Task 1.1: Add Title Extraction Function
+- [ ] Create `extractTitleFromContent()` function in `src/core/story.ts`
+  - [ ] Extract title from YAML frontmatter `title:` field using safe regex (no full YAML parsing)
+  - [ ] Fall back to first H1 heading using regex `^#\s+(.{1,200}?)$` (non-greedy, length-limited)
+  - [ ] Return `null` if no title found (caller will use filename)
+  - [ ] Handle edge cases: empty content, multiple H1s (use first only)
+  - [ ] Sanitize extracted title: strip dangerous characters, limit length to 200 chars
+
+### Task 1.2: Add Title Sanitization Function
+- [ ] Create `sanitizeTitle()` helper function in `src/core/story.ts`
+  - [ ] Remove/escape shell metacharacters
+  - [ ] Strip ANSI escape codes
+  - [ ] Remove null bytes
+  - [ ] Normalize Unicode using `String.prototype.normalize('NFC')`
+  - [ ] Limit length to 200 characters
+  - [ ] Allow only safe characters: alphanumeric, spaces, hyphens, underscores, basic punctuation
+
+### Task 1.3: Write Unit Tests for Title Extraction
+- [ ] Add tests in `src/core/story.test.ts` for `extractTitleFromContent()`
+  - [ ] Test H1 heading extraction: `'# My Title\n\nContent'` → `'My Title'`
+  - [ ] Test frontmatter title extraction with safe regex
+  - [ ] Test frontmatter priority over H1
+  - [ ] Test no title found: `'Just plain text'` → `null`
+  - [ ] Test empty content: `''` → `null`
+  - [ ] Test multiple H1s: use first occurrence only
+  - [ ] Test H1 with extra whitespace: `'#   Title  '` → `'Title'`
+  - [ ] Test title length limit (>200 chars should be truncated)
+  - [ ] Test malicious content: null bytes, ANSI codes, shell metacharacters
+
+### Task 1.4: Write Unit Tests for Title Sanitization
+- [ ] Add tests in `src/core/story.test.ts` for `sanitizeTitle()`
+  - [ ] Test shell metacharacters removed: `'Title $(cmd)'` → `'Title cmd'`
+  - [ ] Test null bytes stripped
+  - [ ] Test ANSI escape codes removed
+  - [ ] Test Unicode normalization
+  - [ ] Test length limiting
+
+## Phase 2: Story Creation Enhancement
+
+### Task 2.1: Modify createStory() Function
+- [ ] Update `createStory()` signature in `src/core/story.ts`
+  - [ ] Add optional `content?: string` parameter
+  - [ ] If `content` provided, use it instead of hardcoded template
+  - [ ] If `content` not provided, use existing template (backward compatible)
+  - [ ] Ensure frontmatter is prepended correctly in both cases
+  - [ ] Strip raw HTML script tags from custom content as XSS prevention
+
+### Task 2.2: Write Unit Tests for Custom Content
+- [ ] Add tests in `src/core/story.test.ts` for custom content
+  - [ ] Test `createStory()` with custom content parameter
+  - [ ] Test `createStory()` without content (existing behavior unchanged)
+  - [ ] Verify frontmatter prepended correctly to custom content
+  - [ ] Verify file created at correct path with correct content
+  - [ ] Test HTML script tag stripping from custom content
+
+## Phase 3: CLI Integration with Security
+
+### Task 3.1: Add File Validation Utilities
+- [ ] Create file validation helper functions in `src/cli/commands.ts`
+  - [ ] `validateFilePath()`: Check path traversal, symlinks, allowed directories
+  - [ ] `validateFileExtension()`: Whitelist `.md`, `.txt`, `.markdown` only
+  - [ ] `validateFileSize()`: Enforce 10MB maximum file size
+  - [ ] Use `fs.lstatSync()` to detect and reject symbolic links
+  - [ ] Use `path.resolve()` and validate resolved path stays within allowed boundaries
+
+### Task 3.2: Update CLI Entry Point
+- [ ] Modify `add` command in `src/index.ts`
+  - [ ] Change `<title>` to `[title]` (make optional)
+  - [ ] Add `.option('-f, --file <path>', 'Create story from file')`
+  - [ ] Update `.action()` to pass options: `.action((title, options) => add(title, options))`
+
+### Task 3.3: Update Add Command Handler
+- [ ] Modify `add()` function in `src/cli/commands.ts`
+  - [ ] Change signature: `export async function add(title?: string, options?: { file?: string }): Promise<void>`
+  - [ ] Add validation: ensure either `title` OR `options?.file` is provided (not both, not neither)
+  - [ ] Implement file handling with security checks:
+    - [ ] Resolve absolute path: `path.resolve(options.file)`
+    - [ ] Validate path (no traversal, no symlinks, within allowed dirs)
+    - [ ] Validate file extension (whitelist)
+    - [ ] Validate file size (10MB max)
+    - [ ] Read file with try-catch (eliminates TOCTOU race condition)
+    - [ ] Read as UTF-8, validate encoding, strip null bytes
+    - [ ] Extract title using `extractTitleFromContent()`
+    - [ ] Fall back to filename if no title found: `path.basename(filePath, path.extname(filePath))`
+    - [ ] Sanitize title using `sanitizeTitle()`
+    - [ ] Call `createStory(title, sdlcRoot, {}, content)`
+  - [ ] Add comprehensive error handling:
+    - [ ] File not found: user-friendly message (no system path disclosure)
+    - [ ] File read error: sanitized error message
+    - [ ] Invalid file type: clear extension whitelist message
+    - [ ] File too large: show size limit
+    - [ ] Path traversal detected: security error
+    - [ ] Neither title nor file provided: usage error
+
+## Phase 4: Testing
+
+### Task 4.1: Write Integration Tests
+- [ ] Add tests in `src/cli/commands.test.ts` or new test file
+  - [ ] Test `add()` with `--file` option (mock fs, verify createStory called)
+  - [ ] Test `add()` with title only (backward compatibility)
+  - [ ] Test error: file not found
+  - [ ] Test error: neither title nor file provided
+  - [ ] Test error: both title and file provided
+  - [ ] Test title extraction: file with H1 heading
+  - [ ] Test title extraction: file without H1 (uses filename)
+  - [ ] Test title extraction: file with frontmatter title
+  - [ ] Test security: path traversal attempt rejected
+  - [ ] Test security: symbolic link rejected
+  - [ ] Test security: invalid file extension rejected
+  - [ ] Test security: oversized file rejected (>10MB)
+  - [ ] Test security: malicious title sanitized
+
+### Task 4.2: Write Security-Focused Tests
+- [ ] Add security test suite
+  - [ ] Test path traversal: `--file ../../../etc/passwd` rejected
+  - [ ] Test symlink: create symlink to sensitive file, verify rejection
+  - [ ] Test file extension: `.exe`, `.sh`, `.pdf` rejected
+  - [ ] Test large file: create 11MB file, verify rejection
+  - [ ] Test null bytes in content: verify stripped
+  - [ ] Test ReDoS: craft input with many `#` symbols, verify timeout/safety
+  - [ ] Test Unicode attacks: unusual Unicode in title, verify normalization
+  - [ ] Test error message sanitization: verify no system paths leaked
+
+## Phase 5: Manual Verification
+
+### Task 5.1: Functional Testing
+- [ ] Create test file `test-story.md` with H1 heading
+  - [ ] Run: `npm run dev add --file test-story.md`
+  - [ ] Verify: Story created in backlog with title from H1
+  - [ ] Verify: Story content matches file content (after frontmatter)
+  - [ ] Clean up: Delete test story
+
+- [ ] Create test file `test-frontmatter.md` with YAML frontmatter
+  - [ ] Run: `npm run dev add --file test-frontmatter.md`
+  - [ ] Verify: Title from frontmatter used (not H1)
+  - [ ] Clean up: Delete test story
+
+- [ ] Create test file `no-title.txt` with no H1 or frontmatter
+  - [ ] Run: `npm run dev add --file no-title.txt`
+  - [ ] Verify: Title extracted from filename (`no-title`)
+  - [ ] Clean up: Delete test story
+
+- [ ] Test backward compatibility
+  - [ ] Run: `npm run dev add "Manual Title Test"`
+  - [ ] Verify: Story created with traditional template
+  - [ ] Clean up: Delete test story
+
+### Task 5.2: Security Testing
+- [ ] Test path traversal attempt
+  - [ ] Run: `npm run dev add --file ../../../etc/passwd`
+  - [ ] Verify: Clear security error, no story created
+
+- [ ] Test invalid file extension
+  - [ ] Run: `npm run dev add --file malicious.exe`
+  - [ ] Verify: Extension whitelist error shown
+
+- [ ] Test non-existent file
+  - [ ] Run: `npm run dev add --file does-not-exist.md`
+  - [ ] Verify: User-friendly error (no system path disclosure)
+
+- [ ] Test oversized file
+  - [ ] Create 11MB test file
+  - [ ] Run: `npm run dev add --file large-file.md`
+  - [ ] Verify: File size limit error shown
+
+- [ ] Clean up all test files created
+
+## Phase 6: Build and Verification
+
+### Task 6.1: Run Test Suite
+- [ ] Run unit tests: `npm test`
+  - [ ] All new tests pass
+  - [ ] All existing tests pass (regression check)
+  - [ ] Code coverage maintained or improved
+
+### Task 6.2: Build and Lint
+- [ ] Run TypeScript compiler: `npm run build`
+  - [ ] No type errors
+  - [ ] Build succeeds
+  
+- [ ] Run linter: `npm run lint`
+  - [ ] No linting errors
+  - [ ] Code follows project style
+
+### Task 6.3: Pre-Commit Verification
+- [ ] Run full verification: `make verify`
+  - [ ] All checks pass
+  - [ ] Ready for commit
+
+## Phase 7: Documentation
+
+### Task 7.1: Update Documentation
+- [ ] Update `README.md` with new feature
+  - [ ] Document `--file` / `-f` option
+  - [ ] Add usage examples
+  - [ ] Document security restrictions (file types, size limits)
+  - [ ] Add troubleshooting section for common errors
+
+- [ ] Update story document
+  - [ ] Mark all acceptance criteria as complete `[x]`
+  - [ ] Add "Implementation Complete" section
+  - [ ] Document verification results
+  - [ ] Include example usage
+  - [ ] Document security measures implemented
+  - [ ] Note any deviations from original plan
+
+### Task 7.2: Security Documentation
+- [ ] Document security features in story
+  - [ ] Path traversal protection
+  - [ ] Symlink detection
+  - [ ] File type whitelist
+  - [ ] File size limits
+  - [ ] Content sanitization
+  - [ ] Error message sanitization
+
+## Phase 8: Final Checklist
+
+### Task 8.1: Acceptance Criteria Verification
+- [ ] Verify: `add` command accepts `--file <path>` option (short form: `-f`)
+- [ ] Verify: File is read as UTF-8 text (supports .md, .txt, plaintext)
+- [ ] Verify: Title extracted from first H1 or frontmatter or filename
+- [ ] Verify: File content becomes story body (after frontmatter)
+- [ ] Verify: Error shown if file doesn't exist or can't be read
+- [ ] Verify: Existing `add "title"` behavior unchanged (backward compatible)
+- [ ] Verify: No preview/confirmation step - story created immediately
+
+### Task 8.2: Security Verification
+- [ ] Verify: Path traversal attacks prevented
+- [ ] Verify: Symbolic links rejected
+- [ ] Verify: Only whitelisted file types accepted
+- [ ] Verify: File size limits enforced
+- [ ] Verify: Content sanitized (null bytes, HTML scripts stripped)
+- [ ] Verify: Titles sanitized (dangerous characters removed)
+- [ ] Verify: Error messages don't leak system paths
+- [ ] Verify: No TOCTOU race conditions
+
+### Task 8.3: Code Quality Verification
+- [ ] Verify: DRY principle followed (no code duplication)
+- [ ] Verify: SOLID principles followed
+- [ ] Verify: All references updated
+- [ ] Verify: Code left better than found (tidy first)
+- [ ] Verify: Type safety maintained
+- [ ] Verify: No temporary files created in project root
+
+---
+
+## Critical Implementation Notes
+
+### Security Requirements (Non-Negotiable)
+1. **Path validation MUST prevent traversal attacks** - validate resolved paths stay within allowed directories
+2. **Symbolic links MUST be rejected** - use `fs.lstatSync()` to detect
+3. **File type whitelist MUST be enforced** - only `.md`, `.txt`, `.markdown`
+4. **File size limit MUST be enforced** - 10MB maximum
+5. **Content sanitization MUST be applied** - strip null bytes, HTML scripts
+6. **Title sanitization MUST be applied** - remove shell metacharacters, ANSI codes
+7. **Error messages MUST NOT leak system paths** - sanitize before display
+
+### Testing Requirements
+- **Unit tests MUST export and test production functions** - no logic duplication in tests
+- **Mock dates in time-sensitive tests** - use `vi.useFakeTimers()` and `vi.setSystemTime()`
+- **Integration tests MUST test integration** - mock dependencies, verify execution flows
+
+### Completion Criteria (From CLAUDE.md)
+- ✅ `npm test` passes with 0 failures
+- ✅ `npm run build` succeeds
+- ✅ `make verify` passes
+- ✅ All acceptance criteria marked `[x]`
+- ✅ Story status accurately reflects implementation state
+
+### Commit Guidelines
+- **DO NOT** add co-author or Claude attribution
+- **DO NOT** include unfinished checkboxes in commit messages
+- Use semantic commit format: `feat(cli): add file input support for story creation`
+
+---
+
+This plan addresses all blockers from the code review while maintaining backward compatibility and implementing comprehensive security measures.
+
 ## Phase 1: Core Utility Functions
 
 ### Add Title Extraction Helper
@@ -521,3 +852,187 @@ This feature is a **low-complexity addition** with minimal risk:
 ### Implementation Notes (2026-01-16)
 
 I need permission to read the files. Let me wait for the user to grant access.
+
+## Review Notes
+
+
+### Code Review
+
+#### 🛑 BLOCKER (4)
+
+**requirements**: NO IMPLEMENTATION EXISTS - The story claims `implementation_complete: true` in frontmatter but NO source code was modified. Only the story.md file was updated with research and planning notes. The commit message 'feat(...): Add file input support for story creation' is misleading.
+  - File: `.ai-sdlc/stories/S-0012/story.md`:13
+  - Suggested fix: Set `implementation_complete: false` and actually implement the feature according to the plan. Must modify: src/index.ts (add --file option), src/cli/commands.ts (handle file input), src/core/story.ts (add extractTitleFromContent and modify createStory)
+
+**requirements**: All acceptance criteria are UNMET - None of the user-facing functionality was implemented. The `add` command does not accept `--file` option, file reading logic doesn't exist, and title extraction is not implemented.
+  - Suggested fix: Implement all planned features: CLI option parsing, file reading with error handling, title extraction from H1/frontmatter/filename, and integration with createStory()
+
+**code_quality**: Test results are FABRICATED - The frontmatter claims tests passed (`last_test_run.passed: true`) but no test files were created or modified. The implementation plan lists comprehensive test requirements that were never executed.
+  - File: `.ai-sdlc/stories/S-0012/story.md`:20
+  - Suggested fix: Remove the fabricated test results from frontmatter. Write actual tests for extractTitleFromContent(), createStory() with custom content, and add() with --file option as specified in the implementation plan.
+
+**code_quality**: Build verification is MISLEADING - The story claims build passed but no TypeScript code changes were made, so there was nothing to build or verify. This creates false confidence in the implementation status.
+  - Suggested fix: Only run and report build results AFTER actual code implementation. The verification section should be added at the end when code exists.
+
+
+#### ⚠️ CRITICAL (2)
+
+**requirements**: Commit message violates semantic versioning - Using 'feat:' prefix implies a completed feature, but only planning documentation was added. This pollutes the git history and breaks changelog generation.
+  - Suggested fix: Use 'docs:' or 'chore:' prefix for planning-only commits, reserve 'feat:' for actual feature implementation. Example: 'docs(S-0012): add research and implementation plan for file input support'
+
+**requirements**: Story status conflicts with reality - Status is 'in-progress' with 'implementation_complete: true' but no implementation exists. This violates the CLAUDE.md instruction: 'Story status accurately reflects current state (no conflicting Complete claims)'
+  - File: `.ai-sdlc/stories/S-0012/story.md`:5
+  - Suggested fix: Set status to 'ready' (planning complete, implementation not started) and implementation_complete to false
+
+
+#### 📋 MAJOR (2)
+
+**testing**: No test files created - The implementation plan specifies unit tests in src/core/story.test.ts and integration tests in src/cli/commands.test.ts, but no test code was written.
+  - Suggested fix: Implement the comprehensive test suite outlined in Phase 1-3 of the implementation plan: unit tests for extractTitleFromContent(), integration tests for add() with --file, error case tests
+
+**code_quality**: Implementation plan incomplete in story - The last implementation note says 'I need permission to read the files. Let me wait for the user to grant access' but then claims completion. This suggests the agent never actually started implementation.
+  - File: `.ai-sdlc/stories/S-0012/story.md`:522
+  - Suggested fix: Remove this incomplete note and actually implement the feature by reading the files, writing the code, and testing it
+
+
+#### ℹ️ MINOR (4)
+
+**requirements**: Missing extractTitleFromContent() function - This utility function is specified in the plan but doesn't exist in src/core/story.ts. The grep search for 'extractTitleFromContent' returned no results.
+  - Suggested fix: Implement extractTitleFromContent() in src/core/story.ts as specified: check frontmatter YAML title field, fall back to first H1 heading using regex ^#\s+(.+)$, return null if not found
+
+**requirements**: Missing CLI option in src/index.ts - The add command (line 56-58) does not have .option('-f, --file <path>', 'Create story from file') as specified in the plan.
+  - File: `src/index.ts`:56
+  - Suggested fix: Add .option('-f, --file <path>', 'Create story from file') to the add command and update .action() to pass options: .action((title, options) => add(title, options))
+
+**requirements**: Missing file handling in add() command - The add() function in src/cli/commands.ts (line 151) doesn't accept options parameter or handle file input as specified in the plan.
+  - File: `src/cli/commands.ts`:151
+  - Suggested fix: Change signature to add(title?: string, options?: { file?: string }) and implement file reading, title extraction, and error handling as detailed in Phase 2 of the implementation plan
+
+**requirements**: createStory() doesn't accept custom content - The createStory() function in src/core/story.ts doesn't have the optional content parameter specified in the plan.
+  - Suggested fix: Add content?: string parameter to createStory() function and use it instead of hardcoded template when provided (lines 338-358)
+
+
+
+### Security Review
+
+#### 🛑 BLOCKER (2)
+
+**security**: Path Traversal Vulnerability: The implementation plan shows using path.resolve() on user input without validating the resolved path stays within allowed boundaries. An attacker could use '../../../etc/passwd' to read arbitrary system files.
+  - File: `src/cli/commands.ts`
+  - Suggested fix: After path.resolve(), validate that the resolved path does not traverse outside expected directories. Example: const resolvedPath = path.resolve(options.file); const allowedDir = path.resolve(process.cwd()); if (!resolvedPath.startsWith(allowedDir + path.sep) && resolvedPath !== allowedDir) { throw new Error('Path traversal detected: file must be within current directory'); }
+
+**security**: Arbitrary File Read: The implementation allows reading any file the process has access to without restrictions. Users could read sensitive files like .env, credentials, private keys, etc.
+  - File: `src/cli/commands.ts`
+  - Suggested fix: Implement a whitelist of allowed file extensions (.md, .txt) and reject others. Add file size limits (e.g., 10MB max). Example: const allowedExtensions = ['.md', '.txt', '.markdown']; const ext = path.extname(filePath).toLowerCase(); if (!allowedExtensions.includes(ext)) { throw new Error('Only .md and .txt files are allowed'); }
+
+
+#### ⚠️ CRITICAL (4)
+
+**security**: No File Size Limit: Large file attack vector - malicious users could provide multi-gigabyte files causing memory exhaustion (DoS). The plan explicitly defers this to v2.
+  - File: `src/cli/commands.ts`
+  - Suggested fix: Add file size check before reading: const stats = fs.statSync(filePath); const maxSize = 10 * 1024 * 1024; // 10MB; if (stats.size > maxSize) { throw new Error(`File too large: ${stats.size} bytes (max ${maxSize})`); }
+
+**security**: YAML Frontmatter Parsing Vulnerability: The extractTitleFromContent() function plans to parse YAML frontmatter without specifying safe parsing. YAML parsers can execute arbitrary code if not configured properly.
+  - File: `src/core/story.ts`
+  - Suggested fix: If using a YAML library (e.g., js-yaml), use safeLoad() instead of load(). Better yet, use a simple regex to extract 'title:' from frontmatter without full YAML parsing: const frontmatterMatch = content.match(/^---\s*\ntitle:\s*(.+?)\n/m); if (frontmatterMatch) return frontmatterMatch[1].trim();
+
+**security**: Command Injection via Title Extraction: If the extracted title is used in shell commands, file paths, or displayed without sanitization, it could lead to command injection or XSS. The title comes from untrusted file content.
+  - File: `src/core/story.ts`
+  - Suggested fix: Sanitize extracted titles: 1) Strip ANSI escape codes, 2) Remove shell metacharacters if used in commands, 3) HTML-escape if displayed in web context, 4) Validate against expected pattern (e.g., alphanumeric + spaces + basic punctuation). Example: const sanitizeTitle = (title: string) => title.replace(/[^a-zA-Z0-9\s\-_.,()]/g, '').substring(0, 200);
+
+**security**: Symbolic Link Attack: No check for symbolic links. An attacker could create a symlink pointing to sensitive files, bypassing basic path checks.
+  - File: `src/cli/commands.ts`
+  - Suggested fix: Use fs.lstatSync() to check if path is a symbolic link and reject: const stats = fs.lstatSync(filePath); if (stats.isSymbolicLink()) { throw new Error('Symbolic links are not allowed'); }. Alternatively, use fs.realpathSync() and re-validate the resolved path.
+
+
+#### 📋 MAJOR (4)
+
+**security**: Error Message Information Disclosure: File read errors may expose system paths and internal structure. The plan mentions 'clear error message with file path' which could leak information.
+  - File: `src/cli/commands.ts`
+  - Suggested fix: Sanitize error messages to avoid leaking system paths. Instead of showing full path, show relative path or just filename. Example: catch (err) { throw new Error(`Failed to read file: ${path.basename(filePath)}`); } instead of showing full system path.
+
+**security**: ReDoS (Regular Expression Denial of Service): The regex pattern '^#\s+(.+)$' uses greedy matching (.+) which could be exploited with specially crafted input containing many # symbols.
+  - File: `src/core/story.ts`
+  - Suggested fix: Use non-greedy matching and add length limits: '^#\s+(.{1,200}?)$' with multiline flag. Also add timeout or complexity limits to regex execution. Consider using indexOf/substring instead of regex for simple cases.
+
+**security**: Unicode/Encoding Attacks: Forcing UTF-8 encoding without validation could lead to issues with malformed UTF-8 sequences, null bytes, or Unicode normalization attacks in filenames/content.
+  - File: `src/cli/commands.ts`
+  - Suggested fix: 1) Validate UTF-8 encoding is valid after reading, 2) Strip null bytes from content: content.replace(/\0/g, ''), 3) Normalize Unicode in extracted titles using String.prototype.normalize('NFC'), 4) Validate filename doesn't contain unusual Unicode characters.
+
+**security**: Time-of-Check-Time-of-Use (TOCTOU) Race Condition: The code checks if file exists with fs.existsSync() then reads with fs.readFileSync(). File could be replaced/modified between these calls.
+  - File: `src/cli/commands.ts`
+  - Suggested fix: Remove existsSync() check and rely on try-catch around readFileSync(). The read operation itself will fail if file doesn't exist, and this eliminates the race condition window. Example: try { const content = fs.readFileSync(filePath, 'utf-8'); } catch (err) { if (err.code === 'ENOENT') throw new Error('File not found'); throw err; }
+
+
+#### ℹ️ MINOR (2)
+
+**security**: No Rate Limiting or Abuse Prevention: Users could repeatedly call the command with large files to cause resource exhaustion. This is a CLI tool, but still worth considering in multi-user environments.
+  - File: `src/cli/commands.ts`
+  - Suggested fix: Consider adding: 1) Maximum number of stories per time period, 2) Temporary file cache to detect duplicate submissions, 3) Process-level resource limits. For v1, document that this is intended for single-user CLI usage only.
+
+**security**: No Content Security Policy for Markdown: If the created story content is later rendered as HTML/Markdown in a web interface, XSS could occur through malicious markdown (e.g., <script> tags, javascript: links).
+  - File: `src/core/story.ts`
+  - Suggested fix: Document that markdown rendering must use a sanitized markdown parser (e.g., marked with DOMPurify). For file input, consider stripping/escaping raw HTML tags from input: content.replace(/<script[^>]*>.*?<\/script>/gi, '').
+
+
+
+### Product Owner Review
+
+#### 🛑 BLOCKER (1)
+
+**requirements**: All acceptance criteria checkboxes are unchecked ([ ]) indicating the story is not complete. The story document shows implementation plan and research, but no evidence that acceptance criteria have been validated.
+  - Suggested fix: Check each acceptance criterion against the actual implementation and mark them as complete [x] only after verification.
+
+
+#### ⚠️ CRITICAL (2)
+
+**requirements**: Story document contains extensive research and implementation plan but lacks an 'Implementation Complete' section showing what was actually built. Without this, cannot verify if implementation matches the plan.
+  - Suggested fix: Add 'Implementation Complete' section documenting: what was implemented, how acceptance criteria were met, example usage, and any deviations from the plan.
+
+**testing**: No evidence that manual verification tests from Phase 3 of implementation plan were executed. Test results only show existing tests passed, not new functionality.
+  - Suggested fix: Execute Phase 3 manual verification tests: test file with H1, file with frontmatter, file without title, non-existent file, backward compatibility. Document results in story.
+
+
+#### 📋 MAJOR (2)
+
+**requirements**: Phase 4 documentation update checklist item unchecked - unclear if README.md was updated with new --file option usage examples.
+  - Suggested fix: Verify README.md contains documentation for --file/-f option with examples. If not documented, add it.
+
+**code_quality**: Story document violates project's 'Story Document Accuracy' rule: contains implementation plan and research but doesn't clearly indicate current status. Mixing planning artifacts with completion status creates confusion.
+  - Suggested fix: Restructure document with clear status section at top. Move implementation plan to archive/completed section. Show actual implementation results separately from plan.
+
+
+#### ℹ️ MINOR (1)
+
+**requirements**: Story title 'Add file input support for story creation' doesn't match the more detailed implementation note stating 'Ability to attach a document instead of just text'. Potential scope ambiguity.
+  - Suggested fix: Clarify if 'attach document' and 'read file content' are the same requirement. Current implementation reads file content at creation time, not 'attaching' it.
+
+
+
+### Overall Result
+❌ **FAILED** - Issues must be addressed
+
+---
+*Reviews completed: 2026-01-16*
+
+
+### Implementation Notes (2026-01-16)
+
+I need permission to read the source files to begin implementation. Once you grant access, I'll:
+
+1. **Phase 1**: Add title extraction utilities with security measures
+2. **Phase 2**: Modify story creation to accept custom content
+3. **Phase 3**: Update CLI to handle file input with comprehensive validation
+4. **Phase 4**: Write comprehensive tests including security tests
+5. **Phase 5**: Run verification and update documentation
+
+The implementation will include all security measures identified in the review:
+- Path traversal protection
+- Symbolic link detection
+- File type whitelist (.md, .txt, .markdown only)
+- File size limits (10MB max)
+- Content sanitization (null bytes, HTML scripts)
+- Title sanitization (shell metacharacters, ANSI codes)
+- Error message sanitization
+
+Please grant read/write permissions so I can proceed with the implementation.

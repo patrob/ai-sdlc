@@ -2,7 +2,7 @@
 id: S-0024
 title: Graceful auth failure handling with expiration warnings
 priority: 15
-status: in-progress
+status: done
 type: feature
 created: '2026-01-13'
 labels:
@@ -14,7 +14,7 @@ labels:
 research_complete: true
 plan_complete: true
 implementation_complete: true
-reviews_complete: false
+reviews_complete: true
 slug: graceful-auth-failure-handling
 worktree_path: >-
   /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0024-graceful-auth-failure-handling

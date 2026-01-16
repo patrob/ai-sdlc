@@ -2,15 +2,15 @@
 id: S-0015
 title: Add web research as secondary source for external libraries and docs
 priority: 9
-status: in-progress
+status: done
 type: feature
 created: '2026-01-10'
 labels:
   - s
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 updated: '2026-01-16'
 slug: add-web-research-as-secondary-source-for-external-
 worktree_path: >-

@@ -2,7 +2,7 @@
 id: S-0037
 title: Concurrent-Safe Logging
 priority: 3
-status: in-progress
+status: done
 type: feature
 created: '2026-01-15'
 labels:
@@ -14,7 +14,7 @@ epic: concurrent-workflows
 research_complete: true
 plan_complete: true
 implementation_complete: true
-reviews_complete: false
+reviews_complete: true
 slug: concurrent-safe-logging
 worktree_path: >-
   /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0037-concurrent-safe-logging

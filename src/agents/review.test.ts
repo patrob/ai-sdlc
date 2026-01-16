@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
-import { runReviewAgent, validateTDDCycles, generateTDDIssues, generateReviewSummary, removeUnfinishedCheckboxes, getStoryFileURL, formatPRDescription, truncatePRBody, createPullRequest, getSourceCodeChanges } from './review.js';
+import { runReviewAgent, validateTDDCycles, generateTDDIssues, generateReviewSummary, removeUnfinishedCheckboxes, getStoryFileURL, formatPRDescription, truncatePRBody, createPullRequest, getSourceCodeChanges, deriveIndividualPassFailFromPerspectives } from './review.js';
 import * as storyModule from '../core/story.js';
 import * as clientModule from '../core/client.js';
 import * as configModule from '../core/config.js';
@@ -307,9 +307,9 @@ describe('Review Agent - Pre-check Optimization', () => {
 
       const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
 
-      // Verify reviews proceeded
-      expect(result.changesMade).toContain('Verification passed - proceeding with code/security/PO reviews');
-      expect(clientModule.runAgentQuery).toHaveBeenCalledTimes(3); // Code, Security, PO reviews
+      // Verify reviews proceeded with unified review (single LLM call)
+      expect(result.changesMade).toContain('Verification passed - proceeding with unified collaborative review');
+      expect(clientModule.runAgentQuery).toHaveBeenCalledTimes(1); // Single unified review
     });
 
     it('should include test success in changesMade', async () => {
@@ -1990,8 +1990,8 @@ describe('Pre-check Gate Logic', () => {
     // Should proceed to normal review flow (not early return)
     expect(result.decision).not.toBe(ReviewDecision.RECOVERY);
 
-    // Verify LLM reviews WERE called (3 reviews: code, security, PO)
-    expect(clientModule.runAgentQuery).toHaveBeenCalledTimes(3);
+    // Verify LLM review WAS called (1 unified review instead of 3)
+    expect(clientModule.runAgentQuery).toHaveBeenCalledTimes(1);
   });
 
   it('should fail open when git command fails (assume changes exist)', async () => {
@@ -2040,5 +2040,353 @@ describe('Pre-check Gate Logic', () => {
     // Should proceed to normal review (fail open, not blocked)
     expect(result.decision).not.toBe(ReviewDecision.RECOVERY);
     expect(clientModule.runAgentQuery).toHaveBeenCalled();
+  });
+});
+
+describe('Unified Collaborative Review', () => {
+  describe('deriveIndividualPassFailFromPerspectives', () => {
+    it('should export deriveIndividualPassFailFromPerspectives function', () => {
+      expect(deriveIndividualPassFailFromPerspectives).toBeDefined();
+      expect(typeof deriveIndividualPassFailFromPerspectives).toBe('function');
+    });
+
+    it('should return all pass when no blocker/critical issues', () => {
+      const issues: ReviewIssue[] = [
+        {
+          severity: 'major',
+          category: 'code_quality',
+          description: 'Minor issue',
+          perspectives: ['code', 'security'],
+        },
+        {
+          severity: 'minor',
+          category: 'style',
+          description: 'Style issue',
+          perspectives: ['code'],
+        },
+      ];
+
+      const result = deriveIndividualPassFailFromPerspectives(issues);
+
+      expect(result.codeReviewPassed).toBe(true);
+      expect(result.securityReviewPassed).toBe(true);
+      expect(result.poReviewPassed).toBe(true);
+    });
+
+    it('should fail code perspective when blocker issue flagged for code', () => {
+      const issues: ReviewIssue[] = [
+        {
+          severity: 'blocker',
+          category: 'testing',
+          description: 'No tests',
+          perspectives: ['code'],
+        },
+      ];
+
+      const result = deriveIndividualPassFailFromPerspectives(issues);
+
+      expect(result.codeReviewPassed).toBe(false);
+      expect(result.securityReviewPassed).toBe(true);
+      expect(result.poReviewPassed).toBe(true);
+    });
+
+    it('should fail security perspective when critical issue flagged for security', () => {
+      const issues: ReviewIssue[] = [
+        {
+          severity: 'critical',
+          category: 'security',
+          description: 'SQL injection vulnerability',
+          perspectives: ['security'],
+        },
+      ];
+
+      const result = deriveIndividualPassFailFromPerspectives(issues);
+
+      expect(result.codeReviewPassed).toBe(true);
+      expect(result.securityReviewPassed).toBe(false);
+      expect(result.poReviewPassed).toBe(true);
+    });
+
+    it('should fail PO perspective when blocker issue flagged for po', () => {
+      const issues: ReviewIssue[] = [
+        {
+          severity: 'blocker',
+          category: 'requirements',
+          description: 'Acceptance criteria not met',
+          perspectives: ['po'],
+        },
+      ];
+
+      const result = deriveIndividualPassFailFromPerspectives(issues);
+
+      expect(result.codeReviewPassed).toBe(true);
+      expect(result.securityReviewPassed).toBe(true);
+      expect(result.poReviewPassed).toBe(false);
+    });
+
+    it('should fail multiple perspectives when issue affects them', () => {
+      const issues: ReviewIssue[] = [
+        {
+          severity: 'blocker',
+          category: 'implementation',
+          description: 'No implementation exists',
+          perspectives: ['code', 'security', 'po'],
+        },
+      ];
+
+      const result = deriveIndividualPassFailFromPerspectives(issues);
+
+      expect(result.codeReviewPassed).toBe(false);
+      expect(result.securityReviewPassed).toBe(false);
+      expect(result.poReviewPassed).toBe(false);
+    });
+
+    it('should handle issues without perspectives field (backward compatibility)', () => {
+      const issues: ReviewIssue[] = [
+        {
+          severity: 'blocker',
+          category: 'testing',
+          description: 'No tests',
+          // No perspectives field
+        },
+      ];
+
+      const result = deriveIndividualPassFailFromPerspectives(issues);
+
+      // Without perspectives, all should pass (no issues attributed to them)
+      expect(result.codeReviewPassed).toBe(true);
+      expect(result.securityReviewPassed).toBe(true);
+      expect(result.poReviewPassed).toBe(true);
+    });
+
+    it('should handle empty issues array', () => {
+      const result = deriveIndividualPassFailFromPerspectives([]);
+
+      expect(result.codeReviewPassed).toBe(true);
+      expect(result.securityReviewPassed).toBe(true);
+      expect(result.poReviewPassed).toBe(true);
+    });
+
+    it('should only fail on blocker/critical, not major/minor', () => {
+      const issues: ReviewIssue[] = [
+        {
+          severity: 'major',
+          category: 'code_quality',
+          description: 'Major issue',
+          perspectives: ['code'],
+        },
+        {
+          severity: 'minor',
+          category: 'security',
+          description: 'Minor security issue',
+          perspectives: ['security'],
+        },
+      ];
+
+      const result = deriveIndividualPassFailFromPerspectives(issues);
+
+      // Major/minor don't fail perspectives
+      expect(result.codeReviewPassed).toBe(true);
+      expect(result.securityReviewPassed).toBe(true);
+      expect(result.poReviewPassed).toBe(true);
+    });
+
+    it('should handle mixed severity issues correctly', () => {
+      const issues: ReviewIssue[] = [
+        {
+          severity: 'major',
+          category: 'style',
+          description: 'Style issue',
+          perspectives: ['code'],
+        },
+        {
+          severity: 'critical',
+          category: 'security',
+          description: 'Security flaw',
+          perspectives: ['security'],
+        },
+        {
+          severity: 'minor',
+          category: 'documentation',
+          description: 'Missing docs',
+          perspectives: ['po'],
+        },
+      ];
+
+      const result = deriveIndividualPassFailFromPerspectives(issues);
+
+      // Only security has critical issue
+      expect(result.codeReviewPassed).toBe(true);
+      expect(result.securityReviewPassed).toBe(false);
+      expect(result.poReviewPassed).toBe(true);
+    });
+  });
+
+  describe('Unified review integration', () => {
+    const mockStoryPath = '/test/stories/test-story.md';
+    const mockWorkingDir = '/test/project';
+
+    const mockStory = {
+      path: mockStoryPath,
+      slug: 'test-story',
+      frontmatter: {
+        id: 'test-1',
+        title: 'Test Story',
+        priority: 1,
+        status: 'in-progress' as const,
+        type: 'feature' as const,
+        created: '2024-01-01',
+        labels: [],
+        research_complete: true,
+        plan_complete: true,
+        implementation_complete: true,
+        reviews_complete: false,
+      },
+      content: '# Test Story\n\nContent',
+    };
+
+    const mockConfig: Config = {
+      sdlcFolder: '/test/sdlc',
+      stageGates: {
+        requireApprovalBeforeImplementation: false,
+        requireApprovalBeforePR: false,
+        autoMergeOnApproval: false,
+      },
+      refinement: {
+        maxIterations: 3,
+        escalateOnMaxAttempts: 'error',
+        enableCircuitBreaker: true,
+      },
+      reviewConfig: {
+        maxRetries: 3,
+        maxRetriesUpperBound: 10,
+        autoCompleteOnApproval: true,
+        autoRestartOnRejection: true,
+      },
+      defaultLabels: [],
+      theme: 'auto',
+      testCommand: 'npm test',
+      buildCommand: 'npm run build',
+      timeouts: {
+        agentTimeout: 600000,
+        buildTimeout: 120000,
+        testTimeout: 300000,
+      },
+    };
+
+    beforeEach(() => {
+      vi.resetAllMocks();
+      vi.mocked(storyModule.parseStory).mockReturnValue(mockStory);
+      vi.mocked(configModule.loadConfig).mockReturnValue(mockConfig);
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as fs.Stats);
+    });
+
+    it('should parse unified review response with perspectives', async () => {
+      const mockSpawn = vi.mocked(spawn);
+      mockSpawn.mockImplementation((() => {
+        const mockProcess: any = {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn((event, callback) => {
+            if (event === 'close') {
+              setTimeout(() => callback(0), 10);
+            }
+          }),
+        };
+        return mockProcess;
+      }) as any);
+
+      // Mock unified review response with perspectives
+      const unifiedResponse = JSON.stringify({
+        passed: false,
+        issues: [
+          {
+            severity: 'blocker',
+            category: 'implementation',
+            description: 'No implementation exists',
+            perspectives: ['code', 'security', 'po'],
+          },
+          {
+            severity: 'critical',
+            category: 'testing',
+            description: 'No tests written',
+            perspectives: ['code'],
+          },
+        ],
+      });
+
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue(unifiedResponse);
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      expect(result.issues).toHaveLength(2);
+      expect(result.issues[0].perspectives).toEqual(['code', 'security', 'po']);
+      expect(result.issues[1].perspectives).toEqual(['code']);
+    });
+
+    it('should make only 1 LLM call for unified review', async () => {
+      const mockSpawn = vi.mocked(spawn);
+      mockSpawn.mockImplementation((() => {
+        const mockProcess: any = {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn((event, callback) => {
+            if (event === 'close') {
+              setTimeout(() => callback(0), 10);
+            }
+          }),
+        };
+        return mockProcess;
+      }) as any);
+
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue('{"passed": true, "issues": []}');
+
+      await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Should call LLM only once (unified review), not 3 times
+      expect(clientModule.runAgentQuery).toHaveBeenCalledTimes(1);
+    });
+
+    it('should derive correct pass/fail for each perspective', async () => {
+      const mockSpawn = vi.mocked(spawn);
+      mockSpawn.mockImplementation((() => {
+        const mockProcess: any = {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn((event, callback) => {
+            if (event === 'close') {
+              setTimeout(() => callback(0), 10);
+            }
+          }),
+        };
+        return mockProcess;
+      }) as any);
+
+      // Security has critical issue, others don't
+      const unifiedResponse = JSON.stringify({
+        passed: false,
+        issues: [
+          {
+            severity: 'critical',
+            category: 'security',
+            description: 'SQL injection vulnerability',
+            perspectives: ['security'],
+          },
+        ],
+      });
+
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue(unifiedResponse);
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Parse the review history to check derived values
+      expect(vi.mocked(storyModule.appendReviewHistory)).toHaveBeenCalled();
+      const reviewAttempt = vi.mocked(storyModule.appendReviewHistory).mock.calls[0][1];
+
+      expect(reviewAttempt.codeReviewPassed).toBe(true);
+      expect(reviewAttempt.securityReviewPassed).toBe(false);
+      expect(reviewAttempt.poReviewPassed).toBe(true);
+    });
   });
 });

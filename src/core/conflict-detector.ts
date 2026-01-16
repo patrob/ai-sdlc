@@ -1,5 +1,6 @@
 import { spawnSync } from 'child_process';
 import path from 'path';
+import fs from 'fs';
 import {
   Story,
   ConflictAnalysis,
@@ -7,6 +8,102 @@ import {
   ConflictSeverity,
 } from '../types/index.js';
 import { sanitizeStoryId } from './story.js';
+
+/**
+ * Validate branch name to prevent command injection attacks.
+ * Rejects branch names containing shell metacharacters.
+ *
+ * @param branchName - Branch name to validate
+ * @throws Error if branch name contains dangerous characters
+ */
+function validateBranchName(branchName: string): void {
+  if (!branchName) {
+    throw new Error('Branch name cannot be empty');
+  }
+
+  // Reject shell metacharacters that could be used for command injection
+  const dangerousChars = [';', '|', '&', '$', '`', '\n', '\r'];
+  for (const char of dangerousChars) {
+    if (branchName.includes(char)) {
+      throw new Error(`Invalid branch name: contains dangerous character '${char}'`);
+    }
+  }
+
+  // Reject path traversal sequences
+  if (branchName.includes('..')) {
+    throw new Error('Invalid branch name: contains path traversal sequence (..)');
+  }
+}
+
+/**
+ * Validate worktree path to prevent path traversal attacks.
+ * Ensures the path is an absolute path.
+ * Note: Worktrees can legitimately exist outside the project root.
+ *
+ * @param worktreePath - Worktree path to validate
+ * @param projectRoot - Project root directory (unused but kept for API consistency)
+ * @throws Error if worktree path is invalid
+ */
+function validateWorktreePath(worktreePath: string, projectRoot: string): void {
+  if (!worktreePath) {
+    throw new Error('Worktree path cannot be empty');
+  }
+
+  // Validate that path doesn't contain suspicious patterns
+  // Reject path traversal patterns in the original path
+  if (worktreePath.includes('..')) {
+    throw new Error('Invalid worktree path: contains path traversal sequence (..)');
+  }
+
+  // Ensure it's an absolute path (starts with / on Unix or drive letter on Windows)
+  // Check the original path, not the resolved one
+  if (!path.isAbsolute(worktreePath)) {
+    throw new Error('Invalid worktree path: must be an absolute path');
+  }
+}
+
+/**
+ * Validate base branch name format.
+ * Only allows alphanumeric characters, dots, slashes, underscores, and hyphens.
+ *
+ * @param baseBranch - Base branch name to validate
+ * @throws Error if base branch name contains invalid characters
+ */
+function validateBaseBranch(baseBranch: string): void {
+  if (!baseBranch) {
+    throw new Error('Base branch name cannot be empty');
+  }
+
+  if (!/^[a-zA-Z0-9._\/-]+$/.test(baseBranch)) {
+    throw new Error(`Invalid base branch name: contains invalid characters (only alphanumeric, dots, slashes, underscores, and hyphens allowed)`);
+  }
+}
+
+/**
+ * Validate project root directory.
+ * Ensures it's an absolute path, exists, and contains a .git directory.
+ *
+ * @param projectRoot - Project root directory to validate
+ * @throws Error if project root is invalid
+ */
+function validateProjectRoot(projectRoot: string): void {
+  if (!projectRoot) {
+    throw new Error('Project root cannot be empty');
+  }
+
+  if (!path.isAbsolute(projectRoot)) {
+    throw new Error('Project root must be an absolute path');
+  }
+
+  if (!fs.existsSync(projectRoot)) {
+    throw new Error(`Project root does not exist: ${projectRoot}`);
+  }
+
+  const gitDir = path.join(projectRoot, '.git');
+  if (!fs.existsSync(gitDir)) {
+    throw new Error(`Project root is not a git repository: ${projectRoot} (no .git directory found)`);
+  }
+}
 
 /**
  * Service for detecting conflicts between multiple stories by analyzing their git branches.
@@ -25,7 +122,11 @@ export class ConflictDetectorService {
   constructor(
     private projectRoot: string,
     private baseBranch: string = 'main'
-  ) {}
+  ) {
+    // Validate constructor parameters for security
+    validateProjectRoot(projectRoot);
+    validateBaseBranch(baseBranch);
+  }
 
   /**
    * Detect conflicts between multiple stories by analyzing their git branches.
@@ -34,7 +135,7 @@ export class ConflictDetectorService {
    * @param stories - Array of stories to analyze
    * @returns Conflict analysis with severity classification and recommendations
    */
-  async detectConflicts(stories: Story[]): Promise<ConflictDetectionResult> {
+  detectConflicts(stories: Story[]): ConflictDetectionResult {
     // Handle edge cases: empty array or single story
     if (stories.length === 0 || stories.length === 1) {
       return {
@@ -51,7 +152,7 @@ export class ConflictDetectorService {
     // Perform pairwise comparison (O(n²))
     for (let i = 0; i < stories.length; i++) {
       for (let j = i + 1; j < stories.length; j++) {
-        const analysis = await this.analyzePair(stories[i], stories[j]);
+        const analysis = this.analyzePair(stories[i], stories[j]);
         conflicts.push(analysis);
       }
     }
@@ -63,7 +164,8 @@ export class ConflictDetectorService {
     // Generate summary
     const highCount = conflicts.filter(c => c.severity === 'high').length;
     const mediumCount = conflicts.filter(c => c.severity === 'medium').length;
-    const summary = this.generateSummary(conflicts.length, highCount, mediumCount, safeToRunConcurrently);
+    const lowCount = conflicts.filter(c => c.severity === 'low').length;
+    const summary = this.generateSummary(conflicts.length, highCount, mediumCount, lowCount, safeToRunConcurrently);
 
     return {
       conflicts,
@@ -76,18 +178,18 @@ export class ConflictDetectorService {
    * Analyze potential conflicts between two stories
    * @private
    */
-  private async analyzePair(storyA: Story, storyB: Story): Promise<ConflictAnalysis> {
+  private analyzePair(storyA: Story, storyB: Story): ConflictAnalysis {
     // Sanitize story IDs first to prevent path traversal attacks
     // This must happen BEFORE any other operations
     sanitizeStoryId(storyA.frontmatter.id);
     sanitizeStoryId(storyB.frontmatter.id);
 
-    const filesA = await this.getModifiedFiles(storyA);
-    const filesB = await this.getModifiedFiles(storyB);
+    const filesA = this.getModifiedFiles(storyA);
+    const filesB = this.getModifiedFiles(storyB);
 
     const sharedFiles = this.findSharedFiles(filesA, filesB);
     const sharedDirectories = this.findSharedDirectories(filesA, filesB);
-    const severity = this.classifySeverity(sharedFiles, sharedDirectories);
+    const severity = this.classifySeverity(sharedFiles, sharedDirectories, filesA, filesB);
     const recommendation = this.generateRecommendation(sharedFiles, sharedDirectories, severity);
 
     return {
@@ -104,7 +206,7 @@ export class ConflictDetectorService {
    * Get all modified files for a story (committed and uncommitted changes)
    * @private
    */
-  private async getModifiedFiles(story: Story): Promise<string[]> {
+  private getModifiedFiles(story: Story): string[] {
     // Find the branch for this story
     const branchName = this.getBranchName(story);
     if (!branchName) {
@@ -138,6 +240,8 @@ export class ConflictDetectorService {
 
     // First, check if branch is explicitly set in frontmatter
     if (story.frontmatter.branch) {
+      // SECURITY: Validate branch name to prevent command injection
+      validateBranchName(story.frontmatter.branch);
       return story.frontmatter.branch;
     }
 
@@ -171,6 +275,8 @@ export class ConflictDetectorService {
   private getBranchWorkingDirectory(story: Story): string {
     // If story has a worktree path, use that
     if (story.frontmatter.worktree_path) {
+      // SECURITY: Validate worktree path to prevent path traversal attacks
+      validateWorktreePath(story.frontmatter.worktree_path, this.projectRoot);
       return story.frontmatter.worktree_path;
     }
 
@@ -179,13 +285,14 @@ export class ConflictDetectorService {
   }
 
   /**
-   * Get committed changes using git diff
+   * Get committed changes using git diff --name-status.
+   * Handles renamed and deleted files by including both old and new paths.
    * @private
    */
   private getCommittedChanges(workingDir: string, branchName: string): string[] {
     const result = spawnSync(
       'git',
-      ['diff', '--name-only', `${this.baseBranch}...${branchName}`],
+      ['diff', '--name-status', `${this.baseBranch}...${branchName}`],
       {
         cwd: workingDir,
         encoding: 'utf-8',
@@ -200,14 +307,37 @@ export class ConflictDetectorService {
     }
 
     const output = result.stdout?.toString() || '';
-    return output
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0);
+    const files: string[] = [];
+
+    for (const line of output.split('\n')) {
+      if (!line.trim()) continue;
+
+      // Parse git diff --name-status format: "STATUS\tFILE" or "RXXX\tOLD\tNEW"
+      const parts = line.split('\t');
+      if (parts.length < 2) continue;
+
+      const status = parts[0].trim();
+
+      // Handle renames (R or R100 or similar)
+      if (status.startsWith('R')) {
+        if (parts.length >= 3) {
+          // Format: R100\told-file\tnew-file
+          // Include both old and new paths for comprehensive conflict detection
+          files.push(parts[1].trim()); // old path
+          files.push(parts[2].trim()); // new path
+        }
+      } else {
+        // Modified (M), Added (A), Deleted (D), etc.
+        files.push(parts[1].trim());
+      }
+    }
+
+    return files;
   }
 
   /**
-   * Get uncommitted changes using git status --porcelain
+   * Get uncommitted changes using git status --porcelain.
+   * Handles quoted filenames with spaces or special characters.
    * @private
    */
   private getUncommittedChanges(workingDir: string): string[] {
@@ -230,7 +360,16 @@ export class ConflictDetectorService {
         // Parse porcelain format: "XY filename"
         // XY are status codes, filename starts at column 4
         if (line.length < 4) return '';
-        return line.substring(3).trim();
+
+        let filename = line.substring(3).trim();
+
+        // Handle quoted filenames (filenames with spaces or special chars are wrapped in quotes)
+        // Format: 'XY "filename with spaces.txt"'
+        if (filename.startsWith('"') && filename.endsWith('"')) {
+          filename = filename.slice(1, -1);
+        }
+
+        return filename;
       })
       .filter(line => line.length > 0);
   }
@@ -255,15 +394,31 @@ export class ConflictDetectorService {
   }
 
   /**
-   * Classify conflict severity based on overlap
+   * Classify conflict severity based on overlap.
+   *
+   * Severity levels:
+   * - high: Same file modified in both stories (direct conflict)
+   * - medium: Same directory, different files (potential merge issues)
+   * - low: Different directories, but both stories have changes (cross-cutting concerns)
+   * - none: No overlap or one story has no changes
+   *
    * @private
    */
-  private classifySeverity(sharedFiles: string[], sharedDirs: string[]): ConflictSeverity {
+  private classifySeverity(
+    sharedFiles: string[],
+    sharedDirs: string[],
+    filesA: string[],
+    filesB: string[]
+  ): ConflictSeverity {
     if (sharedFiles.length > 0) {
       return 'high';
     }
     if (sharedDirs.length > 0) {
       return 'medium';
+    }
+    // Low severity: both stories have changes, but in different areas
+    if (filesA.length > 0 && filesB.length > 0) {
+      return 'low';
     }
     return 'none';
   }
@@ -283,6 +438,9 @@ export class ConflictDetectorService {
     if (severity === 'medium') {
       return `Proceed with caution - ${sharedDirs.length} shared directory(ies)`;
     }
+    if (severity === 'low') {
+      return 'Safe to run concurrently - changes in different areas';
+    }
     return 'Safe to run concurrently - no conflicts detected';
   }
 
@@ -294,6 +452,7 @@ export class ConflictDetectorService {
     totalPairs: number,
     highCount: number,
     mediumCount: number,
+    lowCount: number,
     safe: boolean
   ): string {
     if (highCount > 0) {
@@ -301,6 +460,9 @@ export class ConflictDetectorService {
     }
     if (mediumCount > 0) {
       return `Found ${mediumCount} medium-severity conflict(s) - proceed with caution`;
+    }
+    if (lowCount > 0) {
+      return `Found ${lowCount} low-severity conflict(s) - safe to run concurrently but monitor closely`;
     }
     return `No conflicts detected across ${totalPairs} story pair(s) - safe for concurrent execution`;
   }
@@ -317,15 +479,15 @@ export class ConflictDetectorService {
  *
  * @example
  * ```typescript
- * const result = await detectConflicts(stories, '/path/to/project');
+ * const result = detectConflicts(stories, '/path/to/project');
  * console.log(result.summary);
  * ```
  */
-export async function detectConflicts(
+export function detectConflicts(
   stories: Story[],
   projectRoot: string,
   baseBranch: string = 'main'
-): Promise<ConflictDetectionResult> {
+): ConflictDetectionResult {
   const detector = new ConflictDetectorService(projectRoot, baseBranch);
   return detector.detectConflicts(stories);
 }

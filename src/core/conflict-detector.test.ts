@@ -2,9 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { spawnSync, SpawnSyncReturns } from 'child_process';
 import { ConflictDetectorService, detectConflicts } from './conflict-detector.js';
 import { Story } from '../types/index.js';
+import fs from 'fs';
 
-// Mock child_process
+// Mock modules
 vi.mock('child_process');
+vi.mock('fs');
+
 const mockSpawnSync = vi.mocked(spawnSync);
 
 // Helper to create a mock Story object
@@ -57,8 +60,10 @@ describe('ConflictDetectorService', () => {
   let service: ConflictDetectorService;
 
   beforeEach(() => {
-    service = new ConflictDetectorService('/project/root', 'main');
     vi.clearAllMocks();
+    // Mock fs.existsSync to return true for project root and .git directory
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    service = new ConflictDetectorService('/project/root', 'main');
   });
 
   afterEach(() => {
@@ -71,7 +76,7 @@ describe('ConflictDetectorService', () => {
         const story = createMockStory('S-0001', 'ai-sdlc/S-0001-test-story');
 
         // Should not call git since branch is in frontmatter
-        const result = await service.detectConflicts([story]);
+        const result = service.detectConflicts([story]);
 
         // Verify detectConflicts uses the branch
         expect(result).toBeDefined();
@@ -95,7 +100,7 @@ describe('ConflictDetectorService', () => {
         // Story 2: Mock git status
         mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
 
-        await service.detectConflicts([story1, story2]);
+        service.detectConflicts([story1, story2]);
 
         expect(mockSpawnSync).toHaveBeenCalledWith(
           'git',
@@ -113,7 +118,7 @@ describe('ConflictDetectorService', () => {
         // Mock git branch --list returning empty
         mockSpawnSync.mockReturnValue(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story]);
+        const result = service.detectConflicts([story]);
 
         // Single story with no branch = no conflicts
         expect(result.conflicts).toEqual([]);
@@ -126,7 +131,7 @@ describe('ConflictDetectorService', () => {
         // Mock git branch --list failing
         mockSpawnSync.mockReturnValue(createMockSpawnResult('', 1, 'error'));
 
-        const result = await service.detectConflicts([story]);
+        const result = service.detectConflicts([story]);
 
         expect(result.conflicts).toEqual([]);
         expect(result.safeToRunConcurrently).toBe(true);
@@ -138,27 +143,102 @@ describe('ConflictDetectorService', () => {
         const story1 = createMockStory('S-0001', 'ai-sdlc/S-0001-story');
         const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
 
-        // Story 1: git diff returns files
+        // Story 1: git diff returns files in --name-status format
         mockSpawnSync.mockReturnValueOnce(
-          createMockSpawnResult('src/file1.ts\nsrc/file2.ts\n')
+          createMockSpawnResult('M\tsrc/file1.ts\nA\tsrc/file2.ts\n')
         );
         // Story 1: git status returns nothing
         mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
 
         // Story 2: git diff returns files
         mockSpawnSync.mockReturnValueOnce(
-          createMockSpawnResult('src/file3.ts\n')
+          createMockSpawnResult('M\tsrc/file3.ts\n')
         );
         // Story 2: git status returns nothing
         mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(mockSpawnSync).toHaveBeenCalledWith(
           'git',
-          ['diff', '--name-only', 'main...ai-sdlc/S-0001-story'],
+          ['diff', '--name-status', 'main...ai-sdlc/S-0001-story'],
           expect.any(Object)
         );
+      });
+
+      it('should handle renamed files (includes both old and new paths)', async () => {
+        const story1 = createMockStory('S-0001', 'ai-sdlc/S-0001-story');
+        const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
+
+        // Story 1: git diff shows renamed file
+        mockSpawnSync.mockReturnValueOnce(
+          createMockSpawnResult('R100\tsrc/old-name.ts\tsrc/new-name.ts\n')
+        );
+        // Story 1: git status returns nothing
+        mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
+
+        // Story 2: git diff modifies old name
+        mockSpawnSync.mockReturnValueOnce(
+          createMockSpawnResult('M\tsrc/old-name.ts\n')
+        );
+        // Story 2: git status returns nothing
+        mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
+
+        const result = service.detectConflicts([story1, story2]);
+
+        // Should detect conflict on old-name.ts (story1 renamed it, story2 modified it)
+        expect(result.conflicts[0].sharedFiles).toContain('src/old-name.ts');
+        expect(result.conflicts[0].severity).toBe('high');
+      });
+
+      it('should handle deleted files', async () => {
+        const story1 = createMockStory('S-0001', 'ai-sdlc/S-0001-story');
+        const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
+
+        // Story 1: git diff shows deleted file
+        mockSpawnSync.mockReturnValueOnce(
+          createMockSpawnResult('D\tsrc/deleted.ts\n')
+        );
+        // Story 1: git status returns nothing
+        mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
+
+        // Story 2: git diff modifies same file
+        mockSpawnSync.mockReturnValueOnce(
+          createMockSpawnResult('M\tsrc/deleted.ts\n')
+        );
+        // Story 2: git status returns nothing
+        mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
+
+        const result = service.detectConflicts([story1, story2]);
+
+        // Should detect conflict (story1 deleted, story2 modified)
+        expect(result.conflicts[0].sharedFiles).toContain('src/deleted.ts');
+        expect(result.conflicts[0].severity).toBe('high');
+      });
+
+      it('should handle filenames with spaces (quoted in porcelain format)', async () => {
+        const story1 = createMockStory('S-0001', 'ai-sdlc/S-0001-story');
+        const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
+
+        // Story 1: git diff returns nothing
+        mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
+        // Story 1: git status returns file with spaces (quoted)
+        mockSpawnSync.mockReturnValueOnce(
+          createMockSpawnResult(' M "src/file with spaces.ts"\n')
+        );
+
+        // Story 2: git diff returns nothing
+        mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
+        // Story 2: git status returns same file
+        mockSpawnSync.mockReturnValueOnce(
+          createMockSpawnResult(' M "src/file with spaces.ts"\n')
+        );
+
+        const result = service.detectConflicts([story1, story2]);
+
+        // Should detect conflict on file with spaces
+        expect(result.conflicts[0].sharedFiles).toContain('src/file with spaces.ts');
+        expect(result.conflicts[0].severity).toBe('high');
       });
 
       it('should include uncommitted changes from git status', async () => {
@@ -177,7 +257,7 @@ describe('ConflictDetectorService', () => {
         // Story 2: git status returns nothing
         mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(mockSpawnSync).toHaveBeenCalledWith(
           'git',
@@ -192,7 +272,7 @@ describe('ConflictDetectorService', () => {
 
         // Story 1: git diff returns file
         mockSpawnSync.mockReturnValueOnce(
-          createMockSpawnResult('src/file.ts\n')
+          createMockSpawnResult('M\tsrc/file.ts\n')
         );
         // Story 1: git status also returns same file
         mockSpawnSync.mockReturnValueOnce(
@@ -201,12 +281,12 @@ describe('ConflictDetectorService', () => {
 
         // Story 2: git diff returns different file
         mockSpawnSync.mockReturnValueOnce(
-          createMockSpawnResult('src/other.ts\n')
+          createMockSpawnResult('M\tsrc/other.ts\n')
         );
         // Story 2: git status returns nothing
         mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         // Should not have duplicates
         expect(result.conflicts[0].sharedFiles).toHaveLength(0);
@@ -218,7 +298,7 @@ describe('ConflictDetectorService', () => {
         // Mock git branch --list returning empty
         mockSpawnSync.mockReturnValue(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story]);
+        const result = service.detectConflicts([story]);
 
         expect(result.conflicts).toEqual([]);
       });
@@ -237,7 +317,7 @@ describe('ConflictDetectorService', () => {
         // Story 2: git status returns empty
         mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.conflicts[0].sharedFiles).toEqual([]);
         expect(result.conflicts[0].severity).toBe('none');
@@ -257,7 +337,7 @@ describe('ConflictDetectorService', () => {
         // Story 2: git status fails
         mockSpawnSync.mockReturnValueOnce(createMockSpawnResult('', 1, 'error'));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         // Should handle gracefully - no files means no conflict
         expect(result.conflicts[0].severity).toBe('none');
@@ -279,12 +359,12 @@ describe('ConflictDetectorService', () => {
         mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
         mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
 
-        await service.detectConflicts([story1, story2]);
+        service.detectConflicts([story1, story2]);
 
         // Check that story1 used worktree path
         expect(mockSpawnSync).toHaveBeenCalledWith(
           'git',
-          ['diff', '--name-only', 'main...ai-sdlc/S-0001-story'],
+          ['diff', '--name-status', 'main...ai-sdlc/S-0001-story'],
           expect.objectContaining({
             cwd: '/worktrees/S-0001',
           })
@@ -293,7 +373,7 @@ describe('ConflictDetectorService', () => {
         // Check that story2 used project root
         expect(mockSpawnSync).toHaveBeenCalledWith(
           'git',
-          ['diff', '--name-only', 'main...ai-sdlc/S-0002-story'],
+          ['diff', '--name-status', 'main...ai-sdlc/S-0002-story'],
           expect.objectContaining({
             cwd: '/project/root',
           })
@@ -309,13 +389,14 @@ describe('ConflictDetectorService', () => {
         const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
 
         // Both stories modify the same file
+        // Format: STATUS\tFILENAME (git diff --name-status format)
         mockSpawnSync
-          .mockReturnValueOnce(createMockSpawnResult('src/shared.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/shared.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''))
-          .mockReturnValueOnce(createMockSpawnResult('src/shared.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/shared.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.conflicts[0].sharedFiles).toEqual(['src/shared.ts']);
         expect(result.conflicts[0].severity).toBe('high');
@@ -327,12 +408,12 @@ describe('ConflictDetectorService', () => {
 
         // Different files
         mockSpawnSync
-          .mockReturnValueOnce(createMockSpawnResult('src/file1.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file1.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''))
-          .mockReturnValueOnce(createMockSpawnResult('src/file2.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file2.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.conflicts[0].sharedFiles).toEqual([]);
       });
@@ -344,13 +425,14 @@ describe('ConflictDetectorService', () => {
         const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
 
         // Same directory, different files
+        // Format: STATUS\tFILENAME (git diff --name-status format)
         mockSpawnSync
-          .mockReturnValueOnce(createMockSpawnResult('src/core/file1.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/core/file1.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''))
-          .mockReturnValueOnce(createMockSpawnResult('src/core/file2.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/core/file2.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.conflicts[0].sharedDirectories).toContain('src/core');
         expect(result.conflicts[0].severity).toBe('medium');
@@ -361,13 +443,14 @@ describe('ConflictDetectorService', () => {
         const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
 
         // Different directories
+        // Format: STATUS\tFILENAME (git diff --name-status format)
         mockSpawnSync
-          .mockReturnValueOnce(createMockSpawnResult('src/core/file1.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/core/file1.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''))
-          .mockReturnValueOnce(createMockSpawnResult('tests/unit/file2.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\ttests/unit/file2.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.conflicts[0].sharedDirectories).toEqual([]);
       });
@@ -379,12 +462,12 @@ describe('ConflictDetectorService', () => {
         const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
 
         mockSpawnSync
-          .mockReturnValueOnce(createMockSpawnResult('src/file.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''))
-          .mockReturnValueOnce(createMockSpawnResult('src/file.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.conflicts[0].severity).toBe('high');
       });
@@ -394,27 +477,43 @@ describe('ConflictDetectorService', () => {
         const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
 
         mockSpawnSync
-          .mockReturnValueOnce(createMockSpawnResult('src/file1.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file1.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''))
-          .mockReturnValueOnce(createMockSpawnResult('src/file2.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file2.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.conflicts[0].severity).toBe('medium');
       });
 
-      it('should return none when no overlap', async () => {
+      it('should return low when both stories have changes in different directories', async () => {
         const story1 = createMockStory('S-0001', 'ai-sdlc/S-0001-story');
         const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
 
         mockSpawnSync
-          .mockReturnValueOnce(createMockSpawnResult('src/file1.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file1.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''))
-          .mockReturnValueOnce(createMockSpawnResult('tests/file2.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\ttests/file2.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
+
+        expect(result.conflicts[0].severity).toBe('low');
+      });
+
+      it('should return none when one story has no changes', async () => {
+        const story1 = createMockStory('S-0001', 'ai-sdlc/S-0001-story');
+        const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
+
+        // Story 1 has changes, Story 2 has no changes
+        mockSpawnSync
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file1.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult(''))
+          .mockReturnValueOnce(createMockSpawnResult('')) // No committed changes
+          .mockReturnValueOnce(createMockSpawnResult('')); // No uncommitted changes
+
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.conflicts[0].severity).toBe('none');
       });
@@ -426,12 +525,12 @@ describe('ConflictDetectorService', () => {
         const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
 
         mockSpawnSync
-          .mockReturnValueOnce(createMockSpawnResult('src/file.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''))
-          .mockReturnValueOnce(createMockSpawnResult('src/file.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.conflicts[0].recommendation).toContain('Run sequentially');
         expect(result.conflicts[0].recommendation).toContain('1 shared file(s)');
@@ -442,29 +541,47 @@ describe('ConflictDetectorService', () => {
         const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
 
         mockSpawnSync
-          .mockReturnValueOnce(createMockSpawnResult('src/file1.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file1.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''))
-          .mockReturnValueOnce(createMockSpawnResult('src/file2.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file2.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.conflicts[0].recommendation).toContain('Proceed with caution');
       });
 
-      it('should return "Safe to run" for none severity', async () => {
+      it('should return "Safe to run - changes in different areas" for low severity', async () => {
         const story1 = createMockStory('S-0001', 'ai-sdlc/S-0001-story');
         const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
 
         mockSpawnSync
-          .mockReturnValueOnce(createMockSpawnResult('src/file1.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file1.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''))
-          .mockReturnValueOnce(createMockSpawnResult('tests/file2.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\ttests/file2.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.conflicts[0].recommendation).toContain('Safe to run concurrently');
+        expect(result.conflicts[0].recommendation).toContain('different areas');
+      });
+
+      it('should return "Safe to run - no conflicts" for none severity', async () => {
+        const story1 = createMockStory('S-0001', 'ai-sdlc/S-0001-story');
+        const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
+
+        // Story 1 has changes, Story 2 has no changes
+        mockSpawnSync
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file1.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult(''))
+          .mockReturnValueOnce(createMockSpawnResult(''))
+          .mockReturnValueOnce(createMockSpawnResult(''));
+
+        const result = service.detectConflicts([story1, story2]);
+
+        expect(result.conflicts[0].recommendation).toContain('Safe to run concurrently');
+        expect(result.conflicts[0].recommendation).toContain('no conflicts');
       });
     });
   });
@@ -477,7 +594,7 @@ describe('ConflictDetectorService', () => {
 
         mockSpawnSync.mockReturnValue(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         // 2 stories = 1 pair
         expect(result.conflicts).toHaveLength(1);
@@ -492,7 +609,7 @@ describe('ConflictDetectorService', () => {
 
         mockSpawnSync.mockReturnValue(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2, story3]);
+        const result = service.detectConflicts([story1, story2, story3]);
 
         // 3 stories = 3 pairs (1-2, 1-3, 2-3)
         expect(result.conflicts).toHaveLength(3);
@@ -508,7 +625,7 @@ describe('ConflictDetectorService', () => {
 
         mockSpawnSync.mockReturnValue(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts(stories);
+        const result = service.detectConflicts(stories);
 
         // 4 stories = 6 pairs
         expect(result.conflicts).toHaveLength(6);
@@ -519,13 +636,14 @@ describe('ConflictDetectorService', () => {
         const story2 = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
 
         // Both modify same file (high severity)
+        // Note: Uses --name-status format (STATUS\tFILENAME)
         mockSpawnSync
-          .mockReturnValueOnce(createMockSpawnResult('src/shared.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/shared.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''))
-          .mockReturnValueOnce(createMockSpawnResult('src/shared.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/shared.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.safeToRunConcurrently).toBe(false);
         expect(result.summary).toContain('high-severity');
@@ -537,12 +655,12 @@ describe('ConflictDetectorService', () => {
 
         // Different files in same directory (medium severity)
         mockSpawnSync
-          .mockReturnValueOnce(createMockSpawnResult('src/file1.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file1.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''))
-          .mockReturnValueOnce(createMockSpawnResult('src/file2.ts\n'))
+          .mockReturnValueOnce(createMockSpawnResult('M\tsrc/file2.ts\n'))
           .mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.safeToRunConcurrently).toBe(true);
         expect(result.summary).toContain('medium-severity');
@@ -554,7 +672,7 @@ describe('ConflictDetectorService', () => {
 
         mockSpawnSync.mockReturnValue(createMockSpawnResult(''));
 
-        const result = await service.detectConflicts([story1, story2]);
+        const result = service.detectConflicts([story1, story2]);
 
         expect(result.summary).toContain('No conflicts detected');
         expect(result.summary).toContain('1 story pair');
@@ -563,7 +681,7 @@ describe('ConflictDetectorService', () => {
       it('should handle single story (returns empty conflicts array)', async () => {
         const story = createMockStory('S-0001', 'ai-sdlc/S-0001-story');
 
-        const result = await service.detectConflicts([story]);
+        const result = service.detectConflicts([story]);
 
         expect(result.conflicts).toEqual([]);
         expect(result.safeToRunConcurrently).toBe(true);
@@ -571,7 +689,7 @@ describe('ConflictDetectorService', () => {
       });
 
       it('should handle empty story array (returns empty conflicts array)', async () => {
-        const result = await service.detectConflicts([]);
+        const result = service.detectConflicts([]);
 
         expect(result.conflicts).toEqual([]);
         expect(result.safeToRunConcurrently).toBe(true);
@@ -581,14 +699,107 @@ describe('ConflictDetectorService', () => {
   });
 
   describe('Security', () => {
-    it('should sanitize story IDs to prevent path traversal', async () => {
+    it('should sanitize story IDs to prevent path traversal', () => {
       const maliciousStory = createMockStory('../../../etc/passwd');
       const validStory = createMockStory('S-0001', 'ai-sdlc/S-0001-story');
 
       // Should throw error when trying to sanitize the malicious story ID
-      await expect(
+      expect(() =>
         service.detectConflicts([maliciousStory, validStory])
-      ).rejects.toThrow();
+      ).toThrow('Invalid story ID: contains path traversal sequence');
+    });
+
+    it('should reject malicious branch names with shell metacharacters', () => {
+      const storyWithMaliciousBranch = createMockStory('S-0001', 'main; rm -rf /');
+      const validStory = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
+
+      // Should throw error when validating the malicious branch name
+      expect(() =>
+        service.detectConflicts([storyWithMaliciousBranch, validStory])
+      ).toThrow('Invalid branch name: contains dangerous character');
+    });
+
+    it('should reject branch names with pipe characters', () => {
+      const storyWithPipe = createMockStory('S-0001', 'main | cat /etc/passwd');
+      const validStory = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
+
+      expect(() =>
+        service.detectConflicts([storyWithPipe, validStory])
+      ).toThrow('Invalid branch name: contains dangerous character');
+    });
+
+    it('should reject branch names with ampersand characters', () => {
+      const storyWithAmpersand = createMockStory('S-0001', 'main & echo hacked');
+      const validStory = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
+
+      expect(() =>
+        service.detectConflicts([storyWithAmpersand, validStory])
+      ).toThrow('Invalid branch name: contains dangerous character');
+    });
+
+    it('should reject branch names with backticks', () => {
+      const storyWithBacktick = createMockStory('S-0001', 'main`whoami`');
+      const validStory = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
+
+      expect(() =>
+        service.detectConflicts([storyWithBacktick, validStory])
+      ).toThrow('Invalid branch name: contains dangerous character');
+    });
+
+    it('should reject worktree paths with path traversal', () => {
+      const storyWithMaliciousWorktree = createMockStory('S-0001', 'ai-sdlc/S-0001-story', '../../../etc');
+      const validStory = createMockStory('S-0002', 'ai-sdlc/S-0002-story');
+
+      // Mock git calls for the valid story
+      mockSpawnSync.mockReturnValue(createMockSpawnResult(''));
+
+      expect(() =>
+        service.detectConflicts([storyWithMaliciousWorktree, validStory])
+      ).toThrow('Invalid worktree path: contains path traversal sequence');
+    });
+
+    it('should reject non-absolute project root', () => {
+      expect(() => {
+        new ConflictDetectorService('relative/path', 'main');
+      }).toThrow('Project root must be an absolute path');
+    });
+
+    it('should reject non-existent project root', () => {
+      // Override global mock to return false for non-existent path
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      expect(() => {
+        new ConflictDetectorService('/nonexistent/path/12345', 'main');
+      }).toThrow('Project root does not exist');
+    });
+
+    it('should reject project root without .git directory', () => {
+      // Mock fs.existsSync to simulate directory exists but no .git
+      const existsSyncSpy = vi.spyOn(fs, 'existsSync');
+      existsSyncSpy.mockImplementation((path) => {
+        // Return true for project root, false for .git directory
+        return !path.toString().endsWith('.git');
+      });
+
+      expect(() => {
+        new ConflictDetectorService('/path/without/git', 'main');
+      }).toThrow('Project root is not a git repository');
+
+      existsSyncSpy.mockRestore();
+    });
+
+    it('should reject invalid base branch names with special characters', () => {
+      expect(() => {
+        new ConflictDetectorService('/project/root', 'main; rm -rf /');
+      }).toThrow('Invalid base branch name');
+    });
+
+    it('should accept valid base branch names', () => {
+      // These should NOT throw
+      expect(() => new ConflictDetectorService('/project/root', 'main')).not.toThrow();
+      expect(() => new ConflictDetectorService('/project/root', 'feature/my-branch')).not.toThrow();
+      expect(() => new ConflictDetectorService('/project/root', 'release-1.0')).not.toThrow();
+      expect(() => new ConflictDetectorService('/project/root', 'hotfix_bug')).not.toThrow();
     });
 
     it('should use shell: false in all spawnSync calls', async () => {
@@ -597,7 +808,7 @@ describe('ConflictDetectorService', () => {
 
       mockSpawnSync.mockReturnValue(createMockSpawnResult(''));
 
-      await service.detectConflicts([story1, story2]);
+      service.detectConflicts([story1, story2]);
 
       // Check all spawnSync calls have shell: false
       const calls = mockSpawnSync.mock.calls;
@@ -614,7 +825,7 @@ describe('ConflictDetectorService', () => {
 
       mockSpawnSync.mockReturnValue(createMockSpawnResult(''));
 
-      const result = await detectConflicts(
+      const result = detectConflicts(
         [story1, story2],
         '/project/root',
         'main'

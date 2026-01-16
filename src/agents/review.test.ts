@@ -491,6 +491,203 @@ describe('Review Agent - Pre-check Optimization', () => {
       expect(result.issues.some(issue => issue.category === 'testing')).toBe(true);
     });
   });
+
+  describe('Test Alignment Pre-check', () => {
+    it('should detect test alignment issues when tests pass but verify old behavior', async () => {
+      // Mock build and tests passing (exit 0)
+      const mockSpawn = vi.mocked(spawn);
+      mockSpawn.mockImplementation((() => {
+        const mockProcess: any = {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn((event, callback) => {
+            if (event === 'close') {
+              // Both build and tests pass
+              setTimeout(() => callback(0), 10);
+            }
+          }),
+        };
+
+        setTimeout(() => {
+          const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+          if (stdoutCallback) {
+            stdoutCallback(Buffer.from('Test Suites: 5 passed, 5 total\nTests:       12 passed, 12 total\n'));
+          }
+        }, 5);
+
+        return mockProcess;
+      }) as any);
+
+      // Mock LLM to detect test alignment issue
+      const llmResponse = JSON.stringify({
+        passed: false,
+        issues: [
+          {
+            severity: 'blocker',
+            category: 'test_alignment',
+            description: 'Test file src/core/config.test.ts expects synchronous behavior but production code is now async.\n\nThe test calls `loadConfig()` without await, expecting immediate return.\n\nProduction code signature changed to: `async function loadConfig(): Promise<Config>`',
+            file: 'src/core/config.test.ts',
+            line: 42,
+            suggestedFix: 'Update test to: `const config = await loadConfig();` and mark test function as async.',
+            perspectives: ['code'],
+          },
+        ],
+      });
+
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue(llmResponse);
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Verify: REJECTED with BLOCKER severity
+      expect(result.success).toBe(true); // Agent executed successfully
+      expect(result.passed).toBe(false); // Review did not pass
+      expect(result.decision).toBe(ReviewDecision.REJECTED);
+      expect(result.issues).toHaveLength(1);
+      expect(result.issues[0].severity).toBe('blocker');
+      expect(result.issues[0].category).toBe('test_alignment');
+      expect(result.issues[0].description).toContain('synchronous behavior but production code is now async');
+      expect(result.issues[0].file).toBe('src/core/config.test.ts');
+    });
+
+    it('should include specific misalignment details in rejection feedback', async () => {
+      // Mock passing tests
+      const mockSpawn = vi.mocked(spawn);
+      mockSpawn.mockImplementation((() => {
+        const mockProcess: any = {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn((event, callback) => {
+            if (event === 'close') {
+              setTimeout(() => callback(0), 10);
+            }
+          }),
+        };
+        setTimeout(() => {
+          const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+          if (stdoutCallback) {
+            stdoutCallback(Buffer.from('Tests passed\n'));
+          }
+        }, 5);
+        return mockProcess;
+      }) as any);
+
+      // Mock LLM detecting alignment issue with detailed feedback
+      const llmResponse = JSON.stringify({
+        passed: false,
+        issues: [
+          {
+            severity: 'blocker',
+            category: 'test_alignment',
+            description: 'Test file src/agents/research.test.ts verifies OLD behavior.\n\nOLD: function returned string\nNEW: function returns Promise<string>\n\nTest assertion: expect(result).toBe("value") - this checks a Promise object, not the resolved value.',
+            file: 'src/agents/research.test.ts',
+            suggestedFix: 'Change to: const result = await myFunction(); expect(result).toBe("value");',
+            perspectives: ['code'],
+          },
+        ],
+      });
+
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue(llmResponse);
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Verify feedback includes: test file name, old vs new behavior, suggested fix
+      expect(result.issues[0].description).toContain('src/agents/research.test.ts');
+      expect(result.issues[0].description).toContain('OLD:');
+      expect(result.issues[0].description).toContain('NEW:');
+      expect(result.issues[0].suggestedFix).toContain('await');
+      expect(result.feedback).toContain('test_alignment');
+    });
+
+    it('should distinguish test failure from test misalignment', async () => {
+      // Scenario A: Tests FAIL (exit code 1) - already tested elsewhere
+      // Scenario B: Tests PASS but misaligned - this test
+
+      const mockSpawn = vi.mocked(spawn);
+      mockSpawn.mockImplementation((() => {
+        const mockProcess: any = {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn((event, callback) => {
+            if (event === 'close') {
+              setTimeout(() => callback(0), 10); // Tests PASS
+            }
+          }),
+        };
+        setTimeout(() => {
+          const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+          if (stdoutCallback) {
+            stdoutCallback(Buffer.from('All tests passed\n'));
+          }
+        }, 5);
+        return mockProcess;
+      }) as any);
+
+      // LLM detects misalignment
+      const llmResponse = JSON.stringify({
+        passed: false,
+        issues: [
+          {
+            severity: 'blocker',
+            category: 'test_alignment', // NOT 'testing'
+            description: 'Tests pass but verify wrong behavior',
+            perspectives: ['code'],
+          },
+        ],
+      });
+
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue(llmResponse);
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Verify: category is 'test_alignment', NOT 'testing'
+      expect(result.issues[0].category).toBe('test_alignment');
+      expect(result.issues[0].category).not.toBe('testing');
+
+      // Verify: LLM was called (because tests passed, just misaligned)
+      expect(clientModule.runAgentQuery).toHaveBeenCalled();
+    });
+
+    it('should proceed with review when tests pass and align', async () => {
+      // Mock passing tests
+      const mockSpawn = vi.mocked(spawn);
+      mockSpawn.mockImplementation((() => {
+        const mockProcess: any = {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn((event, callback) => {
+            if (event === 'close') {
+              setTimeout(() => callback(0), 10);
+            }
+          }),
+        };
+        setTimeout(() => {
+          const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+          if (stdoutCallback) {
+            stdoutCallback(Buffer.from('Tests passed\n'));
+          }
+        }, 5);
+        return mockProcess;
+      }) as any);
+
+      // LLM finds no alignment issues
+      const llmResponse = JSON.stringify({
+        passed: true,
+        issues: [], // No issues at all
+      });
+
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue(llmResponse);
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Verify: Review proceeds normally (no early return)
+      expect(result.passed).toBe(true);
+      expect(result.decision).toBe(ReviewDecision.APPROVED);
+      // Verify: No test_alignment issues created
+      expect(result.issues.filter(i => i.category === 'test_alignment')).toHaveLength(0);
+      // Verify: LLM review WAS called
+      expect(clientModule.runAgentQuery).toHaveBeenCalled();
+    });
+  });
 });
 
 describe('TDD Validation', () => {

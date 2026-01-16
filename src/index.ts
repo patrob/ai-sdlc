@@ -5,10 +5,13 @@ import chalk from 'chalk';
 import { createRequire } from 'module';
 import { init, status, add, run, details, unblock, migrate, listWorktrees, addWorktree, removeWorktree } from './cli/commands.js';
 import { hasApiKey } from './core/auth.js';
-import { loadConfig, saveConfig, DEFAULT_LOGGING_CONFIG } from './core/config.js';
+import { loadConfig, saveConfig, DEFAULT_LOGGING_CONFIG, getSdlcRoot } from './core/config.js';
 import { getThemedChalk } from './core/theme.js';
 import { ThemePreference, LogConfig } from './types/index.js';
 import { initLogger } from './core/logger.js';
+import { getLatestLogPath, readLastLines, tailLog } from './core/story-logger.js';
+import fs from 'fs';
+import path from 'path';
 
 const require = createRequire(import.meta.url);
 const packageJson = require('../package.json');
@@ -85,7 +88,7 @@ program
   .option('--max-iterations <number>', 'Maximum retry iterations (default: infinite)')
   .option('--watch', 'Run in daemon mode, continuously processing backlog')
   .option('-v, --verbose', 'Show detailed daemon output (use with --watch)')
-  .option('--force', 'Skip git validation checks (use with caution)')
+  .option('--force', 'Skip git validation and conflict checks (use with caution)')
   .option('--worktree', 'Create isolated git worktree for story execution (requires --story)')
   .option('--no-worktree', 'Disable worktree even when enabled in config')
   .option('--log-level <level>', 'Set log verbosity (debug, info, warn, error)', 'info')
@@ -166,6 +169,74 @@ program
     } else {
       console.log(c.warning(`Unknown configuration key: ${key}`));
       console.log(c.dim('Available keys: theme'));
+    }
+  });
+
+// Logs command
+program
+  .command('logs <storyId>')
+  .description('View logs for a story')
+  .option('-t, --tail', 'Follow log output (like tail -f)')
+  .option('-n, --lines <n>', 'Number of lines to show', '50')
+  .option('-f, --file <timestamp>', 'View specific log file by timestamp (e.g., 2026-01-15T10-30-00)')
+  .action(async (storyId: string, options: { tail?: boolean; lines?: string; file?: string }) => {
+    try {
+      const config = loadConfig();
+      const c = getThemedChalk(config);
+      const sdlcRoot = getSdlcRoot();
+
+      // Determine which log file to view
+      let logPath: string | null;
+
+      if (options.file) {
+        // View specific log file by timestamp
+        const sanitizedStoryId = storyId; // Will be sanitized by getLatestLogPath
+        const logDir = path.join(sdlcRoot, 'stories', sanitizedStoryId, 'logs');
+        logPath = path.join(logDir, `${options.file}.log`);
+
+        if (!fs.existsSync(logPath)) {
+          console.log(c.error(`Log file not found: ${options.file}.log`));
+          console.log(c.dim(`  Story: ${storyId}`));
+          console.log(c.dim(`  Expected path: ${logPath}`));
+          process.exit(1);
+        }
+      } else {
+        // Get latest log file
+        logPath = getLatestLogPath(sdlcRoot, storyId);
+
+        if (!logPath) {
+          console.log(c.error(`No logs found for story: ${storyId}`));
+          console.log(c.dim('  Logs are created when running actions with `ai-sdlc run`'));
+          process.exit(1);
+        }
+      }
+
+      // Display logs
+      if (options.tail) {
+        // Follow mode (tail -f)
+        console.log(c.dim(`Following log: ${path.basename(logPath)}`));
+        console.log(c.dim(`Press Ctrl+C to exit\n`));
+        tailLog(logPath);
+      } else {
+        // Show last N lines
+        const numLines = parseInt(options.lines || '50', 10);
+        const content = await readLastLines(logPath, numLines);
+
+        console.log(c.dim(`Log file: ${path.basename(logPath)}`));
+        console.log(c.dim(`Showing last ${numLines} lines\n`));
+        console.log(content);
+      }
+    } catch (error) {
+      const config = loadConfig();
+      const c = getThemedChalk(config);
+
+      if (error instanceof Error && error.message.includes('Invalid story ID')) {
+        console.log(c.error(`Invalid story ID: ${storyId}`));
+        console.log(c.dim('  Story IDs cannot contain path traversal sequences or separators'));
+      } else {
+        console.log(c.error(`Error viewing logs: ${error instanceof Error ? error.message : String(error)}`));
+      }
+      process.exit(1);
     }
   });
 

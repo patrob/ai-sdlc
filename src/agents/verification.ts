@@ -193,18 +193,7 @@ export async function verifyImplementation(
     }
   }
 
-  if (options.runTests) {
-    testsRan = true;
-    const testResult = await options.runTests(workingDir, testTimeout);
-    testsPassed = testResult.success;
-    testsOutput = testResult.output;
-  } else if (config.testCommand) {
-    testsRan = true;
-    const testResult = await runCommandAsync(config.testCommand, workingDir, testTimeout);
-    testsPassed = testResult.success;
-    testsOutput = testResult.output;
-  }
-
+  // Run build first - tests require successful compilation
   if (options.runBuild) {
     buildRan = true;
     const buildResult = await options.runBuild(workingDir, buildTimeout);
@@ -215,6 +204,30 @@ export async function verifyImplementation(
     const buildResult = await runCommandAsync(config.buildCommand, workingDir, buildTimeout);
     buildPassed = buildResult.success;
     buildOutput = buildResult.output;
+  }
+
+  // Short-circuit: Don't run tests if build failed
+  if (buildRan && !buildPassed) {
+    return {
+      passed: false,
+      failures: 0,
+      timestamp,
+      testsOutput: 'Build failed - skipping tests. Fix TypeScript errors first.',
+      buildOutput,
+    };
+  }
+
+  // Run tests only after successful build (or when no build command exists)
+  if (options.runTests) {
+    testsRan = true;
+    const testResult = await options.runTests(workingDir, testTimeout);
+    testsPassed = testResult.success;
+    testsOutput = testResult.output;
+  } else if (config.testCommand) {
+    testsRan = true;
+    const testResult = await runCommandAsync(config.testCommand, workingDir, testTimeout);
+    testsPassed = testResult.success;
+    testsOutput = testResult.output;
   }
 
   const failures = testsPassed ? 0 : extractFailureCount(testsOutput);

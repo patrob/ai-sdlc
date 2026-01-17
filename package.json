@@ -62,6 +62,7 @@
   },
   "devDependencies": {
     "@types/chokidar": "^2.1.7",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.0.0",
     "@types/proper-lockfile": "^4.1.4",
     "@types/write-file-atomic": "^4.0.3",

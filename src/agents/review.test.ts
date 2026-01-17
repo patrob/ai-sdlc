@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
-import { runReviewAgent, validateTDDCycles, generateTDDIssues, generateReviewSummary, removeUnfinishedCheckboxes, getStoryFileURL, formatPRDescription, truncatePRBody, createPullRequest, getSourceCodeChanges, deriveIndividualPassFailFromPerspectives } from './review.js';
+import { runReviewAgent, validateTDDCycles, generateTDDIssues, generateReviewSummary, removeUnfinishedCheckboxes, getStoryFileURL, formatPRDescription, truncatePRBody, createPullRequest, getSourceCodeChanges, deriveIndividualPassFailFromPerspectives, hasTestFiles } from './review.js';
 import * as storyModule from '../core/story.js';
 import * as clientModule from '../core/client.js';
 import * as configModule from '../core/config.js';
@@ -100,6 +100,16 @@ describe('Review Agent - Pre-check Optimization', () => {
 
   describe('when tests fail', () => {
     it('should return immediately with BLOCKER without running LLM reviews', async () => {
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/example.ts\ntests/example.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
       // Mock spawn to simulate failed test execution
       const mockSpawn = vi.mocked(spawn);
       let callCount = 0;
@@ -161,6 +171,16 @@ describe('Review Agent - Pre-check Optimization', () => {
     it('should include test failure output in BLOCKER issue', async () => {
       const testOutput = 'FAIL tests/example.test.ts\n  ✗ example test failed\n    Expected: true\n    Received: false\n';
 
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/example.ts\ntests/example.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
       const mockSpawn = vi.mocked(spawn);
       mockSpawn.mockImplementation(((command: string, args: string[]) => {
         const isTestCommand = args.includes('test');
@@ -200,6 +220,16 @@ describe('Review Agent - Pre-check Optimization', () => {
       // Generate large test output (>10KB)
       const largeOutput = 'Failed test output\n'.repeat(1000); // ~18KB
 
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/example.ts\ntests/example.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
       const mockSpawn = vi.mocked(spawn);
       mockSpawn.mockImplementation(((command: string, args: string[]) => {
         const isTestCommand = args.includes('test');
@@ -238,6 +268,16 @@ describe('Review Agent - Pre-check Optimization', () => {
     });
 
     it('should block review when build fails even if tests pass', async () => {
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/example.ts\ntests/example.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
       const mockSpawn = vi.mocked(spawn);
       let callCount = 0;
 
@@ -279,6 +319,16 @@ describe('Review Agent - Pre-check Optimization', () => {
 
   describe('when tests pass', () => {
     it('should proceed with code/security/PO reviews', async () => {
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/example.ts\ntests/example.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
       // Mock spawn to simulate successful test execution
       const mockSpawn = vi.mocked(spawn);
       mockSpawn.mockImplementation((() => {
@@ -313,6 +363,16 @@ describe('Review Agent - Pre-check Optimization', () => {
     });
 
     it('should include test success in changesMade', async () => {
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/example.ts\ntests/example.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
       const mockSpawn = vi.mocked(spawn);
       mockSpawn.mockImplementation((() => {
         const mockProcess: any = {
@@ -347,6 +407,17 @@ describe('Review Agent - Pre-check Optimization', () => {
     it('should handle null line values in LLM response gracefully', async () => {
       // This test reproduces the ZodError: "Invalid input: expected number, received null"
       // at path ["issues", 3, "line"] when the LLM returns null for optional fields
+
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/index.ts\nsrc/index.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
       const mockSpawn = vi.mocked(spawn);
       mockSpawn.mockImplementation((() => {
         const mockProcess: any = {
@@ -423,6 +494,16 @@ describe('Review Agent - Pre-check Optimization', () => {
     });
 
     it('should handle empty test output gracefully', async () => {
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/example.ts\ntests/example.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
       const mockSpawn = vi.mocked(spawn);
       mockSpawn.mockImplementation(((command: string, args: string[]) => {
         const isTestCommand = args.includes('test');
@@ -461,6 +542,16 @@ describe('Review Agent - Pre-check Optimization', () => {
     });
 
     it('should handle both build and test failures', async () => {
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/example.ts\ntests/example.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
       const mockSpawn = vi.mocked(spawn);
       mockSpawn.mockImplementation((() => {
         const mockProcess: any = {
@@ -489,6 +580,246 @@ describe('Review Agent - Pre-check Optimization', () => {
       expect(result.issues.length).toBeGreaterThanOrEqual(2);
       expect(result.issues.some(issue => issue.category === 'build')).toBe(true);
       expect(result.issues.some(issue => issue.category === 'testing')).toBe(true);
+    });
+  });
+
+  // NOTE: This test suite is intentionally nested inside 'Review Agent - Pre-check Optimization'
+  // to inherit the beforeEach mock setup (parseStory, loadConfig, fs mocks).
+  // This is a DISTINCT feature from the optimization tests, but requires the same mock setup.
+  describe('Test Alignment Pre-check', () => {
+    it('should detect test alignment issues when tests pass but verify old behavior', async () => {
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/config.ts\nsrc/config.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
+      // Mock build and tests passing (exit 0)
+      const mockSpawn = vi.mocked(spawn);
+      mockSpawn.mockImplementation((() => {
+        const mockProcess: any = {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn((event, callback) => {
+            if (event === 'close') {
+              // Both build and tests pass
+              setTimeout(() => callback(0), 10);
+            }
+          }),
+        };
+
+        setTimeout(() => {
+          const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+          if (stdoutCallback) {
+            stdoutCallback(Buffer.from('Test Suites: 5 passed, 5 total\nTests:       12 passed, 12 total\n'));
+          }
+        }, 5);
+
+        return mockProcess;
+      }) as any);
+
+      // Mock LLM to detect test alignment issue
+      const llmResponse = JSON.stringify({
+        passed: false,
+        issues: [
+          {
+            severity: 'blocker',
+            category: 'test_alignment',
+            description: 'Test file src/core/config.test.ts expects synchronous behavior but production code is now async.\n\nThe test calls `loadConfig()` without await, expecting immediate return.\n\nProduction code signature changed to: `async function loadConfig(): Promise<Config>`',
+            file: 'src/core/config.test.ts',
+            line: 42,
+            suggestedFix: 'Update test to: `const config = await loadConfig();` and mark test function as async.',
+            perspectives: ['code'],
+          },
+        ],
+      });
+
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue(llmResponse);
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Verify: REJECTED with BLOCKER severity
+      expect(result.success).toBe(true); // Agent executed successfully
+      expect(result.passed).toBe(false); // Review did not pass
+      expect(result.decision).toBe(ReviewDecision.REJECTED);
+      expect(result.issues).toHaveLength(1);
+      expect(result.issues[0].severity).toBe('blocker');
+      expect(result.issues[0].category).toBe('test_alignment');
+      expect(result.issues[0].description).toContain('synchronous behavior but production code is now async');
+      expect(result.issues[0].file).toBe('src/core/config.test.ts');
+    });
+
+    it('should include specific misalignment details in rejection feedback', async () => {
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/research.ts\nsrc/research.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
+      // Mock passing tests
+      const mockSpawn = vi.mocked(spawn);
+      mockSpawn.mockImplementation((() => {
+        const mockProcess: any = {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn((event, callback) => {
+            if (event === 'close') {
+              setTimeout(() => callback(0), 10);
+            }
+          }),
+        };
+        setTimeout(() => {
+          const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+          if (stdoutCallback) {
+            stdoutCallback(Buffer.from('Tests passed\n'));
+          }
+        }, 5);
+        return mockProcess;
+      }) as any);
+
+      // Mock LLM detecting alignment issue with detailed feedback
+      const llmResponse = JSON.stringify({
+        passed: false,
+        issues: [
+          {
+            severity: 'blocker',
+            category: 'test_alignment',
+            description: 'Test file src/agents/research.test.ts verifies OLD behavior.\n\nOLD: function returned string\nNEW: function returns Promise<string>\n\nTest assertion: expect(result).toBe("value") - this checks a Promise object, not the resolved value.',
+            file: 'src/agents/research.test.ts',
+            suggestedFix: 'Change to: const result = await myFunction(); expect(result).toBe("value");',
+            perspectives: ['code'],
+          },
+        ],
+      });
+
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue(llmResponse);
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Verify feedback includes: test file name, old vs new behavior, suggested fix
+      expect(result.issues[0].description).toContain('src/agents/research.test.ts');
+      expect(result.issues[0].description).toContain('OLD:');
+      expect(result.issues[0].description).toContain('NEW:');
+      expect(result.issues[0].suggestedFix).toContain('await');
+      expect(result.feedback).toContain('test_alignment');
+    });
+
+    it('should distinguish test failure from test misalignment', async () => {
+      // Scenario A: Tests FAIL (exit code 1) - already tested elsewhere
+      // Scenario B: Tests PASS but misaligned - this test
+
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/feature.ts\nsrc/feature.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
+      const mockSpawn = vi.mocked(spawn);
+      mockSpawn.mockImplementation((() => {
+        const mockProcess: any = {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn((event, callback) => {
+            if (event === 'close') {
+              setTimeout(() => callback(0), 10); // Tests PASS
+            }
+          }),
+        };
+        setTimeout(() => {
+          const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+          if (stdoutCallback) {
+            stdoutCallback(Buffer.from('All tests passed\n'));
+          }
+        }, 5);
+        return mockProcess;
+      }) as any);
+
+      // LLM detects misalignment
+      const llmResponse = JSON.stringify({
+        passed: false,
+        issues: [
+          {
+            severity: 'blocker',
+            category: 'test_alignment', // NOT 'testing'
+            description: 'Tests pass but verify wrong behavior',
+            perspectives: ['code'],
+          },
+        ],
+      });
+
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue(llmResponse);
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Verify: category is 'test_alignment', NOT 'testing'
+      expect(result.issues[0].category).toBe('test_alignment');
+      expect(result.issues[0].category).not.toBe('testing');
+
+      // Verify: LLM was called (because tests passed, just misaligned)
+      expect(clientModule.runAgentQuery).toHaveBeenCalled();
+    });
+
+    it('should proceed with review when tests pass and align', async () => {
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/utils.ts\nsrc/utils.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
+      // Mock passing tests
+      const mockSpawn = vi.mocked(spawn);
+      mockSpawn.mockImplementation((() => {
+        const mockProcess: any = {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn((event, callback) => {
+            if (event === 'close') {
+              setTimeout(() => callback(0), 10);
+            }
+          }),
+        };
+        setTimeout(() => {
+          const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
+          if (stdoutCallback) {
+            stdoutCallback(Buffer.from('Tests passed\n'));
+          }
+        }, 5);
+        return mockProcess;
+      }) as any);
+
+      // LLM finds no alignment issues
+      const llmResponse = JSON.stringify({
+        passed: true,
+        issues: [], // No issues at all
+      });
+
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue(llmResponse);
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Verify: Review proceeds normally (no early return)
+      expect(result.passed).toBe(true);
+      expect(result.decision).toBe(ReviewDecision.APPROVED);
+      // Verify: No test_alignment issues created
+      expect(result.issues.filter(i => i.category === 'test_alignment')).toHaveLength(0);
+      // Verify: LLM review WAS called
+      expect(clientModule.runAgentQuery).toHaveBeenCalled();
     });
   });
 });
@@ -723,6 +1054,16 @@ describe('TDD Validation', () => {
 
       vi.mocked(storyModule.parseStory).mockReturnValue(mockStoryWithTDD as any);
 
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/feature.ts\nsrc/feature.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
       // Mock spawn to simulate successful build/test
       const mockSpawn = vi.mocked(spawn);
       mockSpawn.mockImplementation((() => {
@@ -783,6 +1124,16 @@ describe('TDD Validation', () => {
       };
 
       vi.mocked(storyModule.parseStory).mockReturnValue(mockStoryNoTDD as any);
+
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/feature.ts\nsrc/feature.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
 
       // Mock spawn to simulate successful build/test
       const mockSpawn = vi.mocked(spawn);
@@ -1948,13 +2299,13 @@ describe('Pre-check Gate Logic', () => {
     const { spawnSync } = await import('child_process');
     const { spawn } = await import('child_process');
 
-    // Mock git diff to return source files
+    // Mock git diff to return source files AND test files (required by hasTestFiles pre-check)
     vi.mocked(spawnSync).mockReturnValue({
       status: 0,
-      stdout: 'src/core/story.ts\nsrc/agents/review.ts\n',
+      stdout: 'src/core/story.ts\nsrc/agents/review.ts\nsrc/agents/review.test.ts\n',
       stderr: '',
       pid: 123,
-      output: ['', 'src/core/story.ts\nsrc/agents/review.ts\n', ''],
+      output: ['', 'src/core/story.ts\nsrc/agents/review.ts\nsrc/agents/review.test.ts\n', ''],
       signal: null,
     } as any);
 
@@ -2283,6 +2634,16 @@ describe('Unified Collaborative Review', () => {
     });
 
     it('should parse unified review response with perspectives', async () => {
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/feature.ts\nsrc/feature.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
       const mockSpawn = vi.mocked(spawn);
       mockSpawn.mockImplementation((() => {
         const mockProcess: any = {
@@ -2326,6 +2687,16 @@ describe('Unified Collaborative Review', () => {
     });
 
     it('should make only 1 LLM call for unified review', async () => {
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/feature.ts\nsrc/feature.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
       const mockSpawn = vi.mocked(spawn);
       mockSpawn.mockImplementation((() => {
         const mockProcess: any = {
@@ -2349,6 +2720,16 @@ describe('Unified Collaborative Review', () => {
     });
 
     it('should derive correct pass/fail for each perspective', async () => {
+      // Mock spawnSync (for hasTestFiles check) - tests exist
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/feature.ts\nsrc/feature.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
       const mockSpawn = vi.mocked(spawn);
       mockSpawn.mockImplementation((() => {
         const mockProcess: any = {
@@ -2387,6 +2768,233 @@ describe('Unified Collaborative Review', () => {
       expect(reviewAttempt.codeReviewPassed).toBe(true);
       expect(reviewAttempt.securityReviewPassed).toBe(false);
       expect(reviewAttempt.poReviewPassed).toBe(true);
+    });
+  });
+
+  describe('hasTestFiles helper', () => {
+    it('should detect test files with .test. pattern', () => {
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/config.ts\nsrc/config.test.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
+      const result = hasTestFiles('/test/project');
+      expect(result).toBe(true);
+    });
+
+    it('should detect test files with .spec. pattern', () => {
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/utils.ts\nsrc/utils.spec.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
+      const result = hasTestFiles('/test/project');
+      expect(result).toBe(true);
+    });
+
+    it('should detect test files in __tests__/ directory', () => {
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/feature.ts\n__tests__/feature.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
+      const result = hasTestFiles('/test/project');
+      expect(result).toBe(true);
+    });
+
+    it('should return false when no test files exist', () => {
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 0,
+        stdout: Buffer.from('src/calculator.ts\nsrc/utils.ts\n'),
+        stderr: Buffer.from(''),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
+      const result = hasTestFiles('/test/project');
+      expect(result).toBe(false);
+    });
+
+    it('should fail open (return true) when git command fails', () => {
+      vi.mocked(spawnSync).mockReturnValue({
+        status: 1,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from('git error'),
+        output: [],
+        pid: 1,
+        signal: null,
+      } as any);
+
+      const result = hasTestFiles('/test/project');
+      // Should fail open to avoid false blocks
+      expect(result).toBe(true);
+    });
+  });
+
+  describe('missing tests blocker', () => {
+    const mockStoryPath = '/test/stories/test-story.md';
+    const mockWorkingDir = '/test/project';
+
+    const mockStory = {
+      path: mockStoryPath,
+      slug: 'test-story',
+      frontmatter: {
+        id: 'test-1',
+        title: 'Test Story',
+        priority: 1,
+        status: 'in-progress' as const,
+        type: 'feature' as const,
+        created: '2024-01-01',
+        labels: [],
+        research_complete: true,
+        plan_complete: true,
+        implementation_complete: true,
+        reviews_complete: false,
+      },
+      content: '# Test Story\n\nContent',
+    };
+
+    const mockConfig: Config = {
+      sdlcFolder: '/test/sdlc',
+      stageGates: {
+        requireApprovalBeforeImplementation: false,
+        requireApprovalBeforePR: false,
+        autoMergeOnApproval: false,
+      },
+      refinement: {
+        maxIterations: 3,
+        escalateOnMaxAttempts: 'error',
+        enableCircuitBreaker: true,
+      },
+      reviewConfig: {
+        maxRetries: 3,
+        maxRetriesUpperBound: 10,
+        autoCompleteOnApproval: true,
+        autoRestartOnRejection: true,
+      },
+      defaultLabels: [],
+      theme: 'auto',
+      testCommand: 'npm test',
+      buildCommand: 'npm run build',
+      timeouts: {
+        agentTimeout: 600000,
+        buildTimeout: 120000,
+        testTimeout: 300000,
+      },
+    };
+
+    beforeEach(() => {
+      vi.resetAllMocks();
+      vi.mocked(storyModule.parseStory).mockReturnValue(mockStory);
+      vi.mocked(configModule.loadConfig).mockReturnValue(mockConfig);
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as fs.Stats);
+    });
+
+    it('should block review when no test files exist in implementation', async () => {
+      // Mock git diff to show source changes but no test files
+      vi.mocked(spawnSync).mockImplementation((cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'diff') {
+          const stdout = args?.includes('HEAD~1')
+            ? 'src/calculator.ts\nsrc/utils.ts\n'  // Source files only, no tests
+            : '';
+          return {
+            status: 0,
+            stdout: Buffer.from(stdout),
+            stderr: Buffer.from(''),
+            output: [],
+            pid: 1,
+            signal: null,
+          } as any;
+        }
+        return {
+          status: 0,
+          stdout: Buffer.from(''),
+          stderr: Buffer.from(''),
+          output: [],
+          pid: 1,
+          signal: null,
+        } as any;
+      });
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Should reject with blocker
+      expect(result.decision).toBe(ReviewDecision.REJECTED);
+      expect(result.severity).toBe(ReviewSeverity.CRITICAL);
+
+      // Should have testing category blocker
+      const noTestsIssue = result.issues.find(i =>
+        i.category === 'testing' && i.description.includes('No tests found')
+      );
+      expect(noTestsIssue).toBeDefined();
+      expect(noTestsIssue?.severity).toBe('blocker');
+      expect(noTestsIssue?.suggestedFix).toContain('Add test files');
+    });
+
+    it('should proceed with review when test files exist', async () => {
+      // Mock git diff to show both source and test files
+      vi.mocked(spawnSync).mockImplementation((cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'diff') {
+          const stdout = args?.includes('HEAD~1')
+            ? 'src/calculator.ts\nsrc/calculator.test.ts\n'  // Source + test files
+            : '';
+          return {
+            status: 0,
+            stdout: Buffer.from(stdout),
+            stderr: Buffer.from(''),
+            output: [],
+            pid: 1,
+            signal: null,
+          } as any;
+        }
+        return {
+          status: 0,
+          stdout: Buffer.from(''),
+          stderr: Buffer.from(''),
+          output: [],
+          pid: 1,
+          signal: null,
+        } as any;
+      });
+
+      // Mock spawn for build/test execution
+      vi.mocked(spawn).mockImplementation((() => {
+        const mockProcess: any = {
+          stdout: { on: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn((event, callback) => {
+            if (event === 'close') {
+              setTimeout(() => callback(0), 10); // Pass
+            }
+          }),
+        };
+        return mockProcess;
+      }) as any);
+
+      // Mock LLM response
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue('{"passed": true, "issues": []}');
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Should not have "No tests found" blocker
+      const noTestsIssue = result.issues.find(i =>
+        i.description.includes('No tests found')
+      );
+      expect(noTestsIssue).toBeUndefined();
     });
   });
 });

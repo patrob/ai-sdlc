@@ -1014,6 +1014,50 @@ export async function runImplementationAgent(
     const config = loadConfig(workingDir);
     const tddEnabled = story.frontmatter.tdd_enabled ?? config.tdd?.enabled ?? false;
 
+    // Check if orchestrator is enabled
+    if (config.useOrchestrator && !tddEnabled) {
+      changesMade.push('Using sequential task orchestrator for implementation');
+
+      const { runImplementationOrchestrator } = await import('./orchestrator.js');
+
+      const orchestratorResult = await runImplementationOrchestrator(
+        currentStoryPath,
+        sdlcRoot,
+        {
+          maxRetriesPerTask: config.implementation.maxRetries,
+          commitAfterEachTask: true,
+          stopOnFirstFailure: true,
+        }
+      );
+
+      if (!orchestratorResult.success) {
+        // Orchestration failed
+        const errorDetails = orchestratorResult.failedTasks
+          .map((ft) => `  - ${ft.taskId}: ${ft.error} (${ft.attempts} attempts)`)
+          .join('\n');
+
+        return {
+          success: false,
+          story: parseStory(currentStoryPath),
+          changesMade,
+          error: `Implementation orchestration failed:\n${errorDetails}\n\nCompleted: ${orchestratorResult.tasksCompleted}, Failed: ${orchestratorResult.tasksFailed}, Remaining: ${orchestratorResult.tasksRemaining}`,
+        };
+      }
+
+      // Orchestration succeeded - mark implementation complete
+      await updateStoryField(story, 'implementation_complete', true);
+      changesMade.push('Marked implementation_complete: true');
+      changesMade.push(
+        `Orchestration complete: ${orchestratorResult.tasksCompleted} tasks completed in ${orchestratorResult.totalAgentInvocations} agent invocations`
+      );
+
+      return {
+        success: true,
+        story: parseStory(currentStoryPath),
+        changesMade,
+      };
+    }
+
     if (tddEnabled) {
       changesMade.push('TDD mode enabled - using Red-Green-Refactor implementation');
 

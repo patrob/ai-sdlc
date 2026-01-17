@@ -2,7 +2,7 @@
 id: S-0004
 title: End-to-end smoke test for complete workflow
 priority: 28
-status: in-progress
+status: done
 type: chore
 created: '2026-01-13'
 labels:
@@ -12,8 +12,8 @@ labels:
   - s
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 slug: end-to-end-workflow-smoke-test
 worktree_path: >-
   /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0004-end-to-end-workflow-smoke-test
@@ -24,6 +24,8 @@ last_test_run:
   failures: 0
   timestamp: '2026-01-16T22:35:05.976Z'
 implementation_retry_count: 0
+max_retries: 3
+last_restart_reason: No source code changes detected. Implementation wrote documentation only.
 ---
 # End-to-end smoke test for complete workflow
 

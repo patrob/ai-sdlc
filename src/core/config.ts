@@ -102,6 +102,8 @@ export const DEFAULT_CONFIG: Config = {
   worktree: { ...DEFAULT_WORKTREE_CONFIG },
   // Logging configuration
   logging: { ...DEFAULT_LOGGING_CONFIG },
+  // Orchestrator configuration
+  useOrchestrator: false,
 };
 
 /**

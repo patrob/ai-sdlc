@@ -5,7 +5,7 @@ import path from 'path';
 import * as readline from 'readline';
 import { getSdlcRoot, loadConfig, initConfig, validateWorktreeBasePath, DEFAULT_WORKTREE_CONFIG } from '../core/config.js';
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoriesByStatus } from '../core/kanban.js';
-import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId } from '../core/story.js';
+import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId, autoCompleteStoryAfterReview } from '../core/story.js';
 import { GitWorktreeService } from '../core/worktree.js';
 import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext, WorktreeInfo, PreFlightResult } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
@@ -1435,6 +1435,24 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
             }
           },
         });
+
+        // Auto-complete story if review was approved
+        if (result && result.success) {
+          const reviewResult = result as ReviewResult;
+          let story = parseStory(action.storyPath);
+          story = await autoCompleteStoryAfterReview(story, config, reviewResult);
+
+          // Log auto-completion if it occurred
+          if (reviewResult.decision === ReviewDecision.APPROVED && config.reviewConfig.autoCompleteOnApproval) {
+            spinner.text = c.success('Review approved - auto-completing story');
+            storyLogger?.log('INFO', `Story auto-completed after review approval: "${story.frontmatter.title}"`);
+
+            // Handle worktree cleanup if story has a worktree
+            if (story.frontmatter.worktree_path) {
+              await handleWorktreeCleanup(story, config, c);
+            }
+          }
+        }
         break;
 
       case 'rework':

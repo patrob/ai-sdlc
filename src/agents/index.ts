@@ -12,3 +12,9 @@ export {
   verifyChanges,
   detectScopeViolation,
 } from './single-task.js';
+export {
+  runImplementationOrchestrator,
+  buildTaskContext,
+  evaluateTaskResult,
+  getNextTask,
+} from './orchestrator.js';

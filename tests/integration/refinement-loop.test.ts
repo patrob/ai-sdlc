@@ -7,7 +7,7 @@ import { assessState } from '../../src/core/kanban.js';
 import { runReworkAgent } from '../../src/agents/rework.js';
 import { runReviewAgent } from '../../src/agents/review.js';
 import { ReviewDecision, ReviewSeverity, ReviewResult, STORIES_FOLDER } from '../../src/types/index.js';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 
 // Mock child_process for test execution simulation
 vi.mock('child_process');
@@ -15,6 +15,22 @@ vi.mock('child_process');
 vi.mock('../../src/core/client.js', () => ({
   runAgentQuery: vi.fn(),
 }));
+
+/**
+ * Helper to create a spawnSync mock return value that simulates git diff output
+ * This is needed because runReviewAgent calls getSourceCodeChanges and hasTestFiles
+ * which use spawnSync to check git status before running build/tests.
+ */
+function mockSpawnSyncWithFiles(files: string[]) {
+  return {
+    status: 0,
+    stdout: Buffer.from(files.join('\n') + '\n'),
+    stderr: Buffer.from(''),
+    output: [],
+    pid: 1,
+    signal: null,
+  } as any;
+}
 
 describe.sequential('Refinement Loop Integration', () => {
   let testDir: string;
@@ -372,6 +388,12 @@ describe.sequential('Review Agent Pre-check Integration', () => {
     story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
+    // Mock spawnSync for pre-checks (getSourceCodeChanges and hasTestFiles)
+    vi.mocked(spawnSync).mockReturnValue(mockSpawnSyncWithFiles([
+      'src/example.ts',
+      'src/example.test.ts',
+    ]));
+
     // Mock spawn to simulate failed test execution
     const mockSpawn = vi.mocked(spawn);
     mockSpawn.mockImplementation(((command: string, args: string[]) => {
@@ -432,6 +454,13 @@ describe.sequential('Review Agent Pre-check Integration', () => {
     story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
 
+    // Mock spawnSync for pre-checks (getSourceCodeChanges and hasTestFiles)
+    // These are called BEFORE the build/test commands
+    vi.mocked(spawnSync).mockReturnValue(mockSpawnSyncWithFiles([
+      'src/feature.ts',
+      'src/feature.test.ts',
+    ]));
+
     // Mock spawn to simulate successful test execution
     const mockSpawn = vi.mocked(spawn);
     mockSpawn.mockImplementation((() => {
@@ -455,9 +484,9 @@ describe.sequential('Review Agent Pre-check Integration', () => {
       return mockProcess;
     }) as any);
 
-    // Mock LLM to return approval
+    // Mock LLM to return approval - set up BEFORE calling runReviewAgent
     const { runAgentQuery } = await import('../../src/core/client.js');
-    vi.mocked(runAgentQuery).mockResolvedValue('APPROVED\n\nNo issues found.');
+    vi.mocked(runAgentQuery).mockResolvedValue('{"passed": true, "issues": []}');
 
     // Execute review
     const result = await runReviewAgent(story.path, testDir);
@@ -475,6 +504,12 @@ describe.sequential('Review Agent Pre-check Integration', () => {
     let story = await createStory('Feature with Verbose Test Failure', sdlcRoot);
     story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
+
+    // Mock spawnSync for pre-checks
+    vi.mocked(spawnSync).mockReturnValue(mockSpawnSyncWithFiles([
+      'src/verbose.ts',
+      'src/verbose.test.ts',
+    ]));
 
     // Mock spawn to return very large test output (>10KB)
     const largeOutput = 'FAIL test output\n'.repeat(1000); // ~18KB
@@ -521,6 +556,12 @@ describe.sequential('Review Agent Pre-check Integration', () => {
     let story = await createStory('Feature with Hanging Tests', sdlcRoot);
     story = await updateStoryStatus(story, 'in-progress');
     story.frontmatter.implementation_complete = true;
+
+    // Mock spawnSync for pre-checks
+    vi.mocked(spawnSync).mockReturnValue(mockSpawnSyncWithFiles([
+      'src/hanging.ts',
+      'src/hanging.test.ts',
+    ]));
 
     // Mock spawn to simulate timeout scenario
     const mockSpawn = vi.mocked(spawn);

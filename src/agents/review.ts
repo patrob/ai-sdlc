@@ -747,6 +747,44 @@ export function getSourceCodeChanges(workingDir: string): string[] {
 }
 
 /**
+ * Check if test files exist in git diff
+ *
+ * Returns true if any test files have been modified/added, false otherwise.
+ * Uses spawnSync for security (prevents command injection).
+ *
+ * @param workingDir - Working directory to run git diff in
+ * @returns True if test files exist in changes, false otherwise
+ */
+export function hasTestFiles(workingDir: string): boolean {
+  try {
+    // Security: Use spawnSync with explicit args (not shell) to prevent injection
+    const result = spawnSync('git', ['diff', '--name-only', 'HEAD~1'], {
+      cwd: workingDir,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (result.status !== 0) {
+      // Git command failed - fail open (assume tests exist to avoid false blocks)
+      return true;
+    }
+
+    const output = result.stdout.toString();
+    const files = output.split('\n').filter(f => f.trim());
+
+    // Check if any files match test patterns
+    return files.some(f =>
+      f.includes('.test.') ||
+      f.includes('.spec.') ||
+      f.includes('__tests__/')
+    );
+  } catch {
+    // If git diff fails, assume tests exist (fail open, not closed)
+    return true;
+  }
+}
+
+/**
  * Generate executive summary from review issues (1-3 sentences)
  *
  * Prioritizes by severity: blocker > critical > major > minor
@@ -1006,6 +1044,36 @@ export async function runReviewAgent(
       fileCount: sourceChanges.length,
     });
 
+    // PRE-CHECK GATE: Check if test files exist
+    const testsExist = hasTestFiles(workingDir);
+    if (!testsExist) {
+      logger.warn('review', 'No test files detected in implementation changes', {
+        storyId: story.frontmatter.id,
+      });
+
+      return {
+        success: true,
+        story: parseStory(storyPath),
+        changesMade: ['No test files found for implementation'],
+        passed: false,
+        decision: ReviewDecision.REJECTED,
+        severity: ReviewSeverity.CRITICAL,
+        reviewType: 'pre-check' as any,
+        issues: [{
+          severity: 'blocker',
+          category: 'testing',
+          description: 'No tests found for this implementation. All implementations must include tests.',
+          suggestedFix: 'Add test files (*.test.ts, *.spec.ts, or files in __tests__/ directory) that verify the implementation.',
+        }],
+        feedback: formatIssuesForDisplay([{
+          severity: 'blocker',
+          category: 'testing',
+          description: 'No tests found for this implementation. All implementations must include tests.',
+          suggestedFix: 'Add test files (*.test.ts, *.spec.ts, or files in __tests__/ directory) that verify the implementation.',
+        }]),
+      };
+    }
+
     // Run build and tests BEFORE reviews (async with progress)
     changesMade.push('Running build and test verification...');
     const verification = await runVerificationAsync(workingDir, config, options?.onVerificationProgress);
@@ -1055,7 +1123,7 @@ export async function runReviewAgent(
           severity: 'blocker',
           category: 'testing',
           description: `Tests must pass before code review can proceed.\n\nCommand: ${config.testCommand}\n\nTest output:\n\`\`\`\n${testOutput}${truncationNote}\n\`\`\``,
-          suggestedFix: 'Fix failing tests before review can proceed.',
+          suggestedFix: 'Fix failing tests before review can proceed. If tests are failing after implementation changes, verify that tests were updated to match the new behavior (not just the old behavior).',
         });
         verificationContext += `\n## Test Results ❌\nTest command \`${config.testCommand}\` FAILED:\n\`\`\`\n${testOutput}${truncationNote}\n\`\`\`\n`;
       }

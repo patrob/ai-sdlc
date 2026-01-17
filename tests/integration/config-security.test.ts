@@ -89,7 +89,7 @@ describe('Configuration Security Tests', () => {
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Invalid settingSources in config (must be array)')
       );
-      expect(config.settingSources).toEqual([]); // Default
+      expect(config.settingSources).toEqual(['project']); // Default from DEFAULT_CONFIG
     });
 
     it('should filter invalid settingSources values', () => {

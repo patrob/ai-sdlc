@@ -69,9 +69,10 @@ const { mockExecSync, mockSpawnSync, mockSpawn, capturedGhCommand, testDirRef, i
     if (command === 'git' && args && args[0] === 'diff' && args[1] === '--name-only' && args[2] === 'HEAD~1') {
       // Return mock source code changes - the implementation mock creates these files
       // and they get committed, so we simulate what git diff would show
+      // Include test files to satisfy test-alignment pre-check (S-0018)
       return {
         status: 0,
-        stdout: 'src/executor.ts\nsrc/validator.ts\n',
+        stdout: 'src/executor.ts\nsrc/validator.ts\nsrc/executor.test.ts\nsrc/validator.test.ts\n',
         stderr: '',
       };
     }
@@ -256,10 +257,39 @@ describe.sequential('End-to-end Workflow Smoke Test', () => {
           '// E2E test validation\nexport function validate() { return true; }\n'
         );
 
+        // Create test files to satisfy test-alignment pre-check (S-0018)
+        const executorTestPath = path.join(testDir, 'src', 'executor.test.ts');
+        fs.writeFileSync(
+          executorTestPath,
+          `import { describe, it, expect } from 'vitest';
+import { execute } from './executor';
+
+describe('executor', () => {
+  it('should execute', () => {
+    expect(execute()).toBe(true);
+  });
+});
+`
+        );
+
+        const validatorTestPath = path.join(testDir, 'src', 'validator.test.ts');
+        fs.writeFileSync(
+          validatorTestPath,
+          `import { describe, it, expect } from 'vitest';
+import { validate } from './validator';
+
+describe('validator', () => {
+  it('should validate', () => {
+    expect(validate()).toBe(true);
+  });
+});
+`
+        );
+
         // Track that implementation has happened (for potential future use)
         implementationDone.value = true;
 
-        return 'Implementation complete. Created executor.ts and validator.ts modules.';
+        return 'Implementation complete. Created executor.ts and validator.ts modules with tests.';
       }
 
       // Review phase - check early because review prompts start with "Review"
@@ -430,6 +460,9 @@ labels: test, e2e
     // Verify implementation files were created
     expect(fs.existsSync(path.join(testDir, 'src', 'executor.ts'))).toBe(true);
     expect(fs.existsSync(path.join(testDir, 'src', 'validator.ts'))).toBe(true);
+    // Verify test files were created (required by test-alignment pre-check S-0018)
+    expect(fs.existsSync(path.join(testDir, 'src', 'executor.test.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(testDir, 'src', 'validator.test.ts'))).toBe(true);
   }, 30000); // 30 second timeout
 
   it('should handle phase transitions correctly', async () => {

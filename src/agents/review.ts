@@ -6,6 +6,7 @@ import { parseStory, writeStory, updateStoryStatus, appendToSection, updateStory
 import { runAgentQuery } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from '../core/config.js';
+import { extractStructuredResponseSync } from '../core/llm-utils.js';
 import { Story, AgentResult, ReviewResult, ReviewIssue, ReviewIssueSeverity, ReviewDecision, ReviewSeverity, ReviewAttempt, Config, TDDTestCycle } from '../types/index.js';
 import { sanitizeInput, truncateText } from '../cli/formatting.js';
 import { detectTestDuplicationPatterns } from './test-pattern-detector.js';
@@ -447,30 +448,28 @@ ${REVIEW_OUTPUT_FORMAT}`;
 
 /**
  * Parse review response and extract structured issues
+ * Uses extractStructuredResponseSync for robust parsing with multiple strategies:
+ * 1. Direct JSON parse
+ * 2. JSON within markdown code blocks
+ * 3. JSON with leading/trailing text stripped
+ * 4. YAML format fallback
+ *
  * Security: Uses zod schema validation to prevent malicious JSON
  */
 function parseReviewResponse(response: string, reviewType: string): { passed: boolean; issues: ReviewIssue[] } {
-  try {
-    // Try to extract JSON from the response
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      // Fallback: no JSON found, analyze text
-      return parseTextReview(response, reviewType);
-    }
+  const logger = getLogger();
 
-    const parsed = JSON.parse(jsonMatch[0]);
+  // Use the robust extraction utility with all strategies
+  const extractionResult = extractStructuredResponseSync(response, ReviewResponseSchema, false);
 
-    // Security: Validate against zod schema before using the data
-    const validationResult = ReviewResponseSchema.safeParse(parsed);
+  if (extractionResult.success && extractionResult.data) {
+    const validated = extractionResult.data;
 
-    if (!validationResult.success) {
-      // Log validation errors for debugging
-      console.warn('Review response failed schema validation:', validationResult.error);
-      // Fallback to text analysis
-      return parseTextReview(response, reviewType);
-    }
-
-    const validated = validationResult.data;
+    logger.debug('review', `Successfully parsed review response using strategy: ${extractionResult.strategy}`, {
+      reviewType,
+      strategy: extractionResult.strategy,
+      issueCount: validated.issues.length,
+    });
 
     // Map validated data to ReviewIssue format (additional sanitization)
     const issues: ReviewIssue[] = validated.issues.map((issue) => ({
@@ -487,11 +486,16 @@ function parseReviewResponse(response: string, reviewType: string): { passed: bo
       passed: validated.passed !== false && issues.filter(i => i.severity === 'blocker' || i.severity === 'critical').length === 0,
       issues,
     };
-  } catch (error) {
-    // Fallback to text analysis if JSON parsing fails
-    console.warn('Review response parsing error:', error);
-    return parseTextReview(response, reviewType);
   }
+
+  // All extraction strategies failed - log raw response for debugging and use text fallback
+  logger.warn('review', 'All extraction strategies failed for review response', {
+    reviewType,
+    error: extractionResult.error,
+    responsePreview: response.substring(0, 200),
+  });
+
+  return parseTextReview(response, reviewType);
 }
 
 /**

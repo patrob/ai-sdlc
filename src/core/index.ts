@@ -16,3 +16,4 @@ export * from './auth.js';
 export * from './client.js';
 export * from './workflow-state.js';
 export * from './task-progress.js';
+export * from './llm-utils.js';

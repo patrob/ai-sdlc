@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768602316258-4e6da5fc",
+  "timestamp": "2026-01-16T22:35:13.315Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0004",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0004-end-to-end-workflow-smoke-test/.ai-sdlc/stories/S-0004/story.md",
+      "completedAt": "2026-01-16T22:25:46.550Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0004",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0004-end-to-end-workflow-smoke-test/.ai-sdlc/stories/S-0004/story.md",
+      "completedAt": "2026-01-16T22:28:48.752Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0004",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0004-end-to-end-workflow-smoke-test/.ai-sdlc/stories/S-0004/story.md",
+      "completedAt": "2026-01-16T22:29:22.963Z"
+    },
+    {
+      "type": "implement",
+      "storyId": "S-0004",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0004-end-to-end-workflow-smoke-test/.ai-sdlc/stories/S-0004/story.md",
+      "completedAt": "2026-01-16T22:35:13.274Z"
+    },
+    {
+      "type": "review",
+      "storyId": "S-0004",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0004-end-to-end-workflow-smoke-test/.ai-sdlc/stories/S-0004/story.md",
+      "completedAt": "2026-01-16T22:35:13.315Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0004-end-to-end-workflow-smoke-test/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0004",
+      "fullSDLC": true
+    },
+    "storyContentHash": "e7827dd2d4bb9d76b1682900c8b9108e348b6bf7115cee832027be641082f44e"
+  }
+}

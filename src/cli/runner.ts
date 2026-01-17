@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { getSdlcRoot, loadConfig, isStageGateEnabled } from '../core/config.js';
 import { assessState, kanbanExists } from '../core/kanban.js';
-import { parseStory, resetRPIVCycle, markStoryComplete, updateStoryStatus, isAtMaxRetries, getStory, incrementImplementationRetryCount, updateStoryField } from '../core/story.js';
+import { parseStory, resetRPIVCycle, markStoryComplete, updateStoryStatus, isAtMaxRetries, getStory, incrementImplementationRetryCount, updateStoryField, autoCompleteStoryAfterReview } from '../core/story.js';
 import { Action, StateAssessment, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
 import { runRefinementAgent } from '../agents/refinement.js';
 import { runResearchAgent } from '../agents/research.js';
@@ -254,16 +254,11 @@ export class WorkflowRunner {
     let story = parseStory(storyPath);
 
     if (reviewResult.decision === ReviewDecision.APPROVED) {
-      // Auto-complete on approval
+      // Auto-complete on approval using shared helper
       if (config.reviewConfig.autoCompleteOnApproval) {
         console.log(c.success(`\n✅ Review approved! Auto-completing story "${story.frontmatter.title}"`));
-        await markStoryComplete(story);
-
-        // Update status to done if in in-progress
-        if (story.frontmatter.status === 'in-progress') {
-          story = await updateStoryStatus(story, 'done');
-          console.log(c.success(`Updated story status to done`));
-        }
+        story = await autoCompleteStoryAfterReview(story, config, reviewResult);
+        console.log(c.success(`Updated story status to done`));
       }
     } else if (reviewResult.decision === ReviewDecision.REJECTED) {
       // Auto-restart RPIV cycle on rejection

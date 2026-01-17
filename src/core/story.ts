@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import * as properLockfile from 'proper-lockfile';
-import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, DEFAULT_PRIORITY_GAP, LockOptions } from '../types/index.js';
+import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, DEFAULT_PRIORITY_GAP, LockOptions, ReviewResult, ReviewDecision } from '../types/index.js';
 
 /**
  * Parse a story markdown file into a Story object
@@ -707,6 +707,46 @@ export async function markStoryComplete(story: Story): Promise<Story> {
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
   await writeStory(story);
   return story;
+}
+
+/**
+ * Auto-complete story after review approval
+ * Handles marking story as complete and transitioning to done status
+ *
+ * @param story - The story to auto-complete
+ * @param config - The configuration containing reviewConfig settings
+ * @param reviewResult - The result from the review agent
+ * @returns Updated story if auto-completion occurred, original story otherwise
+ */
+export async function autoCompleteStoryAfterReview(
+  story: Story,
+  config: Config,
+  reviewResult: ReviewResult
+): Promise<Story> {
+  // Only auto-complete if review was approved and config allows it
+  if (reviewResult.decision !== ReviewDecision.APPROVED) {
+    return story;
+  }
+
+  if (!config.reviewConfig.autoCompleteOnApproval) {
+    return story;
+  }
+
+  try {
+    // Mark all workflow flags as complete
+    story = await markStoryComplete(story);
+
+    // Update status to done if currently in-progress
+    if (story.frontmatter.status === 'in-progress') {
+      story = await updateStoryStatus(story, 'done');
+    }
+
+    return story;
+  } catch (error) {
+    // Log error but don't fail the entire review operation
+    console.error('Failed to auto-complete story after review:', error);
+    return story;
+  }
 }
 
 /**

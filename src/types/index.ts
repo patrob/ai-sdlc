@@ -538,6 +538,12 @@ export interface Config {
    * Controls log file location, rotation, and verbosity.
    */
   logging?: LogConfig;
+  /**
+   * Enable sequential task orchestrator for implementation.
+   * When true, implementation runs as separate agents orchestrated sequentially.
+   * @default false
+   */
+  useOrchestrator?: boolean;
 }
 
 // Agent types
@@ -684,6 +690,50 @@ export interface AgentTaskResult {
   scopeViolation?: string[];
   /** Missing files or dependencies reported by agent */
   missingDependencies?: string[];
+}
+
+/**
+ * Information about a failed task in orchestration
+ */
+export interface FailedTaskInfo {
+  /** Task ID that failed */
+  taskId: string;
+  /** Error message explaining the failure */
+  error: string;
+  /** Number of attempts made before failure */
+  attempts: number;
+}
+
+/**
+ * Options for orchestrator execution
+ */
+export interface OrchestratorOptions {
+  /** Maximum retry attempts per task (default: 2) */
+  maxRetriesPerTask?: number;
+  /** Whether to commit after each successful task (default: true) */
+  commitAfterEachTask?: boolean;
+  /** Stop orchestration on first unrecoverable failure (default: true) */
+  stopOnFirstFailure?: boolean;
+  /** Dry run mode - log actions without executing (default: false) */
+  dryRun?: boolean;
+}
+
+/**
+ * Result from orchestrator execution
+ */
+export interface OrchestratorResult {
+  /** Overall success (all tasks completed) */
+  success: boolean;
+  /** Number of tasks successfully completed */
+  tasksCompleted: number;
+  /** Number of tasks that failed */
+  tasksFailed: number;
+  /** Number of tasks remaining (not attempted) */
+  tasksRemaining: number;
+  /** Details of failed tasks */
+  failedTasks: FailedTaskInfo[];
+  /** Total number of agent invocations (including retries) */
+  totalAgentInvocations: number;
 }
 
 // Export workflow state types

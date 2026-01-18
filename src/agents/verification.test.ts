@@ -55,13 +55,20 @@ describe('verifyImplementation', () => {
   });
 
   it('should return passed when tests and build both pass', async () => {
-    const mockRunTests = vi.fn().mockResolvedValue({
-      success: true,
-      output: 'All tests passed',
+    const callOrder: string[] = [];
+    const mockRunTests = vi.fn().mockImplementation(async () => {
+      callOrder.push('tests');
+      return {
+        success: true,
+        output: 'All tests passed',
+      };
     });
-    const mockRunBuild = vi.fn().mockResolvedValue({
-      success: true,
-      output: 'Build succeeded',
+    const mockRunBuild = vi.fn().mockImplementation(async () => {
+      callOrder.push('build');
+      return {
+        success: true,
+        output: 'Build succeeded',
+      };
     });
 
     const story = createMockStory();
@@ -75,6 +82,8 @@ describe('verifyImplementation', () => {
     expect(result.buildOutput).toContain('Build succeeded');
     expect(result.timestamp).toBe('2024-01-15T10:00:00.000Z');
     expect(result.failures).toBe(0);
+    // Verify build runs before tests
+    expect(callOrder).toEqual(['build', 'tests']);
   });
 
   it('should return failed when tests fail', async () => {
@@ -116,6 +125,9 @@ describe('verifyImplementation', () => {
 
     expect(result.passed).toBe(false);
     expect(result.buildOutput).toContain('TypeScript compilation error');
+    // Tests should not run when build fails
+    expect(mockRunTests).not.toHaveBeenCalled();
+    expect(result.testsOutput).toBe('Build failed - skipping tests. Fix TypeScript errors first.');
   });
 
   it('should skip tests if no test command configured', async () => {
@@ -204,6 +216,130 @@ describe('verifyImplementation', () => {
     expect(result.passed).toBe(true);
     // spawnSync should not be called for dependency install
     expect(child_process.spawnSync).not.toHaveBeenCalled();
+  });
+
+  it('should skip tests when build fails', async () => {
+    const mockRunBuild = vi.fn().mockResolvedValue({
+      success: false,
+      output: 'TS2304: Cannot find name "Foo"',
+    });
+    const mockRunTests = vi.fn().mockResolvedValue({
+      success: true,
+      output: 'All tests passed',
+    });
+
+    const story = createMockStory();
+    const result = await verifyImplementation(story, '/test/dir', {
+      runBuild: mockRunBuild,
+      runTests: mockRunTests,
+      skipDependencyCheck: true,
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.testsOutput).toBe('Build failed - skipping tests. Fix TypeScript errors first.');
+    expect(result.buildOutput).toContain('TS2304');
+    expect(result.failures).toBe(0);
+    expect(mockRunBuild).toHaveBeenCalledWith('/test/dir', 120000);
+    expect(mockRunTests).not.toHaveBeenCalled();
+  });
+
+  it('should run tests when build succeeds', async () => {
+    const mockRunBuild = vi.fn().mockResolvedValue({
+      success: true,
+      output: 'Build succeeded',
+    });
+    const mockRunTests = vi.fn().mockResolvedValue({
+      success: true,
+      output: 'All tests passed',
+    });
+
+    const story = createMockStory();
+    const result = await verifyImplementation(story, '/test/dir', {
+      runBuild: mockRunBuild,
+      runTests: mockRunTests,
+      skipDependencyCheck: true,
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.testsOutput).toBe('All tests passed');
+    expect(result.buildOutput).toBe('Build succeeded');
+    expect(mockRunBuild).toHaveBeenCalledWith('/test/dir', 120000);
+    expect(mockRunTests).toHaveBeenCalledWith('/test/dir', 300000);
+  });
+
+  it('should run tests when no build command configured', async () => {
+    const mockRunTests = vi.fn().mockResolvedValue({
+      success: true,
+      output: 'All tests passed',
+    });
+
+    const story = createMockStory();
+    const result = await verifyImplementation(story, '/test/dir', {
+      runTests: mockRunTests,
+      skipDependencyCheck: true,
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.testsOutput).toBe('All tests passed');
+    expect(result.buildOutput).toBe('');
+    expect(mockRunTests).toHaveBeenCalled();
+  });
+
+  it('should include correct message in testsOutput when short-circuiting', async () => {
+    const mockRunBuild = vi.fn().mockResolvedValue({
+      success: false,
+      output: 'Build error details',
+    });
+
+    const story = createMockStory();
+    const result = await verifyImplementation(story, '/test/dir', {
+      runBuild: mockRunBuild,
+      skipDependencyCheck: true,
+    });
+
+    expect(result.testsOutput).toBe('Build failed - skipping tests. Fix TypeScript errors first.');
+    expect(result.passed).toBe(false);
+  });
+
+  it('should preserve buildOutput on build failure', async () => {
+    const mockRunBuild = vi.fn().mockResolvedValue({
+      success: false,
+      output: 'Detailed build error:\nLine 42: Type error\nLine 99: Syntax error',
+    });
+
+    const story = createMockStory();
+    const result = await verifyImplementation(story, '/test/dir', {
+      runBuild: mockRunBuild,
+      skipDependencyCheck: true,
+    });
+
+    expect(result.buildOutput).toContain('Detailed build error');
+    expect(result.buildOutput).toContain('Line 42: Type error');
+    expect(result.buildOutput).toContain('Line 99: Syntax error');
+  });
+
+  it('should run tests after successful build when both commands configured', async () => {
+    const mockRunBuild = vi.fn().mockResolvedValue({
+      success: true,
+      output: 'Build completed',
+    });
+    const mockRunTests = vi.fn().mockResolvedValue({
+      success: false,
+      output: '2 tests failed',
+    });
+
+    const story = createMockStory();
+    const result = await verifyImplementation(story, '/test/dir', {
+      runBuild: mockRunBuild,
+      runTests: mockRunTests,
+      skipDependencyCheck: true,
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.testsOutput).toBe('2 tests failed');
+    expect(result.buildOutput).toBe('Build completed');
+    expect(mockRunBuild).toHaveBeenCalled();
+    expect(mockRunTests).toHaveBeenCalled();
   });
 });
 

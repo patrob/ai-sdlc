@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768693296318-805fbc13",
+  "timestamp": "2026-01-17T23:45:27.742Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0055",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0055-typescript-error-classification/.ai-sdlc/stories/S-0055/story.md",
+      "completedAt": "2026-01-17T23:42:08.437Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0055",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0055-typescript-error-classification/.ai-sdlc/stories/S-0055/story.md",
+      "completedAt": "2026-01-17T23:44:51.186Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0055",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0055-typescript-error-classification/.ai-sdlc/stories/S-0055/story.md",
+      "completedAt": "2026-01-17T23:45:27.742Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0055-typescript-error-classification/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0055",
+      "fullSDLC": true
+    },
+    "storyContentHash": "c0a75bf0981170f4c7bd281d5320b13b9bc4860ec720b8c37a1e7ebf49e4d9d1"
+  }
+}

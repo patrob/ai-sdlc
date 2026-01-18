@@ -3,7 +3,7 @@ id: S-0052
 title: Auto-mark stories as done after review approval
 slug: auto-mark-stories-as-done-after-review-approval
 priority: 90
-status: in-progress
+status: done
 type: bug
 created: '2026-01-16'
 labels:
@@ -11,7 +11,7 @@ labels:
 research_complete: true
 plan_complete: true
 implementation_complete: true
-reviews_complete: false
+reviews_complete: true
 worktree_path: >-
   /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0052-auto-mark-stories-as-done-after-review-approval
 updated: '2026-01-17'

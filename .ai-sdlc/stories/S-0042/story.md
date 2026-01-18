@@ -2,7 +2,7 @@
 id: S-0042
 title: Enable Agent Skills Infrastructure
 priority: 50
-status: in-progress
+status: done
 type: feature
 created: '2026-01-15'
 labels:

@@ -1091,6 +1091,148 @@ Just a summary, no AC.
         const prompt = buildRetryPrompt('', buildOutput, 1, 3);
         expect(prompt).toContain('@types/node');
       });
+
+      describe('TypeScript error classification', () => {
+        it('should classify and separate TypeScript errors in build output', () => {
+          const buildOutput = `
+src/app.tsx(59,12): error TS2304: Cannot find name 'Foo'.
+tests/app.test.ts(60,1): error TS2307: Cannot find module '../app'.
+src/types.ts(10,5): error TS2339: Property 'bar' does not exist.
+          `.trim();
+
+          const prompt = buildRetryPrompt('', buildOutput, 1, 3);
+
+          // Should contain source errors section
+          expect(prompt).toContain('SOURCE ERRORS');
+          expect(prompt).toContain('src/app.tsx');
+          expect(prompt).toContain('TS2304');
+
+          // Should contain cascading errors section
+          expect(prompt).toContain('CASCADING ERRORS');
+          expect(prompt).toContain('tests/app.test.ts');
+          expect(prompt).toContain('TS2307');
+        });
+
+        it('should provide guidance to fix source errors first', () => {
+          const buildOutput = `
+src/app.ts(1,1): error TS2304: Cannot find name 'Foo'.
+tests/app.test.ts(2,2): error TS2307: Cannot find module '../app'.
+          `.trim();
+
+          const prompt = buildRetryPrompt('', buildOutput, 1, 3);
+
+          expect(prompt).toContain('Fix source errors first');
+          expect(prompt).toMatch(/source errors.*resolve.*cascading/i);
+        });
+
+        it('should handle build output with only source errors', () => {
+          const buildOutput = `
+src/app.ts(1,1): error TS2304: Cannot find name 'Foo'.
+src/types.ts(2,2): error TS2339: Property 'bar' does not exist.
+          `.trim();
+
+          const prompt = buildRetryPrompt('', buildOutput, 1, 3);
+
+          expect(prompt).toContain('SOURCE ERRORS');
+          expect(prompt).not.toContain('CASCADING ERRORS');
+        });
+
+        it('should handle build output with only cascading errors', () => {
+          const buildOutput = `
+tests/app.test.ts(1,1): error TS2307: Cannot find module '../app'.
+src/app.ts(2,2): error TS2345: Argument of type 'string' is not assignable.
+          `.trim();
+
+          const prompt = buildRetryPrompt('', buildOutput, 1, 3);
+
+          expect(prompt).toContain('CASCADING ERRORS');
+          expect(prompt).not.toContain('SOURCE ERRORS');
+        });
+
+        it('should handle build output with no TypeScript errors', () => {
+          const buildOutput = 'Compilation successful with 0 errors';
+
+          const prompt = buildRetryPrompt('', buildOutput, 1, 3);
+
+          expect(prompt).not.toContain('SOURCE ERRORS');
+          expect(prompt).not.toContain('CASCADING ERRORS');
+          expect(prompt).toContain(buildOutput); // Should still include original output
+        });
+
+        it('should prioritize source errors before cascading in output', () => {
+          const buildOutput = `
+tests/app.test.ts(1,1): error TS2307: Cannot find module '../app'.
+src/app.ts(2,2): error TS2304: Cannot find name 'Foo'.
+src/utils.ts(3,3): error TS2345: Argument type mismatch.
+          `.trim();
+
+          const prompt = buildRetryPrompt('', buildOutput, 1, 3);
+
+          const sourceIndex = prompt.indexOf('SOURCE ERRORS');
+          const cascadingIndex = prompt.indexOf('CASCADING ERRORS');
+
+          expect(sourceIndex).toBeGreaterThan(0);
+          expect(cascadingIndex).toBeGreaterThan(0);
+          expect(sourceIndex).toBeLessThan(cascadingIndex);
+        });
+
+        it('should classify TS2322 errors based on file path context', () => {
+          const buildOutput = `
+src/types/index.d.ts(1,1): error TS2322: Type mismatch in definition.
+src/app.ts(2,2): error TS2322: Type mismatch in usage.
+          `.trim();
+
+          const prompt = buildRetryPrompt('', buildOutput, 1, 3);
+
+          // Type definition file errors should be source
+          expect(prompt).toContain('src/types/index.d.ts');
+          expect(prompt).toContain('SOURCE ERRORS');
+
+          // Regular file type errors should be cascading
+          // (Both will appear but in different sections)
+          const sourceSection = prompt.substring(
+            prompt.indexOf('SOURCE ERRORS'),
+            prompt.indexOf('CASCADING ERRORS') !== -1
+              ? prompt.indexOf('CASCADING ERRORS')
+              : prompt.length
+          );
+          expect(sourceSection).toContain('src/types/index.d.ts');
+          expect(sourceSection).not.toContain('src/app.ts');
+        });
+
+        it('should include error details with line numbers and messages', () => {
+          const buildOutput = `
+src/app.ts(59,12): error TS2304: Cannot find name 'Foo'.
+          `.trim();
+
+          const prompt = buildRetryPrompt('', buildOutput, 1, 3);
+
+          expect(prompt).toContain('src/app.ts');
+          expect(prompt).toContain('59'); // line number
+          expect(prompt).toContain('TS2304');
+          expect(prompt).toContain("Cannot find name 'Foo'");
+        });
+
+        it('should handle mixed TypeScript errors and other build output', () => {
+          const buildOutput = `
+Build started...
+src/app.ts(1,1): error TS2304: Cannot find name 'Foo'.
+Warning: Unused variable
+tests/app.test.ts(2,2): error TS2307: Cannot find module.
+Build completed with errors
+          `.trim();
+
+          const prompt = buildRetryPrompt('', buildOutput, 1, 3);
+
+          // Should classify TypeScript errors
+          expect(prompt).toContain('SOURCE ERRORS');
+          expect(prompt).toContain('CASCADING ERRORS');
+
+          // Should still include full build output
+          expect(prompt).toContain('Build started');
+          expect(prompt).toContain('Warning: Unused variable');
+        });
+      });
     });
 
     describe('detectMissingDependencies', () => {

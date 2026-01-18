@@ -17,6 +17,7 @@ import { AgentOptions } from './research.js';
 import { loadConfig, DEFAULT_TDD_CONFIG } from '../core/config.js';
 import { verifyImplementation } from './verification.js';
 import { createHash } from 'crypto';
+import { parseTypeScriptErrors, classifyAndSortErrors } from '../services/error-classifier.js';
 
 // Re-export for convenience
 export type { AgentProgressCallback };
@@ -1366,6 +1367,10 @@ export function buildRetryPrompt(
   const combinedOutput = (buildOutput || '') + '\n' + (testOutput || '');
   const missingDeps = detectMissingDependencies(combinedOutput);
 
+  // Parse and classify TypeScript errors from build output
+  const tsErrors = parseTypeScriptErrors(buildOutput || '');
+  const classified = classifyAndSortErrors(tsErrors);
+
   let prompt = `CRITICAL: Tests are failing. You attempted implementation but verification failed.
 
 This is retry attempt ${attemptNumber} of ${maxRetries}. Previous attempts failed with similar errors.
@@ -1382,6 +1387,39 @@ This is NOT a code bug - the packages need to be installed. Before making any co
 1. Run \`npm install ${missingDeps.join(' ')}\` to add the missing packages
 2. If these are type definitions, also run \`npm install -D @types/${missingDeps.filter(d => !d.startsWith('@')).join(' @types/')}\`
 3. Re-run the build/tests after installing
+
+`;
+  }
+
+  // Add TypeScript error classification if errors were found
+  if (classified.source.length > 0 || classified.cascading.length > 0) {
+    prompt += `TYPESCRIPT ERROR CLASSIFICATION
+
+`;
+
+    if (classified.source.length > 0) {
+      prompt += `⚠️ SOURCE ERRORS (Fix these first - root causes):
+
+`;
+      classified.source.forEach((err) => {
+        const location = err.line ? `${err.filePath}:${err.line}` : err.filePath;
+        prompt += `- ${err.code} in ${location}: ${err.message}\n`;
+      });
+      prompt += '\n';
+    }
+
+    if (classified.cascading.length > 0) {
+      prompt += `💡 CASCADING ERRORS (may automatically resolve):
+
+`;
+      classified.cascading.forEach((err) => {
+        const location = err.line ? `${err.filePath}:${err.line}` : err.filePath;
+        prompt += `- ${err.code} in ${location}: ${err.message}\n`;
+      });
+      prompt += '\n';
+    }
+
+    prompt += `**Strategy:** Fix source errors first, as they may automatically resolve multiple cascading errors.
 
 `;
   }

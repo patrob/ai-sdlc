@@ -6,7 +6,7 @@ import * as readline from 'readline';
 import { execSync } from 'child_process';
 import { getSdlcRoot, loadConfig, initConfig, validateWorktreeBasePath, DEFAULT_WORKTREE_CONFIG } from '../core/config.js';
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoriesByStatus } from '../core/kanban.js';
-import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId, autoCompleteStoryAfterReview, resetWorkflowState } from '../core/story.js';
+import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId, autoCompleteStoryAfterReview } from '../core/story.js';
 import { GitWorktreeService, WorktreeStatus } from '../core/worktree.js';
 import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext, WorktreeInfo, PreFlightResult } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
@@ -1078,7 +1078,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       const existingWorktree = worktreeService.findByStoryId(targetStory.frontmatter.id);
       if (existingWorktree && existingWorktree.exists) {
         // Handle --clean flag: cleanup and restart
-        if ((options as any).clean) {
+        if (options.clean) {
           console.log(c.warning('Existing worktree found - cleaning up before restart...'));
           console.log();
 
@@ -1106,7 +1106,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
           }
 
           // Check for --force flag to skip confirmation
-          const forceCleanup = (options as any).force;
+          const forceCleanup = options.force;
           if (!forceCleanup) {
             // Prompt for confirmation
             const confirmed = await new Promise<boolean>((resolve) => {

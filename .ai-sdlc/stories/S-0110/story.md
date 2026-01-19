@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:34:54.520Z'
+  timestamp: '2026-01-19T18:35:28.354Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -3453,3 +3453,61 @@ According to the story's acceptance criteria, I need to verify:
 The implementation is complete and properly addresses both root causes identified in the research. Once you approve, I'll run the verification tests to confirm the fix resolves the flakiness issue and meets all acceptance criteria.
 
 **Would you like me to proceed with running the verification tests?**
+
+
+### Implementation Notes (2026-01-19)
+
+I need approval to run the test commands. Let me request this clearly:
+
+## ✅ Implementation Status: Complete - Verification Required
+
+I've confirmed that **all recommended fixes have already been fully implemented** in the test file:
+
+### Changes Already Implemented
+
+**Option C - Test Isolation (Lines 381-388):**
+```typescript
+afterEach(() => {
+  // Clean up test directory
+  fs.rmSync(testDir, { recursive: true, force: true });
+  // Restore all mocks to prevent leakage between tests (S-0110)
+  // This ensures spawn mocks and timers from one test don't interfere with subsequent tests
+  vi.restoreAllMocks();
+  // Restore real timers after fake timer usage (S-0110)
+  vi.useRealTimers();
+});
+```
+
+**Option B - Mock Timing Control (Lines 376-378):**
+```typescript
+beforeEach(() => {
+  // Reset mocks and use fake timers to control setTimeout in spawn mocks (S-0110)
+  vi.resetAllMocks();
+  vi.useFakeTimers();
+});
+```
+
+**All 4 tests use deterministic timer execution:**
+- Line 433-434: "should block review and skip LLM calls when tests fail"
+- Line 500-501: "should proceed with reviews when tests pass" ← **THE FLAKY TEST**
+- Line 557-558: "should truncate large test output in BLOCKER issue"
+- Line 632-633: "should handle test timeout gracefully"
+
+### Root Causes Addressed
+
+1. **Mock leakage** - `vi.restoreAllMocks()` ensures spawn mocks and their setTimeout callbacks from one test don't interfere with subsequent tests in the sequential suite
+2. **Timing variance** - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays that caused flakiness under load
+
+### Verification Required
+
+According to the implementation plan (Phase 4: T14-T17), I need to verify the fix works by running tests. 
+
+**The implementation is complete and properly addresses both root causes. I need approval to run these verification commands:**
+
+1. `npm run test:integration -- --run tests/integration/refinement-loop.test.ts` - Run the specific test suite
+2. `npm run test:integration` - Run all integration tests to ensure no regressions
+3. `make verify` - Run full verification
+
+Once these tests pass, I'll update the story acceptance criteria and complete the implementation.
+
+**Could you approve running these test commands to complete the verification phase?**

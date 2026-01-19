@@ -88,6 +88,7 @@ program
   .option('--dry-run', 'Show what would be done without executing')
   .option('--continue', 'Resume workflow from last checkpoint')
   .option('--story <id-or-slug>', 'Target a specific story by ID or slug')
+  .option('--batch <story-ids>', 'Process multiple stories sequentially (comma-separated list, e.g., S-001,S-002,S-003)')
   .option('--step <phase>', 'Run a specific phase (refine, research, plan, implement, review) - cannot be combined with --auto --story')
   .option('--max-iterations <number>', 'Maximum retry iterations (default: infinite)')
   .option('--watch', 'Run in daemon mode, continuously processing backlog')

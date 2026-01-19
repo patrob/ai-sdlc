@@ -2,6 +2,7 @@ import { execSync, spawn, spawnSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
+import { ProcessManager } from '../core/process-manager.js';
 import { parseStory, writeStory, updateStoryStatus, appendToSection, updateStoryField, isAtMaxRetries, appendReviewHistory, snapshotMaxRetries, getEffectiveMaxRetries, getEffectiveMaxImplementationRetries } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
@@ -223,6 +224,8 @@ async function runCommandAsync(
       cwd: workingDir,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+
+    ProcessManager.getInstance().registerChild(child);
 
     const timeoutId = setTimeout(() => {
       killed = true;

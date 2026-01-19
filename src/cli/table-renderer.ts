@@ -12,6 +12,8 @@ import {
   ColumnWidths,
   getKanbanColumnWidth,
   padColumnToHeight,
+  isWorktreeStory,
+  getWorktreeIndicator,
 } from './formatting.js';
 import { getStoryFlags, formatStatus } from './story-utils.js';
 import stringWidth from 'string-width';
@@ -245,6 +247,11 @@ export function formatKanbanStoryEntry(
     // Add flags if present
     if (flags) {
       content += ` ${flags}`;
+    }
+
+    // Add worktree indicator if story is from a worktree
+    if (isWorktreeStory(story.path)) {
+      content += ` ${getWorktreeIndicator()}`;
     }
 
     // Truncate to fit column width

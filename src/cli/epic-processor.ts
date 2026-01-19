@@ -1,0 +1,434 @@
+import path from 'path';
+import { spawn } from 'child_process';
+import { Story, EpicProcessingOptions, EpicSummary, PhaseExecutionResult } from '../types/index.js';
+import { getSdlcRoot, loadConfig } from '../core/config.js';
+import { findStoriesByEpic } from '../core/kanban.js';
+import { GitWorktreeService } from '../core/worktree.js';
+import { getThemedChalk } from '../core/theme.js';
+import { groupStoriesByPhase, validateDependencies } from './dependency-resolver.js';
+import {
+  createDashboard,
+  updateStoryStatus,
+  markStorySkipped,
+  markStoryFailed,
+  advancePhase,
+  startDashboardRenderer,
+  DashboardState,
+} from './progress-dashboard.js';
+import { StoryLogger } from '../core/story-logger.js';
+import fs from 'fs';
+
+/**
+ * Normalize epic ID by stripping 'epic-' prefix if present
+ * Both 'epic-foo' and 'foo' become 'foo'
+ */
+export function normalizeEpicId(epicId: string): string {
+  return epicId.startsWith('epic-') ? epicId.slice(5) : epicId;
+}
+
+/**
+ * Discover stories for an epic with normalized ID
+ */
+export function discoverEpicStories(sdlcRoot: string, epicId: string): Story[] {
+  const normalized = normalizeEpicId(epicId);
+  const stories = findStoriesByEpic(sdlcRoot, normalized);
+
+  // Sort by priority (ascending) then created date (ascending)
+  return stories.sort((a, b) => {
+    if (a.frontmatter.priority !== b.frontmatter.priority) {
+      return a.frontmatter.priority - b.frontmatter.priority;
+    }
+    return a.frontmatter.created.localeCompare(b.frontmatter.created);
+  });
+}
+
+/**
+ * Format execution plan for display
+ */
+function formatExecutionPlan(epicId: string, phases: Story[][]): string {
+  const lines: string[] = [];
+  const totalStories = phases.reduce((sum, phase) => sum + phase.length, 0);
+
+  lines.push(`\nFound ${totalStories} stories for epic: ${epicId}\n`);
+
+  phases.forEach((phase, index) => {
+    const phaseNum = index + 1;
+    const storyCount = phase.length;
+    const parallelNote = storyCount > 1 ? ', parallel' : '';
+
+    lines.push(`Phase ${phaseNum} (${storyCount} ${storyCount === 1 ? 'story' : 'stories'}${parallelNote}):`);
+
+    phase.forEach(story => {
+      const deps = story.frontmatter.dependencies || [];
+      const depsStr = deps.length > 0 ? ` (depends: ${deps.join(', ')})` : '';
+      lines.push(`  • ${story.frontmatter.id}: ${story.frontmatter.title}${depsStr}`);
+    });
+
+    lines.push('');
+  });
+
+  // Estimate time (rough: 15-30 min per story, parallelized)
+  const estimatedMinutes = phases.length * 15; // Very rough estimate
+  lines.push(`Estimated time: ${estimatedMinutes}-${estimatedMinutes * 2} minutes`);
+
+  return lines.join('\n');
+}
+
+/**
+ * Process a single story in an isolated worktree
+ */
+async function processStoryInWorktree(
+  story: Story,
+  dashboard: DashboardState,
+  worktreeService: GitWorktreeService,
+  keepWorktrees: boolean
+): Promise<{ success: boolean; error?: string }> {
+  const storyId = story.frontmatter.id;
+  const slug = story.frontmatter.slug;
+
+  updateStoryStatus(dashboard, storyId, 'in-progress');
+
+  try {
+    // Create worktree
+    const worktreePath = worktreeService.create({
+      storyId,
+      slug,
+    });
+
+    // Log to story-specific epic run log
+    const sdlcRoot = getSdlcRoot();
+    const logger = new StoryLogger(storyId, sdlcRoot);
+    logger.log('INFO', `Starting story execution in worktree: ${worktreePath}`);
+
+    // Spawn ai-sdlc run process in worktree
+    const result = await new Promise<{ success: boolean; error?: string }>((resolve) => {
+      const proc = spawn(
+        'npx',
+        ['ai-sdlc', 'run', '--story', storyId, '--auto'],
+        {
+          cwd: worktreePath,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          shell: false,
+        }
+      );
+
+      let stdout = '';
+      let stderr = '';
+
+      proc.stdout?.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      proc.stderr?.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          logger.log('INFO', 'Story execution completed successfully');
+          resolve({ success: true });
+        } else {
+          const error = `Process exited with code ${code}`;
+          logger.log('ERROR', `Story execution failed: ${error}\n${stderr}`);
+          resolve({ success: false, error });
+        }
+      });
+
+      proc.on('error', (err) => {
+        logger.log('ERROR', `Failed to spawn process: ${err.message}`);
+        resolve({ success: false, error: err.message });
+      });
+    });
+
+    // Cleanup worktree if not keeping
+    if (!keepWorktrees) {
+      try {
+        worktreeService.remove(worktreePath, false);
+      } catch (cleanupError) {
+        // Log but don't fail the story
+        logger.log('WARN', `Failed to cleanup worktree: ${cleanupError}`);
+      }
+    }
+
+    if (result.success) {
+      updateStoryStatus(dashboard, storyId, 'completed');
+    } else {
+      markStoryFailed(dashboard, storyId, result.error || 'Unknown error');
+    }
+
+    return result;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    markStoryFailed(dashboard, storyId, errorMsg);
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Execute a single phase with concurrency limit
+ */
+async function executePhase(
+  phase: Story[],
+  phaseNumber: number,
+  maxConcurrent: number,
+  dashboard: DashboardState,
+  worktreeService: GitWorktreeService,
+  keepWorktrees: boolean
+): Promise<PhaseExecutionResult> {
+  const result: PhaseExecutionResult = {
+    phase: phaseNumber,
+    succeeded: [],
+    failed: [],
+    skipped: [],
+  };
+
+  const queue = [...phase];
+  const active = new Set<Promise<{ storyId: string; success: boolean; error?: string }>>();
+
+  while (queue.length > 0 || active.size > 0) {
+    // Fill up to maxConcurrent
+    while (active.size < maxConcurrent && queue.length > 0) {
+      const story = queue.shift()!;
+      const promise = processStoryInWorktree(story, dashboard, worktreeService, keepWorktrees)
+        .then(result => ({
+          storyId: story.frontmatter.id,
+          ...result,
+        }));
+
+      active.add(promise);
+
+      // Remove from active when done
+      promise.finally(() => active.delete(promise));
+    }
+
+    if (active.size > 0) {
+      // Wait for at least one to complete
+      const completed = await Promise.race(active);
+
+      if (completed.success) {
+        result.succeeded.push(completed.storyId);
+      } else {
+        result.failed.push(completed.storyId);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Generate final epic summary
+ */
+function generateEpicSummary(
+  epicId: string,
+  phases: Story[][],
+  phaseResults: PhaseExecutionResult[],
+  failedStories: Map<string, string>,
+  skippedStories: Map<string, string>,
+  startTime: number
+): EpicSummary {
+  const totalStories = phases.reduce((sum, phase) => sum + phase.length, 0);
+  const completed = phaseResults.reduce((sum, r) => sum + r.succeeded.length, 0);
+  const failed = Array.from(failedStories.keys()).length;
+  const skipped = Array.from(skippedStories.keys()).length;
+
+  return {
+    epicId,
+    totalStories,
+    completed,
+    failed,
+    skipped,
+    duration: Date.now() - startTime,
+    failedStories: Array.from(failedStories.entries()).map(([storyId, error]) => ({
+      storyId,
+      error,
+    })),
+    skippedStories: Array.from(skippedStories.entries()).map(([storyId, reason]) => ({
+      storyId,
+      reason,
+    })),
+  };
+}
+
+/**
+ * Print epic summary to console
+ */
+function printEpicSummary(summary: EpicSummary, chalk: any): void {
+  console.log('\n' + chalk.bold('═══ Epic Summary ═══'));
+  console.log(`\nEpic: ${chalk.bold(summary.epicId)}`);
+  console.log('');
+
+  if (summary.completed > 0) {
+    console.log(chalk.success(`✓ Completed: ${summary.completed} ${summary.completed === 1 ? 'story' : 'stories'}`));
+  }
+
+  if (summary.failed > 0) {
+    console.log(chalk.error(`✗ Failed: ${summary.failed} ${summary.failed === 1 ? 'story' : 'stories'}`));
+    summary.failedStories.forEach(({ storyId, error }) => {
+      console.log(chalk.error(`  • ${storyId}: ${error}`));
+    });
+  }
+
+  if (summary.skipped > 0) {
+    console.log(chalk.warning(`⊘ Skipped: ${summary.skipped} ${summary.skipped === 1 ? 'story' : 'stories'} (dependencies failed)`));
+    summary.skippedStories.forEach(({ storyId, reason }) => {
+      console.log(chalk.dim(`  • ${storyId}: ${reason}`));
+    });
+  }
+
+  const durationSeconds = Math.floor(summary.duration / 1000);
+  const minutes = Math.floor(durationSeconds / 60);
+  const seconds = durationSeconds % 60;
+  console.log('');
+  console.log(`Duration: ${minutes}m ${seconds}s`);
+  console.log('');
+}
+
+/**
+ * Main epic processing function
+ */
+export async function processEpic(options: EpicProcessingOptions): Promise<number> {
+  const config = loadConfig();
+  const c = getThemedChalk(config);
+  const sdlcRoot = getSdlcRoot();
+  const projectRoot = process.cwd();
+
+  // Validate worktrees enabled
+  if (!config.worktree?.enabled) {
+    console.log(c.error('Error: Epic processing requires worktrees to be enabled'));
+    console.log(c.dim('Set "worktree.enabled": true in .ai-sdlc.json'));
+    return 1;
+  }
+
+  // Get effective configuration
+  const maxConcurrent = options.maxConcurrent ?? config.epic?.maxConcurrent ?? 3;
+  const keepWorktrees = options.keepWorktrees ?? config.epic?.keepWorktrees ?? false;
+  const continueOnFailure = config.epic?.continueOnFailure ?? true;
+
+  // Validate maxConcurrent
+  if (maxConcurrent < 1) {
+    console.log(c.error('Error: --max-concurrent must be >= 1'));
+    return 1;
+  }
+
+  // Discover stories
+  console.log(c.info(`Discovering stories for epic: ${options.epicId}`));
+  const stories = discoverEpicStories(sdlcRoot, options.epicId);
+
+  if (stories.length === 0) {
+    console.log(c.warning(`No stories found for epic: ${options.epicId}`));
+    return 0; // Not an error
+  }
+
+  // Validate dependencies
+  const validation = validateDependencies(stories);
+  if (!validation.valid) {
+    console.log(c.error('Error: Invalid dependencies detected:'));
+    validation.errors.forEach(error => console.log(c.error(`  • ${error}`)));
+    return 1;
+  }
+
+  // Group into phases
+  const phases = groupStoriesByPhase(stories);
+
+  // Display execution plan
+  console.log(formatExecutionPlan(options.epicId, phases));
+
+  // Dry run - stop here
+  if (options.dryRun) {
+    console.log(c.info('\nDry run complete - no stories executed'));
+    return 0;
+  }
+
+  // Confirm execution (unless --force)
+  if (!options.force) {
+    console.log(c.warning('\nContinue? [Y/n] '));
+    // For now, assume yes in automated context
+    // TODO: Add actual prompt in interactive mode
+  }
+
+  // Initialize worktree service
+  const worktreeService = new GitWorktreeService(
+    projectRoot,
+    config.worktree.basePath
+  );
+
+  // Create dashboard
+  const dashboard = createDashboard(options.epicId, phases);
+  const stopRenderer = startDashboardRenderer(dashboard);
+
+  const startTime = Date.now();
+  const failedStories = new Map<string, string>();
+  const skippedStories = new Map<string, string>();
+  const phaseResults: PhaseExecutionResult[] = [];
+
+  try {
+    // Execute phases sequentially
+    for (let i = 0; i < phases.length; i++) {
+      const phase = phases[i];
+
+      // Check if any stories in this phase should be skipped due to failed dependencies
+      const phaseToExecute = phase.filter(story => {
+        const deps = story.frontmatter.dependencies || [];
+        const hasFailedDep = deps.some(dep => failedStories.has(dep));
+
+        if (hasFailedDep) {
+          const failedDep = deps.find(dep => failedStories.has(dep))!;
+          const reason = `Dependency failed: ${failedDep}`;
+          markStorySkipped(dashboard, story.frontmatter.id, reason);
+          skippedStories.set(story.frontmatter.id, reason);
+          return false;
+        }
+
+        return true;
+      });
+
+      // Skip phase if all stories are blocked
+      if (phaseToExecute.length === 0) {
+        continue;
+      }
+
+      // Execute phase
+      const result = await executePhase(
+        phaseToExecute,
+        i + 1,
+        maxConcurrent,
+        dashboard,
+        worktreeService,
+        keepWorktrees
+      );
+
+      phaseResults.push(result);
+
+      // Track failed stories
+      result.failed.forEach(storyId => {
+        failedStories.set(storyId, 'Execution failed');
+      });
+
+      // Stop on failure if not continuing
+      if (!continueOnFailure && result.failed.length > 0) {
+        console.log(c.error('\nStopping due to failure (continueOnFailure = false)'));
+        break;
+      }
+
+      advancePhase(dashboard);
+    }
+  } finally {
+    stopRenderer();
+  }
+
+  // Generate and print summary
+  const summary = generateEpicSummary(
+    options.epicId,
+    phases,
+    phaseResults,
+    failedStories,
+    skippedStories,
+    startTime
+  );
+
+  printEpicSummary(summary, c);
+
+  // Return exit code
+  return summary.failed > 0 ? 1 : 0;
+}

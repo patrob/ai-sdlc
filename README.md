@@ -9,6 +9,7 @@ Agent-first SDLC workflow manager using Claude Agent SDK. A Kanban-style board w
 - **Kanban-style story management** (Backlog → Ready → In Progress → Done)
 - **AI-powered agents** for each workflow stage (refine, research, plan, implement, review)
 - **Full SDLC automation** with `--auto --story` - takes a story from idea to reviewed code
+- **Epic processing** with `--epic` - parallel execution of related stories with dependency resolution
 - **TDD Mode** - Optional Test-Driven Development with Red-Green-Refactor cycles
 - **Resume workflows** after interruption with `--continue`
 - **Daemon mode** - Watch for and process new stories with `--watch`
@@ -49,6 +50,7 @@ ai-sdlc run --auto --story implement-user-authentication
 | `ai-sdlc run --story <id> --step <phase>` | Run specific phase (refine/research/plan/implement/review) |
 | `ai-sdlc run --continue` | Resume after interruption |
 | `ai-sdlc run --watch` | Daemon mode - watch for new stories |
+| `ai-sdlc run --epic <epic-id>` | Process all stories in an epic with parallel execution |
 | `ai-sdlc details <id>` | Show story details |
 | `ai-sdlc config [key] [value]` | View/set configuration |
 
@@ -66,6 +68,62 @@ Refine → Research → Plan → Implement → Review → Create PR → Done
 - `[I]` Implementation complete
 - `[V]` Reviews complete
 - `[!]` Blocked
+
+## Epic Processing
+
+Process multiple related stories in parallel with automatic dependency resolution. Epics use git worktrees for isolation and execute independent stories concurrently.
+
+**Label Format:** Stories are grouped using `epic-{epic-id}` labels (e.g., `epic-ticketing-integration`)
+
+**Basic Usage:**
+```bash
+# Process all stories in an epic (uses default concurrency: 3)
+ai-sdlc run --epic ticketing-integration
+
+# Dry run - show execution plan without running
+ai-sdlc run --epic ticketing-integration --dry-run
+
+# Adjust concurrency limit
+ai-sdlc run --epic ticketing-integration --max-concurrent 5
+
+# Keep worktrees for debugging
+ai-sdlc run --epic ticketing-integration --keep-worktrees
+```
+
+**Dependency Management:**
+Add dependencies to story frontmatter to control execution order:
+```yaml
+---
+id: S-0075
+dependencies: [S-0073, S-0074]
+labels: [epic-ticketing-integration]
+---
+```
+
+**Features:**
+- **Automatic parallelization** - Independent stories run concurrently
+- **Dependency resolution** - Stories wait for dependencies to complete
+- **Real-time dashboard** - Live progress tracking for all stories
+- **Failure handling** - Failed stories don't block independent work
+- **Worktree isolation** - Each story runs in its own git worktree
+
+**Requirements:**
+- Worktrees must be enabled in `.ai-sdlc.json`: `"worktree": { "enabled": true }`
+- Stories must have matching `epic-{epic-id}` label
+
+**Configuration:**
+```json
+{
+  "epic": {
+    "maxConcurrent": 3,
+    "keepWorktrees": false,
+    "continueOnFailure": true
+  },
+  "worktree": {
+    "enabled": true
+  }
+}
+```
 
 ## Configuration
 

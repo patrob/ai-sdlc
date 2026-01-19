@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig, EpicConfig } from '../types/index.js';
 
 const CONFIG_FILENAME = '.ai-sdlc.json';
 
@@ -43,6 +43,15 @@ export const DEFAULT_TDD_CONFIG: TDDConfig = {
 export const DEFAULT_WORKTREE_CONFIG: WorktreeConfig = {
   enabled: false,
   basePath: '.ai-sdlc/worktrees',
+};
+
+/**
+ * Default epic configuration
+ */
+export const DEFAULT_EPIC_CONFIG: EpicConfig = {
+  maxConcurrent: 3,
+  keepWorktrees: false,
+  continueOnFailure: true,
 };
 
 /**
@@ -116,6 +125,8 @@ export const DEFAULT_CONFIG: Config = {
   worktree: { ...DEFAULT_WORKTREE_CONFIG },
   // Logging configuration
   logging: { ...DEFAULT_LOGGING_CONFIG },
+  // Epic configuration
+  epic: { ...DEFAULT_EPIC_CONFIG },
   // Orchestrator configuration
   useOrchestrator: false,
 };
@@ -452,6 +463,10 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
         logging: {
           ...DEFAULT_LOGGING_CONFIG,
           ...userConfig.logging,
+        },
+        epic: {
+          ...DEFAULT_EPIC_CONFIG,
+          ...userConfig.epic,
         },
       };
     } catch (error) {

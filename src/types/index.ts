@@ -122,6 +122,11 @@ export interface StoryFrontmatter {
   assignee?: string;
   labels: string[];
   estimated_effort?: EffortEstimate;
+  /**
+   * Story dependencies for epic processing.
+   * Array of story IDs that must complete before this story can start.
+   */
+  dependencies?: string[];
   // Workflow tracking
   research_complete: boolean;
   plan_complete: boolean;
@@ -443,6 +448,18 @@ export interface WorktreeConfig {
 }
 
 /**
+ * Epic processing configuration for parallel story execution
+ */
+export interface EpicConfig {
+  /** Maximum parallel stories to execute concurrently. @default 3 */
+  maxConcurrent: number;
+  /** Preserve worktrees after completion for debugging. @default false */
+  keepWorktrees: boolean;
+  /** Continue processing other stories when one fails. @default true */
+  continueOnFailure: boolean;
+}
+
+/**
  * Logging configuration for ai-sdlc operations
  */
 export interface LogConfig {
@@ -696,11 +713,56 @@ export interface Config {
    */
   logging?: LogConfig;
   /**
+   * Epic processing configuration for parallel story execution.
+   * Controls concurrency limits and cleanup behavior.
+   */
+  epic?: EpicConfig;
+  /**
    * Enable sequential task orchestrator for implementation.
    * When true, implementation runs as separate agents orchestrated sequentially.
    * @default false
    */
   useOrchestrator?: boolean;
+}
+
+/**
+ * Status of a story during epic execution
+ */
+export type StoryExecutionStatus = 'queued' | 'in-progress' | 'reviewing' | 'completed' | 'failed' | 'skipped';
+
+/**
+ * Options for epic processing from CLI
+ */
+export interface EpicProcessingOptions {
+  epicId: string;
+  maxConcurrent?: number;
+  dryRun?: boolean;
+  force?: boolean;
+  keepWorktrees?: boolean;
+}
+
+/**
+ * Result of processing a single phase of stories
+ */
+export interface PhaseExecutionResult {
+  phase: number;
+  succeeded: string[]; // Story IDs that completed successfully
+  failed: string[]; // Story IDs that failed
+  skipped: string[]; // Story IDs that were skipped due to dependencies
+}
+
+/**
+ * Final summary of epic processing
+ */
+export interface EpicSummary {
+  epicId: string;
+  totalStories: number;
+  completed: number;
+  failed: number;
+  skipped: number;
+  duration: number; // milliseconds
+  failedStories: Array<{ storyId: string; error: string }>;
+  skippedStories: Array<{ storyId: string; reason: string }>;
 }
 
 // Agent types

@@ -822,6 +822,52 @@ export function getConfigurationChanges(workingDir: string): string[] {
 }
 
 /**
+ * Get documentation file changes from git diff
+ *
+ * Detects changes to documentation files including:
+ * - Markdown files (.md) anywhere in the project (excluding story files)
+ * - docs/ directory (any file type)
+ *
+ * Uses spawnSync for security (prevents command injection).
+ *
+ * @param workingDir - Working directory to run git diff in
+ * @returns Array of documentation file paths that have changed, or ['unknown'] if git fails
+ */
+export function getDocumentationChanges(workingDir: string): string[] {
+  try {
+    // Security: Use spawnSync with explicit args (not shell) to prevent injection
+    const result = spawnSync('git', ['diff', '--name-only', 'HEAD~1'], {
+      cwd: workingDir,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (result.status !== 0) {
+      // Git command failed - fail open (assume changes exist)
+      return ['unknown'];
+    }
+
+    const output = result.stdout.toString();
+
+    return output
+      .split('\n')
+      .filter(f => f.trim())
+      .filter(f => {
+        // Markdown files (excluding story files in .ai-sdlc/stories/)
+        if (f.endsWith('.md') && !f.startsWith('.ai-sdlc/stories/')) return true;
+
+        // Files in docs/ directory (any file type - images, diagrams, etc.)
+        if (f.startsWith('docs/')) return true;
+
+        return false;
+      });
+  } catch {
+    // If git diff fails, assume there are changes (fail open, not closed)
+    return ['unknown'];
+  }
+}
+
+/**
  * Determine the effective content type for validation
  *
  * Resolves the final content type based on story frontmatter fields:
@@ -1139,11 +1185,25 @@ export async function runReviewAgent(
       }
     }
 
-    // For 'documentation' type, skip all file change validation
-    if (contentType === 'documentation') {
-      logger.info('review', 'Documentation story - skipping file change validation', {
-        storyId: story.frontmatter.id,
-      });
+    // Check documentation changes for 'documentation' type
+    if (!validationFailed && contentType === 'documentation') {
+      const docChanges = getDocumentationChanges(workingDir);
+
+      if (docChanges.length === 0) {
+        validationFailed = true;
+        validationReason = 'Documentation story requires changes to markdown files (.md) or docs/ directory. No documentation changes detected.';
+
+        logger.warn('review', 'Documentation validation failed', {
+          storyId: story.frontmatter.id,
+          contentType,
+          docChangesFound: docChanges.length,
+        });
+      } else {
+        logger.info('review', 'Documentation changes detected', {
+          storyId: story.frontmatter.id,
+          fileCount: docChanges.length,
+        });
+      }
     }
 
     // Handle validation failure (if any)
@@ -1162,12 +1222,14 @@ export async function runReviewAgent(
 
         await updateStoryField(story, 'implementation_complete', false);
 
-        // Set restart reason (backward compatible message for default code stories)
+        // Set restart reason based on content type
         const restartReason = contentType === 'configuration'
           ? 'Configuration story requires changes to config files (.claude/, .github/, or root config files). No configuration changes detected.'
           : contentType === 'mixed'
             ? 'Mixed story requires both source AND configuration changes - no source code was modified.'
-            : 'No source code changes detected. Implementation wrote documentation only.';
+            : contentType === 'documentation'
+              ? 'Documentation story requires changes to markdown files (.md) or docs/ directory. No documentation changes detected.'
+              : 'No source code changes detected. Implementation wrote documentation only.';
 
         await updateStoryField(story, 'last_restart_reason', restartReason);
 
@@ -1176,7 +1238,9 @@ export async function runReviewAgent(
           ? 'No configuration file modifications detected. Re-running implementation phase.'
           : contentType === 'mixed'
             ? 'No source code modifications detected. Re-running implementation phase.'
-            : 'No source code modifications detected. Re-running implementation phase.';
+            : contentType === 'documentation'
+              ? 'No documentation file modifications detected. Re-running implementation phase.'
+              : 'No source code modifications detected. Re-running implementation phase.';
 
         return {
           success: true,
@@ -1227,34 +1291,43 @@ export async function runReviewAgent(
       contentType,
     });
 
-    // PRE-CHECK GATE: Check if test files exist
-    const testsExist = hasTestFiles(workingDir);
-    if (!testsExist) {
-      logger.warn('review', 'No test files detected in implementation changes', {
-        storyId: story.frontmatter.id,
-      });
+    // PRE-CHECK GATE: Check if test files exist (only for code/mixed types)
+    // Documentation and configuration stories don't require test files
+    const requiresTests = contentType === 'code' || contentType === 'mixed';
+    if (requiresTests) {
+      const testsExist = hasTestFiles(workingDir);
+      if (!testsExist) {
+        logger.warn('review', 'No test files detected in implementation changes', {
+          storyId: story.frontmatter.id,
+        });
 
-      return {
-        success: true,
-        story: parseStory(storyPath),
-        changesMade: ['No test files found for implementation'],
-        passed: false,
-        decision: ReviewDecision.REJECTED,
-        severity: ReviewSeverity.CRITICAL,
-        reviewType: 'pre-check' as any,
-        issues: [{
-          severity: 'blocker',
-          category: 'testing',
-          description: 'No tests found for this implementation. All implementations must include tests.',
-          suggestedFix: 'Add test files (*.test.ts, *.spec.ts, or files in __tests__/ directory) that verify the implementation.',
-        }],
-        feedback: formatIssuesForDisplay([{
-          severity: 'blocker',
-          category: 'testing',
-          description: 'No tests found for this implementation. All implementations must include tests.',
-          suggestedFix: 'Add test files (*.test.ts, *.spec.ts, or files in __tests__/ directory) that verify the implementation.',
-        }]),
-      };
+        return {
+          success: true,
+          story: parseStory(storyPath),
+          changesMade: ['No test files found for implementation'],
+          passed: false,
+          decision: ReviewDecision.REJECTED,
+          severity: ReviewSeverity.CRITICAL,
+          reviewType: 'pre-check' as any,
+          issues: [{
+            severity: 'blocker',
+            category: 'testing',
+            description: 'No tests found for this implementation. All implementations must include tests.',
+            suggestedFix: 'Add test files (*.test.ts, *.spec.ts, or files in __tests__/ directory) that verify the implementation.',
+          }],
+          feedback: formatIssuesForDisplay([{
+            severity: 'blocker',
+            category: 'testing',
+            description: 'No tests found for this implementation. All implementations must include tests.',
+            suggestedFix: 'Add test files (*.test.ts, *.spec.ts, or files in __tests__/ directory) that verify the implementation.',
+          }]),
+        };
+      }
+    } else {
+      logger.info('review', 'Test file check skipped for non-code content type', {
+        storyId: story.frontmatter.id,
+        contentType,
+      });
     }
 
     // Run build and tests BEFORE reviews (async with progress)

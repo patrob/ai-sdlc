@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:17:34.731Z'
+  timestamp: '2026-01-19T18:17:51.253Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -2153,3 +2153,26 @@ Once I have these permissions, I'll:
 2. Apply Option B (use `vi.useFakeTimers()` for deterministic timing)
 3. Verify with 10 consecutive test runs
 4. Commit the changes
+
+
+### Implementation Notes (2026-01-19)
+
+I need permission to read the test file to analyze and implement the fix. Let me request access to the codebase:
+
+I need your permission to access the codebase files to implement this fix. Could you please grant me permission to:
+
+1. **Read files** in `/Users/probinson/Repos/on-par/pocs/ai-sdlc/` directory
+2. **Edit files** to apply the fixes
+3. **Run bash commands** to verify the tests work
+
+Once you grant these permissions, I'll follow the implementation plan:
+
+**Phase 1**: Analyze the current test implementation  
+**Phase 2**: Apply Option C (test isolation) - Add `vi.restoreAllMocks()` to `afterEach`  
+**Phase 3**: If needed, apply Option B (fake timers) - Use `vi.useFakeTimers()` and `vi.runAllTimersAsync()`  
+**Phase 4**: Run verification tests (10 consecutive successful runs)  
+**Phase 5**: Commit the changes
+
+The story indicates this is a test-only fix that addresses mock leakage and timing variance issues causing ~50% failure rate when running in the full test suite.
+
+Should I proceed with the implementation once you grant file access?

@@ -68,23 +68,36 @@ Refine → Research → Plan → Implement → Review → Create PR → Done
 
 ## Configuration
 
-Configure ai-sdlc behavior via a `.ai-sdlc.json` file in your project root. The configuration system supports stage gates, timeouts, retry policies, TDD mode, worktree isolation, and more. You can also override specific settings using `AI_SDLC_*` environment variables.
+Configure ai-sdlc behavior via a `.ai-sdlc.json` file in your project root. If no configuration file exists, ai-sdlc uses sensible defaults.
 
-**Minimal example**:
+**Key configuration areas:**
+- **Stage gates** - Control approval requirements before implementation and PR creation
+- **Timeouts** - Configure operation timeouts (agent, build, test)
+- **Retry policies** - Control automatic retry behavior for review and implementation failures
+- **TDD mode** - Enable test-driven development with red-green-refactor cycles
+- **Worktree isolation** - Use git worktrees for parallel story development
+- **Environment variable overrides** - Use `AI_SDLC_*` variables for CI/CD or temporary changes
 
+**Minimal example** (uses all defaults):
+```json
+{}
+```
+
+**Basic customization**:
 ```json
 {
   "sdlcFolder": ".ai-sdlc",
   "stageGates": {
-    "requireApprovalBeforeImplementation": false
+    "requireApprovalBeforeImplementation": true
+  },
+  "timeouts": {
+    "agentTimeout": 1800000
   },
   "theme": "auto"
 }
 ```
 
-**TDD Mode**: Enable per-story with `tdd_enabled: true` in frontmatter, or globally via config.
-
-📖 **[Complete Configuration Reference](docs/configuration.md)** - Detailed documentation of all 60+ configuration options, validation rules, environment variables, and example configurations.
+📖 **[Complete Configuration Reference](docs/configuration.md)** - Detailed documentation of all configuration options, validation rules, environment variables, and 5 complete example configurations.
 
 ## Authentication
 

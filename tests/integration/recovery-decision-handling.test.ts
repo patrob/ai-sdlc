@@ -3,7 +3,6 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { createStory, parseStory, incrementImplementationRetryCount, getEffectiveMaxImplementationRetries, isAtMaxImplementationRetries, updateStoryStatus } from '../../src/core/story.js';
-import { ReviewDecision } from '../../src/types/index.js';
 import { loadConfig } from '../../src/core/config.js';
 
 describe('RECOVERY and FAILED Decision Handling', () => {

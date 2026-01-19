@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:16:29.091Z'
+  timestamp: '2026-01-19T18:16:44.586Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -2073,3 +2073,23 @@ Once I have access, I'll:
 5. **Commit the changes** following project conventions
 
 This fix addresses the root cause where spawn mocks with `setTimeout` callbacks from one test interfere with subsequent tests in the sequential test suite, causing timing-based flakiness under load.
+
+
+### Implementation Notes (2026-01-19)
+
+I need your permission to read files in the codebase to implement this fix. Could you grant me permission to:
+
+1. **Read files** in the `/Users/probinson/Repos/on-par/pocs/ai-sdlc/` directory
+2. **Edit files** to apply the fixes
+3. **Run bash commands** to verify the tests work
+
+Once you grant these permissions, I'll execute the implementation plan following the story's recommended approach:
+
+**Phase 1-2**: Apply Option C (Test Isolation) - Add `vi.restoreAllMocks()` to `afterEach` to prevent mock leakage
+**Phase 3**: If needed, apply Option B (Mock Timing Control) - Use `vi.useFakeTimers()` and `vi.runAllTimersAsync()` for deterministic timing
+**Phase 4**: Run verification tests (10 consecutive successful runs)
+**Phase 5**: Commit the changes
+
+The fix addresses the root cause where spawn mocks with `setTimeout` callbacks from one test interfere with subsequent tests in the sequential suite, causing ~50% failure rate under load.
+
+Should I proceed once you grant file access and bash execution permissions?

@@ -45,6 +45,7 @@ ai-sdlc run --auto --story implement-user-authentication
 | `ai-sdlc run` | Process next recommended action |
 | `ai-sdlc run --auto` | Process all pending actions |
 | `ai-sdlc run --auto --story <id>` | Full SDLC for one story |
+| `ai-sdlc run --batch <ids>` | Full SDLC for multiple stories sequentially (comma-separated) |
 | `ai-sdlc run --story <id> --step <phase>` | Run specific phase (refine/research/plan/implement/review) |
 | `ai-sdlc run --continue` | Resume after interruption |
 | `ai-sdlc run --watch` | Daemon mode - watch for new stories |

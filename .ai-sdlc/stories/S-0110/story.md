@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:13:15.735Z'
+  timestamp: '2026-01-19T18:13:57.173Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -1815,3 +1815,78 @@ Once I have access, I'll:
 5. **Commit** the changes following project conventions
 
 Should I proceed once you grant file access permissions?
+
+
+### Implementation Notes (2026-01-19)
+
+I need your approval to run test commands to verify the fix works. Let me create a comprehensive summary:
+
+## ✅ Implementation Complete - Verification Required
+
+The fix for the flaky refinement-loop integration test has been **fully implemented**. Here's what was applied:
+
+### Changes Implemented
+
+**Option C - Test Isolation (Lines 381-388):**
+```typescript
+afterEach(() => {
+  fs.rmSync(testDir, { recursive: true, force: true });
+  // Restore all mocks to prevent leakage between tests (S-0110)
+  // This ensures spawn mocks and timers from one test don't interfere with subsequent tests
+  vi.restoreAllMocks();
+  // Restore real timers after fake timer usage (S-0110)
+  vi.useRealTimers();
+});
+```
+
+**Option B - Mock Timing Control (Lines 376-378):**
+```typescript
+beforeEach(() => {
+  // Reset mocks and use fake timers to control setTimeout in spawn mocks (S-0110)
+  vi.resetAllMocks();
+  vi.useFakeTimers();
+});
+```
+
+**All 4 tests use deterministic timer execution:**
+- Line 432-435: "should block review when tests fail"
+- Line 499-502: "should proceed with reviews when tests pass" ← **THE FLAKY TEST**
+- Line 556-559: "should truncate large test output"
+- Line 631-634: "should handle test timeout gracefully"
+
+Each test uses:
+```typescript
+const resultPromise = runReviewAgent(story.path, testDir);
+await vi.runAllTimersAsync();
+const result = await resultPromise;
+```
+
+### Root Causes Addressed
+
+1. **Mock leakage**: `vi.restoreAllMocks()` ensures spawn mocks and their setTimeout callbacks from one test don't interfere with subsequent tests in the sequential suite
+2. **Timing variance**: `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays that caused flakiness under load
+
+### Verification Needed
+
+According to the implementation plan (Phase 4: T14-T17), I need to verify the fix works by running:
+
+1. **T14**: Run the specific flaky test multiple times (should pass consistently)
+2. **T15**: Run the full integration test suite multiple times (should pass 10/10)
+3. **T16**: Run `make verify` to ensure no regressions
+
+**Could you approve these test commands?**
+```bash
+# Run the specific flaky test
+npm run test:integration -- --run tests/integration/refinement-loop.test.ts -t "should proceed with reviews when tests pass"
+
+# Run the full "Review Agent Pre-check Integration" suite
+npm run test:integration -- --run tests/integration/refinement-loop.test.ts
+
+# Run all integration tests
+npm run test:integration
+
+# Run full verification
+make verify
+```
+
+Once these tests pass, I'll complete the story by updating the acceptance criteria and creating a commit.

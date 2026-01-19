@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:06:04.184Z'
+  timestamp: '2026-01-19T18:06:42.517Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -1393,3 +1393,65 @@ Once you grant these permissions, I'll:
 5. Commit the changes
 
 Should I proceed with the implementation?
+
+
+### Implementation Notes (2026-01-19)
+
+I need approval to run test commands. Let me create a summary of the current state and propose the verification plan:
+
+## Implementation Summary
+
+The fix for the flaky refinement-loop integration test has **already been fully implemented** in the test file. Here's what was applied:
+
+### ✅ Option C - Test Isolation (Lines 381-388)
+```typescript
+afterEach(() => {
+  // Clean up test directory
+  fs.rmSync(testDir, { recursive: true, force: true });
+  // Restore all mocks to prevent leakage between tests (S-0110)
+  // This ensures spawn mocks and timers from one test don't interfere with subsequent tests
+  vi.restoreAllMocks();
+  // Restore real timers after fake timer usage (S-0110)
+  vi.useRealTimers();
+});
+```
+
+### ✅ Option B - Mock Timing Control (Lines 376-378 + multiple test locations)
+```typescript
+beforeEach(() => {
+  // Reset mocks and use fake timers to control setTimeout in spawn mocks (S-0110)
+  vi.resetAllMocks();
+  vi.useFakeTimers();
+});
+
+// In each of the 4 tests, the pattern:
+const resultPromise = runReviewAgent(story.path, testDir);
+await vi.runAllTimersAsync();
+const result = await resultPromise;
+```
+
+This addresses both root causes identified in the research:
+1. **Mock leakage** - `vi.restoreAllMocks()` prevents spawn mocks from one test interfering with subsequent tests
+2. **Timing variance** - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays under load
+
+### What Remains: Verification (Phase 4)
+
+According to the implementation plan, I need to run tests to verify the fix works:
+
+**T14**: Run the specific flaky test multiple times in isolation
+**T15**: Run the full integration test suite multiple times  
+**T16**: Run `make verify` to ensure no regressions
+
+**Commands I need to run:**
+```bash
+# Run specific test 10 times
+npm run test:integration -- --run tests/integration/refinement-loop.test.ts -t "should proceed with reviews when tests pass"
+
+# Run full integration suite
+npm run test:integration
+
+# Run full verification
+make verify
+```
+
+**Should I proceed with running these verification tests?** This will confirm the implementation resolves the flakiness and meets all acceptance criteria.

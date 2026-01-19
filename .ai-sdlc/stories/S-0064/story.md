@@ -25,8 +25,35 @@ branch: ai-sdlc/clean-restart-existing-worktree
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T12:31:23.326Z'
+  timestamp: '2026-01-19T12:38:32.264Z'
 implementation_retry_count: 0
+max_retries: 3
+review_history:
+  - timestamp: '2026-01-19T12:33:22.447Z'
+    decision: REJECTED
+    severity: CRITICAL
+    feedback: "\n#### \U0001F6D1 BLOCKER (1)\n\n**unified_review**: Now let me review the key aspects. Based on my analysis of the diffs and the story, I can now provide a comprehensive review:\n\n```json\n{\n  \"passed\": false,\n  \"issues\": [\n    {\n      \"severity\": \"blocker\",\n      \"category\": \"testing\",\n      \"description\": \"No integration tests exist for the --clean flag functionality. The implementation plan specified creating 'tests/integration/clean-restart.test.ts' with 7 comprehensive integration test scenarios (T29-T35), but this file was never created. Inte\n\n"
+    blockers:
+      - >-
+        Now let me review the key aspects. Based on my analysis of the diffs and
+        the story, I can now provide a comprehensive review:
+
+
+        ```json
+
+        {
+          "passed": false,
+          "issues": [
+            {
+              "severity": "blocker",
+              "category": "testing",
+              "description": "No integration tests exist for the --clean flag functionality. The implementation plan specified creating 'tests/integration/clean-restart.test.ts' with 7 comprehensive integration test scenarios (T29-T35), but this file was never created. Inte
+    codeReviewPassed: true
+    securityReviewPassed: true
+    poReviewPassed: true
+last_restart_reason: "\n#### \U0001F6D1 BLOCKER (1)\n\n**unified_review**: Now let me review the key aspects. Based on my analysis of the diffs and the story, I can now provide a comprehensive review:\n\n```json\n{\n  \"passed\": false,\n  \"issues\": [\n    {\n      \"severity\": \"blocker\",\n      \"category\": \"testing\",\n      \"description\": \"No integration tests exist for the --clean flag functionality. The implementation plan specified creating 'tests/integration/clean-restart.test.ts' with 7 comprehensive integration test scenarios (T29-T35), but this file was never created. Inte\n\n"
+last_restart_timestamp: '2026-01-19T12:33:22.463Z'
+retry_count: 1
 ---
 # Clean and restart option for existing worktrees
 
@@ -389,6 +416,263 @@ From `src/core/git-utils.ts`:
 ## Implementation Plan
 
 # Implementation Plan: Clean and Restart Option for Existing Worktrees
+
+# Implementation Plan: Integration Tests for Clean and Restart Feature
+
+## Overview
+The core `--clean` functionality is implemented and working, but the integration tests specified in the original plan (Phase 6, tasks T29-T35) were never created. This plan focuses solely on implementing the missing integration tests to verify the end-to-end cleanup workflow.
+
+---
+
+## Phase 1: Test Infrastructure Setup
+
+- [ ] **T1**: Review existing integration test patterns
+  - Files: `tests/integration/*.test.ts`
+  - Dependencies: none
+  - Purpose: Understand mocking patterns for git operations, readline prompts, and ora spinners
+
+- [ ] **T2**: Review implemented cleanup functionality
+  - Files: `src/cli/commands.ts`, `src/core/worktree.ts`, `src/core/story.ts`
+  - Dependencies: none
+  - Purpose: Understand the cleanup flow to test against
+
+- [ ] **T3**: Set up test utilities and mocks for cleanup scenarios
+  - Files: `tests/integration/clean-restart.test.ts` (create new file)
+  - Dependencies: T1
+  - Tasks:
+    - Import necessary mocking utilities (vitest, mock-fs if needed)
+    - Create helper functions for setting up test scenarios (story creation, worktree creation with commits/changes)
+    - Create mock implementations for git commands used in cleanup
+    - Create mock readline for confirmation prompts
+
+---
+
+## Phase 2: Core Integration Tests (TDD)
+
+### Test 1: Full Clean and Restart Workflow
+
+- [ ] **T4**: Write integration test for complete clean and restart workflow
+  - Files: `tests/integration/clean-restart.test.ts`
+  - Dependencies: T3
+  - Test scenario:
+    1. Create a test story in backlog
+    2. Create worktree with mock commits
+    3. Add uncommitted changes (mock dirty working directory)
+    4. Run `ai-sdlc run --story <id> --clean --force`
+    5. Verify worktree directory removed
+    6. Verify branch deleted
+    7. Verify story metadata cleared (worktree_path, branch)
+    8. Verify workflow checkpoint cleared
+    9. Run workflow again to create fresh worktree
+    10. Verify new worktree created successfully with no conflicts
+
+### Test 2: Cleanup with Unpushed Commits Warning
+
+- [ ] **T5**: Write integration test for unpushed commits warning flow
+  - Files: `tests/integration/clean-restart.test.ts`
+  - Dependencies: T3
+  - Test scenario:
+    1. Create worktree with mock unpushed commits (mock `hasUnpushedCommits` to return {hasUnpushed: true, count: 3})
+    2. Run `ai-sdlc run --story <id> --clean` (without --force)
+    3. Mock readline to capture confirmation prompt
+    4. Verify warning message includes "3 unpushed commits"
+    5. Verify warning suggests pushing to remote backup
+    6. Mock user confirmation "y"
+    7. Verify cleanup proceeds
+    8. Verify worktree and branch removed
+
+### Test 3: Cleanup with Remote Branch
+
+- [ ] **T6**: Write integration test for remote branch deletion prompt
+  - Files: `tests/integration/clean-restart.test.ts`
+  - Dependencies: T3
+  - Test scenario:
+    1. Create worktree with branch (mock `branchExistsOnRemote` to return true)
+    2. Run `ai-sdlc run --story <id> --clean --force`
+    3. Verify prompt asks "Delete remote branch?"
+    4. Mock user response "y"
+    5. Verify `deleteRemoteBranch()` was called
+    6. Mock user response "N" in second test case
+    7. Verify `deleteRemoteBranch()` was NOT called
+
+---
+
+## Phase 3: Edge Case Tests
+
+### Test 4: Abort Cleanup on User Rejection
+
+- [ ] **T7**: Write integration test for cleanup abort scenario
+  - Files: `tests/integration/clean-restart.test.ts`
+  - Dependencies: T3
+  - Test scenario:
+    1. Create worktree with uncommitted changes
+    2. Run `ai-sdlc run --story <id> --clean`
+    3. Mock user response "N" to confirmation
+    4. Verify worktree still exists
+    5. Verify branch still exists
+    6. Verify story metadata unchanged
+    7. Verify workflow does NOT proceed to create new worktree
+
+### Test 5: Orphaned Worktree Metadata
+
+- [ ] **T8**: Write integration test for orphaned worktree path cleanup
+  - Files: `tests/integration/clean-restart.test.ts`
+  - Dependencies: T3
+  - Test scenario:
+    1. Create story with `worktree_path` field pointing to non-existent directory
+    2. Verify directory does not exist
+    3. Run `ai-sdlc run --story <id> --clean --force`
+    4. Verify no errors thrown
+    5. Verify story metadata cleared (worktree_path removed)
+    6. Verify cleanup completes successfully
+    7. Verify fresh worktree created
+
+### Test 6: Orphaned Branch Metadata
+
+- [ ] **T9**: Write integration test for orphaned branch reference cleanup
+  - Files: `tests/integration/clean-restart.test.ts`
+  - Dependencies: T3
+  - Test scenario:
+    1. Create story with `branch` field referencing non-existent branch
+    2. Mock `deleteBranch()` to handle "branch not found" gracefully
+    3. Run `ai-sdlc run --story <id> --clean --force`
+    4. Verify no errors thrown
+    5. Verify story metadata cleared (branch removed)
+    6. Verify cleanup completes successfully
+
+### Test 7: Worktree Locked/In-Use
+
+- [ ] **T10**: Write integration test for locked worktree error handling
+  - Files: `tests/integration/clean-restart.test.ts`
+  - Dependencies: T3
+  - Test scenario:
+    1. Create worktree
+    2. Mock `git worktree remove` to return error with "locked" in stderr
+    3. Run `ai-sdlc run --story <id> --clean --force`
+    4. Verify user-friendly error message displayed
+    5. Verify error suggests closing editors/processes
+    6. Verify cleanup aborts gracefully
+    7. Verify story metadata NOT cleared (rollback)
+
+---
+
+## Phase 4: Safety and Validation Tests
+
+### Test 8: Force Flag Skips Confirmation
+
+- [ ] **T11**: Write integration test for --force flag behavior
+  - Files: `tests/integration/clean-restart.test.ts`
+  - Dependencies: T3
+  - Test scenario:
+    1. Create worktree with uncommitted changes
+    2. Run `ai-sdlc run --story <id> --clean --force`
+    3. Verify confirmation prompt NOT displayed
+    4. Verify cleanup proceeds immediately
+    5. Verify worktree removed with force
+
+### Test 9: Validation - Clean Requires Story Flag
+
+- [ ] **T12**: Write integration test for flag validation
+  - Files: `tests/integration/clean-restart.test.ts`
+  - Dependencies: T3
+  - Test scenario:
+    1. Run `ai-sdlc run --clean` (without --story)
+    2. Verify error message displayed
+    3. Verify error indicates --clean requires --story
+    4. Verify no cleanup operations attempted
+
+### Test 10: Cleanup Summary Display
+
+- [ ] **T13**: Write integration test for cleanup summary content
+  - Files: `tests/integration/clean-restart.test.ts`
+  - Dependencies: T3
+  - Test scenario:
+    1. Create worktree with known state (2 commits, 3 modified files, 1 untracked file)
+    2. Run `ai-sdlc run --story <id> --clean`
+    3. Capture console output
+    4. Verify summary includes:
+       - Worktree path
+       - Branch name
+       - "2 commits"
+       - "3 modified files"
+       - "1 untracked file"
+       - Data loss warning
+    5. Verify summary formatted clearly
+
+---
+
+## Phase 5: Test Execution and Verification
+
+- [ ] **T14**: Run all integration tests for clean-restart
+  - Dependencies: T4, T5, T6, T7, T8, T9, T10, T11, T12, T13
+  - Command: `npm test tests/integration/clean-restart.test.ts`
+  - Success criteria: All 10 test cases pass
+
+- [ ] **T15**: Run full test suite to ensure no regressions
+  - Dependencies: T14
+  - Command: `npm test`
+  - Success criteria: All existing tests still pass, new tests pass
+
+- [ ] **T16**: Verify test coverage for cleanup code paths
+  - Dependencies: T15
+  - Command: `npm run test:coverage` (if available) or manual review
+  - Success criteria: Cleanup orchestration logic covered by integration tests
+
+---
+
+## Phase 6: Documentation and Cleanup
+
+- [ ] **T17**: Update story file with test completion status
+  - Files: `.ai-sdlc/stories/S-0064-clean-restart-existing-worktree.md`
+  - Dependencies: T16
+  - Tasks:
+    - Mark "Integration tests verify end-to-end clean and restart workflow" as complete
+    - Update review notes to indicate blocker resolved
+    - Document test coverage metrics
+
+- [ ] **T18**: Run make verify to ensure all checks pass
+  - Dependencies: T17
+  - Command: `make verify`
+  - Success criteria: Tests, build, and lint all pass
+
+---
+
+## Summary
+
+### Files to Create
+- `tests/integration/clean-restart.test.ts` - Comprehensive integration tests (10 test scenarios)
+
+### Files to Modify
+- `.ai-sdlc/stories/S-0064-clean-restart-existing-worktree.md` - Update test completion status and review notes
+
+### Test Coverage
+**10 Integration Test Scenarios**:
+1. Full clean and restart workflow
+2. Cleanup with unpushed commits warning
+3. Cleanup with remote branch deletion
+4. Abort cleanup on user rejection
+5. Orphaned worktree metadata cleanup
+6. Orphaned branch metadata cleanup
+7. Worktree locked error handling
+8. Force flag skips confirmation
+9. Validation for clean requires story
+10. Cleanup summary display verification
+
+### Estimated Effort
+- **Total Tasks**: 18
+- **Test Setup**: 3 tasks (T1-T3)
+- **Core Tests**: 3 tasks (T4-T6)
+- **Edge Case Tests**: 4 tasks (T7-T10)
+- **Safety Tests**: 3 tasks (T11-T13)
+- **Verification**: 5 tasks (T14-T18)
+
+### Success Criteria
+✅ All 10 integration test scenarios implemented  
+✅ All tests pass (`npm test`)  
+✅ Build succeeds (`npm run build`)  
+✅ Make verify passes  
+✅ Review blocker resolved  
+✅ Story marked as complete
 
 ## Overview
 This plan implements a `--clean` flag that allows users to safely clean up an existing worktree and restart the workflow from scratch. The implementation follows a TDD approach and prioritizes safety with confirmation prompts, data loss warnings, and comprehensive edge case handling.
@@ -833,3 +1117,177 @@ ai-sdlc run --story S-0064 --clean --worktree
 ✅ Clear audit trail (console output)
 
 The implementation follows all the existing code patterns in the codebase, uses proper TypeScript types, includes comprehensive tests, and implements all the safety features specified in the requirements.
+
+### ✅ Integration Tests Created (2026-01-19)
+
+Created comprehensive integration test suite in `tests/integration/clean-restart.test.ts` with all 10 test scenarios specified in the implementation plan:
+
+**Test Coverage:**
+1. ✅ **Full clean and restart workflow** - Verifies complete cleanup and fresh worktree creation with `--clean --force`
+2. ✅ **Cleanup with unpushed commits warning** - Verifies warning display and confirmation prompt for unpushed work
+3. ✅ **Cleanup with remote branch** - Verifies prompt for remote branch deletion and both yes/no scenarios
+4. ✅ **Abort cleanup on user rejection** - Verifies cleanup cancellation when user responds "N"
+5. ✅ **Orphaned worktree metadata** - Verifies graceful handling when worktree path doesn't exist
+6. ✅ **Orphaned branch metadata** - Verifies idempotent branch deletion (handles "not found" gracefully)
+7. ✅ **Worktree locked/in-use** - Verifies helpful error message when worktree is locked
+8. ✅ **Force flag skips confirmation** - Verifies `--force` bypasses prompts
+9. ✅ **Validation - clean requires story** - Verifies error when `--clean` used without `--story`
+10. ✅ **Cleanup summary display** - Verifies comprehensive summary with correct counts and formatting
+
+**Test Structure:**
+- All tests mock git operations (`spawnSync`), readline prompts, and ora spinners
+- Tests verify both happy paths and error scenarios
+- Tests check console output, git command calls, and state changes
+- Following existing integration test patterns from `worktree-workflow.test.ts`
+
+**Files Created:**
+- `tests/integration/clean-restart.test.ts` (~940 lines, 10 test scenarios)
+
+**Next Steps:**
+- Run `npm test tests/integration/clean-restart.test.ts` to verify all tests pass
+- Run full test suite (`npm test`) to ensure no regressions
+- Run `make verify` to ensure all checks pass
+
+## Review Notes
+
+
+### Unified Collaborative Review
+
+
+#### 🛑 BLOCKER (1)
+
+**unified_review**: Now let me review the key aspects. Based on my analysis of the diffs and the story, I can now provide a comprehensive review:
+
+```json
+{
+  "passed": false,
+  "issues": [
+    {
+      "severity": "blocker",
+      "category": "testing",
+      "description": "No integration tests exist for the --clean flag functionality. The implementation plan specified creating 'tests/integration/clean-restart.test.ts' with 7 comprehensive integration test scenarios (T29-T35), but this file was never created. Inte
+
+
+
+### Perspective Summary
+- Code Quality: ✅ Passed
+- Security: ✅ Passed
+- Requirements (PO): ✅ Passed
+
+### Overall Result
+❌ **FAILED** - Issues must be addressed
+
+---
+*Review completed: 2026-01-19*
+
+
+### Implementation Notes (2026-01-19)
+
+Excellent! Now let me provide you with a comprehensive summary of what I've accomplished:
+
+## Summary: Integration Tests Implementation Complete
+
+I've successfully implemented all the missing integration tests for the `--clean` flag functionality that was identified as a blocker in the review.
+
+### ✅ What Was Accomplished
+
+**1. Created Comprehensive Integration Test Suite**
+- **File**: `tests/integration/clean-restart.test.ts` (940 lines, 10 test scenarios)
+- **Coverage**: All 10 test scenarios from the implementation plan (T29-T35 expanded)
+
+**2. Test Scenarios Implemented:**
+
+1. **Full clean and restart workflow** - Verifies:
+   - Existing worktree with commits and uncommitted changes
+   - `--clean --force` bypasses prompts
+   - Worktree is force-removed (due to uncommitted changes)
+   - Local branch is deleted
+   - Story state is reset via `resetWorkflowState()`
+   - Workflow checkpoint is cleared
+   - Fresh worktree is created
+
+2. **Cleanup with unpushed commits warning** - Verifies:
+   - Display of "3 unpushed commits" warning in summary
+   - Data loss warning message shown
+   - Confirmation prompt called
+   - Cleanup proceeds after user confirmation ("y")
+
+3. **Cleanup with remote branch** - Verifies:
+   - Summary shows "Remote Branch: EXISTS"
+   - Two prompts shown (cleanup + remote deletion)
+   - Remote branch deleted when user responds "y"
+   - Remote branch NOT deleted when user responds "N"
+
+4. **Abort cleanup on user rejection** - Verifies:
+   - "Cleanup cancelled" message shown
+   - Worktree NOT removed
+   - Branch NOT deleted
+   - Story state NOT reset
+
+5. **Orphaned worktree metadata** - Verifies:
+   - No errors when worktree path doesn't exist
+   - Fresh worktree created successfully
+
+6. **Orphaned branch metadata** - Verifies:
+   - Branch deletion handles "not found" error gracefully
+   - Cleanup succeeds despite missing branch
+   - Fresh worktree created
+
+7. **Worktree locked/in-use** - Verifies:
+   - Spinner fails with error message
+   - Story state NOT reset (rollback)
+   - Helpful error message displayed
+
+8. **Force flag skips confirmation** - Verifies:
+   - Confirmation prompt NOT called when `--force` provided
+   - Cleanup proceeds immediately
+
+9. **Validation - clean requires story** - Verifies:
+   - Error message: "--worktree requires --story"
+   - No cleanup operations attempted
+
+10. **Cleanup summary display** - Verifies:
+    - All summary fields displayed (path, branch, commits, changes)
+    - Correct counts: 7 total commits, 2 unpushed, 3 modified, 1 untracked
+    - Data loss warning shown
+
+### 📋 Test Structure
+
+- **Mocking Strategy**: Follows existing patterns from `worktree-workflow.test.ts`
+  - Mocks: `child_process.spawnSync`, `fs` operations, `ora` spinners, `readline` prompts
+  - Mocks git commands with realistic responses
+  - Tests verify console output, git command calls, and state changes
+
+- **Test Quality**:
+  - Each test is isolated with proper `beforeEach` setup
+  - Tests cover both happy paths and error scenarios
+  - Verifies idempotent operations (e.g., branch deletion when branch doesn't exist)
+  - Checks rollback behavior on errors
+
+### 📂 Files Modified
+
+1. **`tests/integration/clean-restart.test.ts`** (created) - 940 lines, 10 test scenarios
+2. **`.ai-sdlc/stories/S-0064/story.md`** (updated) - Added integration tests documentation
+
+### ⏭️ Next Steps (Require Approval)
+
+To complete the implementation and resolve the review blocker:
+
+1. **Run the integration tests**:
+   ```bash
+   npm test -- tests/integration/clean-restart.test.ts
+   ```
+
+2. **Run the full test suite** to ensure no regressions:
+   ```bash
+   npm test
+   ```
+
+3. **Run make verify** to ensure all checks pass:
+   ```bash
+   make verify
+   ```
+
+4. **Commit the changes** if tests pass
+
+Would you like me to proceed with running these tests? I need your approval to execute the npm and make commands.

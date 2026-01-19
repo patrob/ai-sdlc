@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:28:59.841Z'
+  timestamp: '2026-01-19T18:29:33.245Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -2876,3 +2876,23 @@ Once granted, I'll:
 5. **Commit the changes** following project conventions
 
 The story indicates this test has a ~50% failure rate in the full suite due to mock leakage and timing issues with real `setTimeout` callbacks under load.
+
+
+### Implementation Notes (2026-01-19)
+
+I need your approval to run the verification tests. The implementation is complete - I just need to confirm it resolves the flakiness issue and meets all acceptance criteria.
+
+**Summary of what's been implemented:**
+- ✅ **Option C (Test Isolation)** - Added `vi.restoreAllMocks()` and `vi.useRealTimers()` in `afterEach` (lines 381-388)
+- ✅ **Option B (Mock Timing Control)** - Added `vi.useFakeTimers()` in `beforeEach` (lines 376-378) and `await vi.runAllTimersAsync()` in all 4 tests
+
+These changes address both root causes:
+1. **Mock leakage** - `vi.restoreAllMocks()` ensures spawn mocks don't leak between tests
+2. **Timing variance** - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays under load
+
+**Could you approve running these test commands?**
+1. `npm run test:integration -- --run tests/integration/refinement-loop.test.ts` (run the specific test suite)
+2. `npm run test:integration` (run all integration tests to ensure no regressions)
+3. `make verify` (run full verification)
+
+Once these tests pass, I'll update the story acceptance criteria and mark it as complete!

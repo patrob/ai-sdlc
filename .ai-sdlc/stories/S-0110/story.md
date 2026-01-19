@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:38:05.891Z'
+  timestamp: '2026-01-19T18:38:40.603Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -3760,3 +3760,36 @@ According to the implementation plan (Phase 4: T14-T17), I need to verify the fi
 4. **T17**: Execution time is under 5 seconds
 
 The implementation is complete and properly addresses both root causes identified in the research. **I need your approval to run the verification tests.** Could you approve running these test commands so I can complete the story?
+
+
+### Implementation Notes (2026-01-19)
+
+I need your approval to run the verification tests. The implementation is complete - I just need to confirm it resolves the flakiness issue.
+
+**Summary of what's been implemented:**
+
+✅ **Option C - Test Isolation (Lines 381-388):**
+- Added `vi.restoreAllMocks()` to prevent mock leakage between tests
+- Added `vi.useRealTimers()` to restore real timers after each test
+- Added detailed comments referencing S-0110
+
+✅ **Option B - Mock Timing Control (Lines 376-378):**
+- Added `vi.useFakeTimers()` in `beforeEach` to use deterministic fake timers
+- All 4 tests in the "Review Agent Pre-check Integration" suite now use `await vi.runAllTimersAsync()` to deterministically execute timers
+- Added detailed comments explaining the timing control
+
+These changes address both root causes:
+1. **Mock leakage** - `vi.restoreAllMocks()` ensures spawn mocks don't leak between tests
+2. **Timing variance** - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays under load
+
+**To complete the story, I need to run verification tests to confirm:**
+1. The test passes reliably in the full integration suite
+2. Test execution time remains under 5 seconds
+3. No regression in other integration tests
+
+**Could you approve running these test commands?**
+- `npm run test:integration -- --run tests/integration/refinement-loop.test.ts`
+- `npm run test:integration`
+- `make verify`
+
+Once approved, I'll verify the fix works and complete the story.

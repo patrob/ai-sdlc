@@ -13,6 +13,7 @@ import { runReviewAgent } from '../agents/review.js';
 import { runReworkAgent } from '../agents/rework.js';
 import { Action } from '../types/index.js';
 import { formatSummaryStatus, formatCompactStoryCompletion } from './formatting.js';
+import { ProcessManager } from '../core/process-manager.js';
 
 /**
  * Daemon statistics tracking
@@ -445,11 +446,15 @@ export class DaemonRunner {
       // Handle double Ctrl+C for force quit
       if (this.ctrlCCount > 0 && now - this.lastCtrlCTime < 2000) {
         console.log('\n\n⚠️  Force quitting...');
+        ProcessManager.getInstance().killAll('SIGKILL');
         process.exit(1);
       }
 
       this.ctrlCCount++;
       this.lastCtrlCTime = now;
+
+      // Kill child processes gracefully before stopping daemon
+      ProcessManager.getInstance().killAll('SIGTERM');
 
       // Call stop() and ensure process exits regardless of outcome
       this.stop()
@@ -457,6 +462,7 @@ export class DaemonRunner {
           // Ignore errors during shutdown
         })
         .finally(() => {
+          ProcessManager.getInstance().killAll('SIGKILL');
           process.exit(0);
         });
     };

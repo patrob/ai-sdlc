@@ -1,6 +1,7 @@
 import { Story } from '../types/index.js';
 import { loadConfig } from '../core/config.js';
 import { spawn, spawnSync } from 'child_process';
+import { ProcessManager } from '../core/process-manager.js';
 import { existsSync, readdirSync } from 'fs';
 import path from 'path';
 
@@ -103,6 +104,8 @@ async function runCommandAsync(
       cwd: workingDir,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+
+    ProcessManager.getInstance().registerChild(child);
 
     const timeoutId = setTimeout(() => {
       killed = true;

@@ -2,7 +2,7 @@
 id: S-0053
 title: Auto-retry transient API failures
 priority: 5
-status: in-progress
+status: done
 type: feature
 created: '2026-01-17'
 labels:
@@ -12,13 +12,10 @@ labels:
   - s
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 slug: auto-retry-transient-api-failures
-worktree_path: >-
-  /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0053-auto-retry-transient-api-failures
 updated: '2026-01-19'
-branch: ai-sdlc/auto-retry-transient-api-failures
 last_test_run:
   passed: true
   failures: 0

@@ -2,7 +2,7 @@
 id: S-0060
 title: Orphaned vitest/node processes not cleaned up after agent runs
 priority: 40
-status: in-progress
+status: done
 type: bug
 created: '2026-01-18'
 labels:
@@ -13,13 +13,10 @@ labels:
   - s
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 slug: orphaned-vitest-processes-cleanup
-worktree_path: >-
-  /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0060-orphaned-vitest-processes-cleanup
 updated: '2026-01-19'
-branch: ai-sdlc/orphaned-vitest-processes-cleanup
 last_test_run:
   passed: true
   failures: 0

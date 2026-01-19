@@ -3,11 +3,11 @@ import ora from 'ora';
 import fs from 'fs';
 import path from 'path';
 import * as readline from 'readline';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { getSdlcRoot, loadConfig, initConfig, validateWorktreeBasePath, DEFAULT_WORKTREE_CONFIG } from '../core/config.js';
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoriesByStatus } from '../core/kanban.js';
-import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId, autoCompleteStoryAfterReview } from '../core/story.js';
-import { GitWorktreeService, WorktreeStatus } from '../core/worktree.js';
+import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId, autoCompleteStoryAfterReview, incrementImplementationRetryCount, getEffectiveMaxImplementationRetries, isAtMaxImplementationRetries, updateStoryStatus } from '../core/story.js';
+import { GitWorktreeService, WorktreeStatus, getLastCompletedPhase, getNextPhase } from '../core/worktree.js';
 import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext, WorktreeInfo, PreFlightResult } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
 import {
@@ -27,6 +27,14 @@ import { validateGitState, GitValidationResult } from '../core/git-utils.js';
 import { StoryLogger } from '../core/story-logger.js';
 import { detectConflicts } from '../core/conflict-detector.js';
 import { getLogger } from '../core/logger.js';
+
+/**
+ * Branch divergence threshold for warnings
+ * When a worktree branch has diverged by more than this number of commits
+ * from the base branch (ahead or behind), a warning will be displayed
+ * suggesting the user rebase to sync with latest changes.
+ */
+const DIVERGENCE_WARNING_THRESHOLD = 10;
 
 /**
  * Initialize the .ai-sdlc folder structure
@@ -569,8 +577,8 @@ export async function preFlightConflictCheck(
     throw new Error('Invalid project path');
   }
 
-  // Check if target story is already in-progress
-  if (targetStory.frontmatter.status === 'in-progress') {
+  // Check if target story is already in-progress (allow if resuming existing worktree)
+  if (targetStory.frontmatter.status === 'in-progress' && !targetStory.frontmatter.worktree_path) {
     console.log(c.error('❌ Story is already in-progress'));
     return { proceed: false, warnings: ['Story already in progress'] };
   }
@@ -677,7 +685,7 @@ export async function preFlightConflictCheck(
 /**
  * Run the workflow (process one action or all)
  */
-export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean }): Promise<void> {
+export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean; clean?: boolean }): Promise<void> {
   const config = loadConfig();
   // Parse maxIterations from CLI (undefined means use config default which is Infinity)
   const maxIterationsOverride = options.maxIterations !== undefined
@@ -695,6 +703,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     step: options.step,
     watch: options.watch,
     worktree: options.worktree,
+    clean: options.clean,
     force: options.force,
   });
 
@@ -1045,8 +1054,117 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     const workingDir = path.dirname(sdlcRoot);
 
     // Check if story already has an existing worktree (resume scenario)
+    // Note: We check only if existingWorktreePath is set, not if it exists.
+    // The validation logic will handle missing directories/branches.
     const existingWorktreePath = targetStory.frontmatter.worktree_path;
-    if (existingWorktreePath && fs.existsSync(existingWorktreePath)) {
+    if (existingWorktreePath) {
+      // Validate worktree before resuming
+      const resolvedBasePath = validateWorktreeBasePath(worktreeConfig.basePath, workingDir);
+
+      // Security validation: ensure worktree_path is within the configured base directory
+      const absoluteWorktreePath = path.resolve(existingWorktreePath);
+      const absoluteBasePath = path.resolve(resolvedBasePath);
+      if (!absoluteWorktreePath.startsWith(absoluteBasePath)) {
+        console.log(c.error('Security Error: worktree_path is outside configured base directory'));
+        console.log(c.dim(`  Worktree path: ${absoluteWorktreePath}`));
+        console.log(c.dim(`  Expected base: ${absoluteBasePath}`));
+        return;
+      }
+
+      // Warn if story is marked as done but has an existing worktree
+      if (targetStory.frontmatter.status === 'done') {
+        console.log(c.warning('⚠ Story is marked as done but has an existing worktree'));
+        console.log(c.dim('  This may be a stale worktree that should be cleaned up.'));
+        console.log();
+
+        // Prompt user for confirmation to proceed
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+
+        const answer = await new Promise<string>((resolve) => {
+          rl.question(c.dim('Continue with this worktree? (y/N): '), (ans) => {
+            rl.close();
+            resolve(ans.toLowerCase().trim());
+          });
+        });
+
+        if (answer !== 'y' && answer !== 'yes') {
+          console.log(c.dim('Aborted. Consider removing the worktree_path from the story frontmatter.'));
+          return;
+        }
+
+        console.log();
+      }
+
+      const worktreeService = new GitWorktreeService(workingDir, resolvedBasePath);
+      const branchName = worktreeService.getBranchName(targetStory.frontmatter.id, targetStory.slug);
+
+      const validation = worktreeService.validateWorktreeForResume(existingWorktreePath, branchName);
+
+      if (!validation.canResume) {
+        console.log(c.error('Cannot resume worktree:'));
+        validation.issues.forEach(issue => console.log(c.dim(`  ✗ ${issue}`)));
+
+        if (validation.requiresRecreation) {
+          const branchExists = !validation.issues.includes('Branch does not exist');
+          const dirMissing = validation.issues.includes('Worktree directory does not exist');
+          const dirExists = !dirMissing;
+
+          // Case 1: Directory missing but branch exists - recreate worktree from existing branch
+          // Case 2: Directory exists but branch missing - recreate with new branch
+          if ((branchExists && dirMissing) || (!branchExists && dirExists)) {
+            const reason = branchExists
+              ? 'Branch exists - automatically recreating worktree directory'
+              : 'Directory exists - automatically recreating worktree with new branch';
+            console.log(c.dim(`\n✓ ${reason}`));
+
+            try {
+              // Remove the old worktree reference if it exists
+              const removeResult = spawnSync('git', ['worktree', 'remove', existingWorktreePath, '--force'], {
+                cwd: workingDir,
+                encoding: 'utf-8',
+                shell: false,
+                stdio: ['ignore', 'pipe', 'pipe'],
+              });
+
+              // Create the worktree at the same path
+              // If branch exists, checkout that branch; otherwise create a new branch
+              const baseBranch = worktreeService.detectBaseBranch();
+              const worktreeAddArgs = branchExists
+                ? ['worktree', 'add', existingWorktreePath, branchName]
+                : ['worktree', 'add', '-b', branchName, existingWorktreePath, baseBranch];
+              const addResult = spawnSync('git', worktreeAddArgs, {
+                cwd: workingDir,
+                encoding: 'utf-8',
+                shell: false,
+                stdio: ['ignore', 'pipe', 'pipe'],
+              });
+
+              if (addResult.status !== 0) {
+                throw new Error(`Failed to recreate worktree: ${addResult.stderr}`);
+              }
+
+              // Install dependencies in the recreated worktree
+              worktreeService.installDependencies(existingWorktreePath);
+
+              console.log(c.success(`✓ Worktree recreated at ${existingWorktreePath}`));
+              getLogger().info('worktree', `Recreated worktree for ${targetStory.frontmatter.id} at ${existingWorktreePath}`);
+            } catch (error) {
+              console.log(c.error(`Failed to recreate worktree: ${error instanceof Error ? error.message : String(error)}`));
+              console.log(c.dim('Please manually remove the worktree_path from the story frontmatter and try again.'));
+              return;
+            }
+          } else {
+            console.log(c.dim('\nWorktree needs manual intervention. Please remove the worktree_path from the story frontmatter and try again.'));
+            return;
+          }
+        } else {
+          return;
+        }
+      }
+
       // Reuse existing worktree
       originalCwd = process.cwd();
       worktreePath = existingWorktreePath;
@@ -1054,9 +1172,62 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       sdlcRoot = getSdlcRoot();
       worktreeCreated = true;
 
+      // Re-load story from worktree context to get current state
+      const worktreeStory = findStoryById(sdlcRoot, targetStory.frontmatter.id);
+      if (worktreeStory) {
+        targetStory = worktreeStory;
+      }
+
+      // Get phase information for resume context
+      const lastPhase = getLastCompletedPhase(targetStory);
+      const nextPhase = getNextPhase(targetStory);
+
+      // Get worktree status for uncommitted changes info
+      const worktreeInfo: WorktreeInfo = {
+        path: existingWorktreePath,
+        branch: branchName,
+        storyId: targetStory.frontmatter.id,
+        exists: true,
+      };
+      const worktreeStatus = worktreeService.getWorktreeStatus(worktreeInfo);
+
+      // Check branch divergence
+      const divergence = worktreeService.checkBranchDivergence(branchName);
+
       console.log(c.success(`✓ Resuming in existing worktree: ${worktreePath}`));
-      console.log(c.dim(`  Branch: ai-sdlc/${targetStory.frontmatter.id}-${targetStory.slug}`));
+      console.log(c.dim(`  Branch: ${branchName}`));
+
+      if (lastPhase) {
+        console.log(c.dim(`  Last completed phase: ${lastPhase}`));
+      }
+
+      if (nextPhase) {
+        console.log(c.dim(`  Next phase: ${nextPhase}`));
+      }
+
+      // Display uncommitted changes if present
+      if (worktreeStatus.workingDirectoryStatus !== 'clean') {
+        const totalChanges = worktreeStatus.modifiedFiles.length + worktreeStatus.untrackedFiles.length;
+        console.log(c.dim(`  Uncommitted changes: ${totalChanges} file(s)`));
+
+        if (worktreeStatus.modifiedFiles.length > 0) {
+          console.log(c.dim(`    Modified: ${worktreeStatus.modifiedFiles.slice(0, 3).join(', ')}${worktreeStatus.modifiedFiles.length > 3 ? '...' : ''}`));
+        }
+        if (worktreeStatus.untrackedFiles.length > 0) {
+          console.log(c.dim(`    Untracked: ${worktreeStatus.untrackedFiles.slice(0, 3).join(', ')}${worktreeStatus.untrackedFiles.length > 3 ? '...' : ''}`));
+        }
+      }
+
+      // Warn if branch has diverged significantly
+      if (divergence.diverged && (divergence.ahead > DIVERGENCE_WARNING_THRESHOLD || divergence.behind > DIVERGENCE_WARNING_THRESHOLD)) {
+        console.log(c.warning(`  ⚠ Branch has diverged from base: ${divergence.ahead} ahead, ${divergence.behind} behind`));
+        console.log(c.dim(`    Consider rebasing to sync with latest changes`));
+      }
+
       console.log();
+
+      // Log resume event
+      getLogger().info('worktree', `Resumed worktree for ${targetStory.frontmatter.id} at ${worktreePath}`);
     } else {
       // Create new worktree
       // Resolve worktree base path from config
@@ -1075,61 +1246,292 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       // This catches scenarios where workflow was interrupted after worktree creation
       // but before the story file was updated
       const existingWorktree = worktreeService.findByStoryId(targetStory.frontmatter.id);
+      let shouldCreateNewWorktree = !existingWorktree || !existingWorktree.exists;
+
       if (existingWorktree && existingWorktree.exists) {
-        const worktreeStatus = worktreeService.getWorktreeStatus(existingWorktree);
-        getLogger().info('worktree', `Detected existing worktree for ${targetStory.frontmatter.id} at ${existingWorktree.path}`);
-        displayExistingWorktreeInfo(worktreeStatus, c);
-        return;
-      }
+        // Handle --clean flag: cleanup and restart
+        if (options.clean) {
+          console.log(c.warning('Existing worktree found - cleaning up before restart...'));
+          console.log();
 
-      // Validate git state for worktree creation
-      const validation = worktreeService.validateCanCreateWorktree();
-      if (!validation.valid) {
-        console.log(c.error(`Error: ${validation.error}`));
-        return;
-      }
+          const worktreeStatus = worktreeService.getWorktreeStatus(existingWorktree);
+          const unpushedResult = worktreeService.hasUnpushedCommits(existingWorktree.path);
+          const commitCount = worktreeService.getCommitCount(existingWorktree.path);
+          const branchOnRemote = worktreeService.branchExistsOnRemote(existingWorktree.branch);
 
-      try {
-        // Detect base branch
-        const baseBranch = worktreeService.detectBaseBranch();
+          // Display summary of what will be deleted
+          console.log(c.bold('Cleanup Summary:'));
+          console.log(c.dim('─'.repeat(60)));
+          console.log(`${c.dim('Worktree Path:')}    ${worktreeStatus.path}`);
+          console.log(`${c.dim('Branch:')}          ${worktreeStatus.branch}`);
+          console.log(`${c.dim('Total Commits:')}   ${commitCount}`);
+          console.log(`${c.dim('Unpushed Commits:')} ${unpushedResult.hasUnpushed ? c.warning(unpushedResult.count.toString()) : c.success('0')}`);
+          console.log(`${c.dim('Modified Files:')}  ${worktreeStatus.modifiedFiles.length > 0 ? c.warning(worktreeStatus.modifiedFiles.length.toString()) : c.success('0')}`);
+          console.log(`${c.dim('Untracked Files:')} ${worktreeStatus.untrackedFiles.length > 0 ? c.warning(worktreeStatus.untrackedFiles.length.toString()) : c.success('0')}`);
+          console.log(`${c.dim('Remote Branch:')}   ${branchOnRemote ? c.warning('EXISTS') : c.dim('none')}`);
+          console.log();
 
-        // Create worktree
+          // Warn about data loss
+          if (worktreeStatus.modifiedFiles.length > 0 || worktreeStatus.untrackedFiles.length > 0 || unpushedResult.hasUnpushed) {
+            console.log(c.error('⚠ WARNING: This will DELETE all uncommitted and unpushed work!'));
+            console.log();
+          }
+
+          // Check for --force flag to skip confirmation
+          const forceCleanup = options.force;
+          if (!forceCleanup) {
+            // Prompt for confirmation
+            const confirmed = await new Promise<boolean>((resolve) => {
+              const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+              rl.question(c.warning('Are you sure you want to proceed? (y/N): '), (answer) => {
+                rl.close();
+                resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
+              });
+            });
+
+            if (!confirmed) {
+              console.log(c.info('Cleanup cancelled.'));
+              return;
+            }
+          }
+
+          console.log();
+          const cleanupSpinner = ora('Cleaning up worktree...').start();
+
+          try {
+            // Remove worktree (force remove to handle uncommitted changes)
+            const forceRemove = worktreeStatus.modifiedFiles.length > 0 || worktreeStatus.untrackedFiles.length > 0;
+            worktreeService.remove(existingWorktree.path, forceRemove);
+            cleanupSpinner.text = 'Worktree removed, deleting branch...';
+
+            // Delete local branch
+            worktreeService.deleteBranch(existingWorktree.branch, true);
+
+            // Optionally delete remote branch if it exists
+            if (branchOnRemote) {
+              if (!forceCleanup) {
+                cleanupSpinner.stop();
+                const deleteRemote = await new Promise<boolean>((resolve) => {
+                  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+                  rl.question(c.warning('Branch exists on remote. Delete it too? (y/N): '), (answer) => {
+                    rl.close();
+                    resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
+                  });
+                });
+
+                if (deleteRemote) {
+                  cleanupSpinner.start('Deleting remote branch...');
+                  worktreeService.deleteRemoteBranch(existingWorktree.branch);
+                }
+                cleanupSpinner.start();
+              } else {
+                // --force provided, skip remote deletion by default (safer)
+                cleanupSpinner.text = 'Skipping remote branch deletion (use manual cleanup if needed)';
+              }
+            }
+
+            // Reset story workflow state
+            cleanupSpinner.text = 'Resetting story state...';
+            const { resetWorkflowState } = await import('../core/story.js');
+            targetStory = await resetWorkflowState(targetStory);
+
+            // Clear workflow checkpoint if exists
+            if (hasWorkflowState(sdlcRoot, targetStory.frontmatter.id)) {
+              await clearWorkflowState(sdlcRoot, targetStory.frontmatter.id);
+            }
+
+            cleanupSpinner.succeed(c.success('✓ Cleanup complete - ready to create fresh worktree'));
+            console.log();
+          } catch (error) {
+            cleanupSpinner.fail(c.error('Cleanup failed'));
+            console.log(c.error(`Error: ${error instanceof Error ? error.message : String(error)}`));
+            return;
+          }
+
+          // After cleanup, create a fresh worktree
+          shouldCreateNewWorktree = true;
+        } else {
+          // Not cleaning - resume in existing worktree (S-0063 feature)
+          getLogger().info('worktree', `Detected existing worktree for ${targetStory.frontmatter.id} at ${existingWorktree.path}`);
+
+          // Validate the existing worktree before resuming
+        const branchName = worktreeService.getBranchName(targetStory.frontmatter.id, targetStory.slug);
+        const validation = worktreeService.validateWorktreeForResume(existingWorktree.path, branchName);
+
+        if (!validation.canResume) {
+          console.log(c.error('Detected existing worktree but cannot resume:'));
+          validation.issues.forEach(issue => console.log(c.dim(`  ✗ ${issue}`)));
+
+          if (validation.requiresRecreation) {
+            const branchExists = !validation.issues.includes('Branch does not exist');
+            const dirMissing = validation.issues.includes('Worktree directory does not exist');
+            const dirExists = !dirMissing;
+
+            // Case 1: Directory missing but branch exists - recreate worktree from existing branch
+            // Case 2: Directory exists but branch missing - recreate with new branch
+            if ((branchExists && dirMissing) || (!branchExists && dirExists)) {
+              const reason = branchExists
+                ? 'Branch exists - automatically recreating worktree directory'
+                : 'Directory exists - automatically recreating worktree with new branch';
+              console.log(c.dim(`\n✓ ${reason}`));
+
+              try {
+                // Remove the old worktree reference if it exists
+                const removeResult = spawnSync('git', ['worktree', 'remove', existingWorktree.path, '--force'], {
+                  cwd: workingDir,
+                  encoding: 'utf-8',
+                  shell: false,
+                  stdio: ['ignore', 'pipe', 'pipe'],
+                });
+
+                // Create the worktree at the same path
+                // If branch exists, checkout that branch; otherwise create a new branch
+                const baseBranch = worktreeService.detectBaseBranch();
+                const worktreeAddArgs = branchExists
+                  ? ['worktree', 'add', existingWorktree.path, branchName]
+                  : ['worktree', 'add', '-b', branchName, existingWorktree.path, baseBranch];
+                const addResult = spawnSync('git', worktreeAddArgs, {
+                  cwd: workingDir,
+                  encoding: 'utf-8',
+                  shell: false,
+                  stdio: ['ignore', 'pipe', 'pipe'],
+                });
+
+                if (addResult.status !== 0) {
+                  throw new Error(`Failed to recreate worktree: ${addResult.stderr}`);
+                }
+
+                // Install dependencies in the recreated worktree
+                worktreeService.installDependencies(existingWorktree.path);
+
+                console.log(c.success(`✓ Worktree recreated at ${existingWorktree.path}`));
+                getLogger().info('worktree', `Recreated worktree for ${targetStory.frontmatter.id} at ${existingWorktree.path}`);
+              } catch (error) {
+                console.log(c.error(`Failed to recreate worktree: ${error instanceof Error ? error.message : String(error)}`));
+                console.log(c.dim('Please manually remove it with:'));
+                console.log(c.dim(`  git worktree remove ${existingWorktree.path}`));
+                return;
+              }
+            } else {
+              console.log(c.dim('\nWorktree needs manual intervention. Please remove it manually with:'));
+              console.log(c.dim(`  git worktree remove ${existingWorktree.path}`));
+              return;
+            }
+          } else {
+            return;
+          }
+        }
+
+        // Automatically resume in the existing worktree
         originalCwd = process.cwd();
-        worktreePath = worktreeService.create({
-          storyId: targetStory.frontmatter.id,
-          slug: targetStory.slug,
-          baseBranch,
-        });
-
-        // Change to worktree directory BEFORE updating story
-        // This ensures story updates happen in the worktree, not on main
-        // (allows parallel story launches from clean main)
+        worktreePath = existingWorktree.path;
         process.chdir(worktreePath);
-
-        // Recalculate sdlcRoot for the worktree context
         sdlcRoot = getSdlcRoot();
         worktreeCreated = true;
 
-        // Now update story frontmatter with worktree path (writes to worktree copy)
-        // Re-resolve target story in worktree context
+        // Update story frontmatter with worktree path (sync state)
         const worktreeStory = findStoryById(sdlcRoot, targetStory.frontmatter.id);
         if (worktreeStory) {
           const updatedStory = await updateStoryField(worktreeStory, 'worktree_path', worktreePath);
           await writeStory(updatedStory);
-          // Update targetStory reference for downstream use
           targetStory = updatedStory;
         }
 
-        console.log(c.success(`✓ Created worktree at: ${worktreePath}`));
-        console.log(c.dim(`  Branch: ai-sdlc/${targetStory.frontmatter.id}-${targetStory.slug}`));
-        console.log();
-      } catch (error) {
-        // Restore directory on worktree creation failure
-        if (originalCwd) {
-          process.chdir(originalCwd);
+        // Get phase information for resume context
+        const lastPhase = getLastCompletedPhase(targetStory);
+        const nextPhase = getNextPhase(targetStory);
+
+        // Get worktree status for uncommitted changes info
+        const worktreeStatus = worktreeService.getWorktreeStatus(existingWorktree);
+
+        // Check branch divergence
+        const divergence = worktreeService.checkBranchDivergence(branchName);
+
+        console.log(c.success(`✓ Resuming in existing worktree: ${worktreePath}`));
+        console.log(c.dim(`  Branch: ${branchName}`));
+        console.log(c.dim(`  (Worktree path synced to story frontmatter)`));
+
+        if (lastPhase) {
+          console.log(c.dim(`  Last completed phase: ${lastPhase}`));
         }
-        console.log(c.error(`Failed to create worktree: ${error instanceof Error ? error.message : String(error)}`));
-        return;
+
+        if (nextPhase) {
+          console.log(c.dim(`  Next phase: ${nextPhase}`));
+        }
+
+        // Display uncommitted changes if present
+        if (worktreeStatus.workingDirectoryStatus !== 'clean') {
+          const totalChanges = worktreeStatus.modifiedFiles.length + worktreeStatus.untrackedFiles.length;
+          console.log(c.dim(`  Uncommitted changes: ${totalChanges} file(s)`));
+
+          if (worktreeStatus.modifiedFiles.length > 0) {
+            console.log(c.dim(`    Modified: ${worktreeStatus.modifiedFiles.slice(0, 3).join(', ')}${worktreeStatus.modifiedFiles.length > 3 ? '...' : ''}`));
+          }
+          if (worktreeStatus.untrackedFiles.length > 0) {
+            console.log(c.dim(`    Untracked: ${worktreeStatus.untrackedFiles.slice(0, 3).join(', ')}${worktreeStatus.untrackedFiles.length > 3 ? '...' : ''}`));
+          }
+        }
+
+        // Warn if branch has diverged significantly
+        if (divergence.diverged && (divergence.ahead > DIVERGENCE_WARNING_THRESHOLD || divergence.behind > DIVERGENCE_WARNING_THRESHOLD)) {
+          console.log(c.warning(`  ⚠ Branch has diverged from base: ${divergence.ahead} ahead, ${divergence.behind} behind`));
+          console.log(c.dim(`    Consider rebasing to sync with latest changes`));
+        }
+
+        console.log();
+        }
+      }
+
+      if (shouldCreateNewWorktree) {
+        // Validate git state for worktree creation
+        const validation = worktreeService.validateCanCreateWorktree();
+        if (!validation.valid) {
+          console.log(c.error(`Error: ${validation.error}`));
+          return;
+        }
+
+        try {
+          // Detect base branch
+          const baseBranch = worktreeService.detectBaseBranch();
+
+          // Create worktree
+          originalCwd = process.cwd();
+          worktreePath = worktreeService.create({
+            storyId: targetStory.frontmatter.id,
+            slug: targetStory.slug,
+            baseBranch,
+          });
+
+          // Change to worktree directory BEFORE updating story
+          // This ensures story updates happen in the worktree, not on main
+          // (allows parallel story launches from clean main)
+          process.chdir(worktreePath);
+
+          // Recalculate sdlcRoot for the worktree context
+          sdlcRoot = getSdlcRoot();
+          worktreeCreated = true;
+
+          // Now update story frontmatter with worktree path (writes to worktree copy)
+          // Re-resolve target story in worktree context
+          const worktreeStory = findStoryById(sdlcRoot, targetStory.frontmatter.id);
+          if (worktreeStory) {
+            const updatedStory = await updateStoryField(worktreeStory, 'worktree_path', worktreePath);
+            await writeStory(updatedStory);
+            // Update targetStory reference for downstream use
+            targetStory = updatedStory;
+          }
+
+          console.log(c.success(`✓ Created worktree at: ${worktreePath}`));
+          console.log(c.dim(`  Branch: ai-sdlc/${targetStory.frontmatter.id}-${targetStory.slug}`));
+          console.log();
+        } catch (error) {
+          // Restore directory on worktree creation failure
+          if (originalCwd) {
+            process.chdir(originalCwd);
+          }
+          console.log(c.error(`Failed to create worktree: ${error instanceof Error ? error.message : String(error)}`));
+          return;
+        }
       }
     }
   }
@@ -1257,6 +1659,60 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
           console.log(c.error('Error: No actions generated for retry. Manual intervention required.'));
           return;
         }
+      } else if (reviewResult.decision === ReviewDecision.RECOVERY) {
+        // Implementation recovery: reset implementation_complete and increment implementation retry count
+        // This is distinct from REJECTED which resets the entire RPIV cycle
+        const story = parseStory(action.storyPath);
+        const config = loadConfig();
+        const retryCount = story.frontmatter.implementation_retry_count || 0;
+        const maxRetries = getEffectiveMaxImplementationRetries(story, config);
+        const maxRetriesDisplay = Number.isFinite(maxRetries) ? maxRetries : '∞';
+
+        console.log();
+        console.log(c.warning(`🔄 Implementation recovery triggered (attempt ${retryCount + 1}/${maxRetriesDisplay})`));
+        console.log(c.dim(`  Reason: ${story.frontmatter.last_restart_reason || 'No source code changes detected'}`));
+
+        // Increment implementation retry count
+        await incrementImplementationRetryCount(story);
+
+        // Check if we've exceeded max implementation retries after incrementing
+        const freshStory = parseStory(action.storyPath);
+        if (isAtMaxImplementationRetries(freshStory, config)) {
+          console.log();
+          console.log(c.error('═'.repeat(50)));
+          console.log(c.error(`✗ Implementation recovery failed - maximum retries reached`));
+          console.log(c.error('═'.repeat(50)));
+          console.log(c.dim(`Story has reached the maximum implementation retry limit (${maxRetries}).`));
+          console.log(c.warning('Marking story as blocked. Manual intervention required.'));
+
+          // Mark story as blocked
+          await updateStoryStatus(freshStory, 'blocked');
+
+          console.log(c.info('Story status updated to: blocked'));
+          await clearWorkflowState(sdlcRoot, action.storyId);
+          process.exit(1);
+        }
+
+        // Regenerate actions to restart from implementation phase
+        const newActions = generateFullSDLCActions(freshStory, c);
+
+        if (newActions.length > 0) {
+          currentActions = newActions;
+          currentActionIndex = 0;
+          console.log(c.info(`  → Restarting from ${newActions[0].type} phase`));
+          console.log();
+          continue; // Restart the loop with new actions
+        } else {
+          console.log(c.error('Error: No actions generated for recovery. Manual intervention required.'));
+          process.exit(1);
+        }
+      } else if (reviewResult.decision === ReviewDecision.FAILED) {
+        // Review agent failed - don't increment retry count
+        console.log();
+        console.log(c.error(`✗ Review process failed: ${reviewResult.error || 'Unknown error'}`));
+        console.log(c.warning('This does not count as a retry attempt. You can retry manually.'));
+        await clearWorkflowState(sdlcRoot, action.storyId);
+        process.exit(1);
       }
     }
 

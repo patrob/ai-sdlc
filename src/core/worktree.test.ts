@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { GitWorktreeService } from './worktree.js';
+import { GitWorktreeService, getLastCompletedPhase, getNextPhase } from './worktree.js';
 import * as cp from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Story } from '../types/index.js';
 
 // Mock child_process and fs
 vi.mock('child_process');
@@ -728,6 +729,302 @@ branch refs/heads/ai-sdlc/S-0030-second
     });
   });
 
+  describe('hasUnpushedCommits', () => {
+    it('returns false when no remote tracking branch exists', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 128,
+        stdout: '',
+        stderr: "fatal: no upstream configured for branch 'ai-sdlc/S-0029-test'",
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.hasUnpushedCommits('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result.hasUnpushed).toBe(false);
+      expect(result.count).toBe(0);
+    });
+
+    it('returns false and count 0 when no unpushed commits', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '0',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.hasUnpushedCommits('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result.hasUnpushed).toBe(false);
+      expect(result.count).toBe(0);
+    });
+
+    it('returns true and correct count when unpushed commits exist', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '3',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.hasUnpushedCommits('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result.hasUnpushed).toBe(true);
+      expect(result.count).toBe(3);
+    });
+
+    it('handles git command errors gracefully', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: 'fatal: some error',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.hasUnpushedCommits('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result.hasUnpushed).toBe(false);
+      expect(result.count).toBe(0);
+    });
+  });
+
+  describe('branchExistsOnRemote', () => {
+    it('returns true when branch exists on remote', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: 'abc123  refs/heads/ai-sdlc/S-0029-test',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.branchExistsOnRemote('ai-sdlc/S-0029-test');
+      expect(result).toBe(true);
+    });
+
+    it('returns false when branch does not exist on remote', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.branchExistsOnRemote('ai-sdlc/S-0029-test');
+      expect(result).toBe(false);
+    });
+
+    it('returns false when no remote configured', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 128,
+        stdout: '',
+        stderr: 'fatal: could not read from remote repository',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.branchExistsOnRemote('ai-sdlc/S-0029-test');
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getCommitCount', () => {
+    it('returns correct commit count for worktree', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '15',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.getCommitCount('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result).toBe(15);
+    });
+
+    it('returns 0 for new worktree with no commits', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '0',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.getCommitCount('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result).toBe(0);
+    });
+
+    it('returns 0 on error', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 128,
+        stdout: '',
+        stderr: 'fatal: not a git repository',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.getCommitCount('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result).toBe(0);
+    });
+  });
+
+  describe('deleteBranch', () => {
+    it('deletes local branch successfully', () => {
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      service.deleteBranch('ai-sdlc/S-0029-test', true);
+
+      expect(spawnSyncSpy).toHaveBeenCalledWith(
+        'git',
+        ['branch', '-D', 'ai-sdlc/S-0029-test'],
+        expect.objectContaining({
+          cwd: projectRoot,
+          shell: false,
+        })
+      );
+    });
+
+    it('does not throw when branch does not exist', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: "error: branch 'ai-sdlc/S-0029-test' not found",
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      expect(() => service.deleteBranch('ai-sdlc/S-0029-test', true)).not.toThrow();
+    });
+
+    it('throws on other git errors', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: 'fatal: some other error',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      expect(() => service.deleteBranch('ai-sdlc/S-0029-test', true)).toThrow('Failed to delete branch');
+    });
+  });
+
+  describe('deleteRemoteBranch', () => {
+    it('deletes remote branch successfully', () => {
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      service.deleteRemoteBranch('ai-sdlc/S-0029-test');
+
+      expect(spawnSyncSpy).toHaveBeenCalledWith(
+        'git',
+        ['push', 'origin', '--delete', 'ai-sdlc/S-0029-test'],
+        expect.objectContaining({
+          cwd: projectRoot,
+          shell: false,
+        })
+      );
+    });
+
+    it('does not throw when remote branch does not exist', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: "error: unable to delete 'ai-sdlc/S-0029-test': remote ref does not exist",
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      expect(() => service.deleteRemoteBranch('ai-sdlc/S-0029-test')).not.toThrow();
+    });
+
+    it('throws on other git errors', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: 'fatal: could not read from remote repository',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      expect(() => service.deleteRemoteBranch('ai-sdlc/S-0029-test')).toThrow('Failed to delete remote branch');
+    });
+  });
+
+  describe('remove with force parameter', () => {
+    it('adds --force flag when force is true', () => {
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      service.remove('/test/project/.ai-sdlc/worktrees/S-0029-test', true);
+
+      expect(spawnSyncSpy).toHaveBeenCalledWith(
+        'git',
+        ['worktree', 'remove', '--force', '/test/project/.ai-sdlc/worktrees/S-0029-test'],
+        expect.objectContaining({
+          cwd: projectRoot,
+          shell: false,
+        })
+      );
+    });
+
+    it('does not add --force flag when force is false', () => {
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      service.remove('/test/project/.ai-sdlc/worktrees/S-0029-test', false);
+
+      expect(spawnSyncSpy).toHaveBeenCalledWith(
+        'git',
+        ['worktree', 'remove', '/test/project/.ai-sdlc/worktrees/S-0029-test'],
+        expect.objectContaining({
+          cwd: projectRoot,
+          shell: false,
+        })
+      );
+    });
+  });
+
   describe('getWorktreeStatus', () => {
     it('returns basic status for non-existent worktree', () => {
       const worktreeInfo = {
@@ -954,6 +1251,397 @@ branch refs/heads/ai-sdlc/S-0030-second
 
       const result = service.getWorktreeStatus(worktreeInfo);
       expect(result.storyId).toBe('unknown');
+    });
+  });
+
+  describe('validateWorktreeForResume', () => {
+    it('returns valid when directory and branch exist', () => {
+      vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.validateWorktreeForResume(
+        '/test/worktree/path',
+        'ai-sdlc/S-0029-test'
+      );
+
+      expect(result.valid).toBe(true);
+      expect(result.canResume).toBe(true);
+      expect(result.requiresRecreation).toBe(false);
+      expect(result.issues).toEqual([]);
+    });
+
+    it('returns invalid when directory does not exist', () => {
+      vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.validateWorktreeForResume(
+        '/test/worktree/path',
+        'ai-sdlc/S-0029-test'
+      );
+
+      expect(result.valid).toBe(false);
+      expect(result.canResume).toBe(false);
+      expect(result.requiresRecreation).toBe(true);
+      expect(result.issues).toContain('Worktree directory does not exist');
+    });
+
+    it('returns invalid when branch does not exist', () => {
+      vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: 'fatal: Needed a single revision',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.validateWorktreeForResume(
+        '/test/worktree/path',
+        'ai-sdlc/S-0029-test'
+      );
+
+      expect(result.valid).toBe(false);
+      expect(result.canResume).toBe(false);
+      expect(result.requiresRecreation).toBe(true);
+      expect(result.issues).toContain('Branch does not exist');
+    });
+
+    it('returns invalid when story directory not accessible', () => {
+      vi.spyOn(fs, 'existsSync').mockImplementation((p: any) => {
+        if (p === '/test/worktree/path') return true;
+        if (p.includes('.ai-sdlc/stories')) return false;
+        return false;
+      });
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.validateWorktreeForResume(
+        '/test/worktree/path',
+        'ai-sdlc/S-0029-test'
+      );
+
+      expect(result.valid).toBe(false);
+      expect(result.canResume).toBe(false);
+      expect(result.issues).toContain('Story directory not accessible in worktree');
+    });
+
+    it('returns multiple issues when both directory and branch are missing', () => {
+      vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.validateWorktreeForResume(
+        '/test/worktree/path',
+        'ai-sdlc/S-0029-test'
+      );
+
+      expect(result.valid).toBe(false);
+      expect(result.canResume).toBe(false);
+      expect(result.requiresRecreation).toBe(true);
+      expect(result.issues).toHaveLength(2);
+      expect(result.issues).toContain('Worktree directory does not exist');
+      expect(result.issues).toContain('Branch does not exist');
+    });
+  });
+
+  describe('checkBranchDivergence', () => {
+    it('returns no divergence when branch is up to date', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '0\t0',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.checkBranchDivergence('ai-sdlc/S-0029-test', 'main');
+
+      expect(result.ahead).toBe(0);
+      expect(result.behind).toBe(0);
+      expect(result.diverged).toBe(false);
+    });
+
+    it('returns correct values when branch is ahead', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '0\t5',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.checkBranchDivergence('ai-sdlc/S-0029-test', 'main');
+
+      expect(result.ahead).toBe(5);
+      expect(result.behind).toBe(0);
+      expect(result.diverged).toBe(true);
+    });
+
+    it('returns correct values when branch is behind', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '3\t0',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.checkBranchDivergence('ai-sdlc/S-0029-test', 'main');
+
+      expect(result.ahead).toBe(0);
+      expect(result.behind).toBe(3);
+      expect(result.diverged).toBe(true);
+    });
+
+    it('returns correct values when branch has diverged', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '5\t3',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.checkBranchDivergence('ai-sdlc/S-0029-test', 'main');
+
+      expect(result.ahead).toBe(3);
+      expect(result.behind).toBe(5);
+      expect(result.diverged).toBe(true);
+    });
+
+    it('handles git command failure gracefully', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: 'fatal: bad revision',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.checkBranchDivergence('ai-sdlc/S-0029-test', 'main');
+
+      expect(result.ahead).toBe(0);
+      expect(result.behind).toBe(0);
+      expect(result.diverged).toBe(false);
+    });
+
+    it('auto-detects base branch when not provided', () => {
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockImplementation((cmd, args) => {
+        if (args?.[0] === 'rev-parse' && args?.[2] === 'main') {
+          return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
+        }
+        if (args?.[0] === 'rev-list') {
+          return { status: 0, stdout: '0\t2', stderr: '', output: [], pid: 0, signal: null };
+        }
+        return { status: 1, stdout: '', stderr: '', output: [], pid: 0, signal: null };
+      });
+
+      const result = service.checkBranchDivergence('ai-sdlc/S-0029-test');
+
+      expect(spawnSyncSpy).toHaveBeenCalledWith(
+        'git',
+        ['rev-list', '--left-right', '--count', 'main...ai-sdlc/S-0029-test'],
+        expect.anything()
+      );
+      expect(result.ahead).toBe(2);
+    });
+  });
+});
+
+describe('getLastCompletedPhase', () => {
+  const createMockStory = (overrides: any = {}): Story => ({
+    path: '/test/story.md',
+    slug: 'test-story',
+    frontmatter: {
+      id: 'S-0001',
+      title: 'Test Story',
+      status: 'in-progress',
+      type: 'feature',
+      priority: 100,
+      created: '2024-01-01',
+      labels: [],
+      research_complete: false,
+      plan_complete: false,
+      implementation_complete: false,
+      reviews_complete: false,
+      ...overrides,
+    },
+    content: '',
+  });
+
+  it('returns null when no phases are complete', () => {
+    const story = createMockStory();
+    expect(getLastCompletedPhase(story)).toBeNull();
+  });
+
+  it('returns "research" when only research is complete', () => {
+    const story = createMockStory({
+      research_complete: true,
+    });
+    expect(getLastCompletedPhase(story)).toBe('research');
+  });
+
+  it('returns "plan" when research and plan are complete', () => {
+    const story = createMockStory({
+      research_complete: true,
+      plan_complete: true,
+    });
+    expect(getLastCompletedPhase(story)).toBe('plan');
+  });
+
+  it('returns "implementation" when research, plan, and implementation are complete', () => {
+    const story = createMockStory({
+      research_complete: true,
+      plan_complete: true,
+      implementation_complete: true,
+    });
+    expect(getLastCompletedPhase(story)).toBe('implementation');
+  });
+
+  it('returns "review" when all phases are complete', () => {
+    const story = createMockStory({
+      research_complete: true,
+      plan_complete: true,
+      implementation_complete: true,
+      reviews_complete: true,
+    });
+    expect(getLastCompletedPhase(story)).toBe('review');
+  });
+
+  it('returns highest completed phase even when earlier phases are incomplete', () => {
+    const story = createMockStory({
+      research_complete: false,
+      plan_complete: false,
+      implementation_complete: true,
+      reviews_complete: false,
+    });
+    expect(getLastCompletedPhase(story)).toBe('implementation');
+  });
+});
+
+describe('getNextPhase', () => {
+  const createMockStory = (overrides: any = {}): Story => ({
+    path: '/test/story.md',
+    slug: 'test-story',
+    frontmatter: {
+      id: 'S-0001',
+      title: 'Test Story',
+      status: 'ready',
+      type: 'feature',
+      priority: 100,
+      created: '2024-01-01',
+      labels: [],
+      research_complete: false,
+      plan_complete: false,
+      implementation_complete: false,
+      reviews_complete: false,
+      ...overrides,
+    },
+    content: '',
+  });
+
+  it('returns null for blocked stories', () => {
+    const story = createMockStory({ status: 'blocked' });
+    expect(getNextPhase(story)).toBeNull();
+  });
+
+  it('returns null for done stories', () => {
+    const story = createMockStory({ status: 'done' });
+    expect(getNextPhase(story)).toBeNull();
+  });
+
+  it('returns "refine" for backlog stories', () => {
+    const story = createMockStory({ status: 'backlog' });
+    expect(getNextPhase(story)).toBe('refine');
+  });
+
+  describe('ready stories', () => {
+    it('returns "research" when no phases are complete', () => {
+      const story = createMockStory({ status: 'ready' });
+      expect(getNextPhase(story)).toBe('research');
+    });
+
+    it('returns "plan" when research is complete', () => {
+      const story = createMockStory({
+        status: 'ready',
+        research_complete: true,
+      });
+      expect(getNextPhase(story)).toBe('plan');
+    });
+
+    it('returns "implement" when research and plan are complete', () => {
+      const story = createMockStory({
+        status: 'ready',
+        research_complete: true,
+        plan_complete: true,
+      });
+      expect(getNextPhase(story)).toBe('implement');
+    });
+  });
+
+  describe('in-progress stories', () => {
+    it('returns "implement" when implementation is not complete', () => {
+      const story = createMockStory({
+        status: 'in-progress',
+        research_complete: true,
+        plan_complete: true,
+        implementation_complete: false,
+      });
+      expect(getNextPhase(story)).toBe('implement');
+    });
+
+    it('returns "review" when implementation is complete', () => {
+      const story = createMockStory({
+        status: 'in-progress',
+        research_complete: true,
+        plan_complete: true,
+        implementation_complete: true,
+        reviews_complete: false,
+      });
+      expect(getNextPhase(story)).toBe('review');
+    });
+
+    it('returns "create_pr" when all phases are complete', () => {
+      const story = createMockStory({
+        status: 'in-progress',
+        research_complete: true,
+        plan_complete: true,
+        implementation_complete: true,
+        reviews_complete: true,
+      });
+      expect(getNextPhase(story)).toBe('create_pr');
     });
   });
 });

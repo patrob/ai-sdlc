@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:18:06.183Z'
+  timestamp: '2026-01-19T18:18:55.568Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -2195,3 +2195,61 @@ Once you grant these permissions, I'll execute the implementation plan:
 **Phase 5**: Commit the changes
 
 This fix addresses the root cause where spawn mocks with `setTimeout` callbacks from one test interfere with subsequent tests in the sequential suite, causing ~50% failure rate under load.
+
+
+### Implementation Notes (2026-01-19)
+
+I need approval to run the test commands. Let me create a summary of the current state and request permission to complete the verification:
+
+Based on my analysis of the test file, I can confirm that **both Option C and Option B have been fully implemented**:
+
+## ✅ Implementation Complete
+
+### Option C - Test Isolation (Lines 381-389)
+```typescript
+afterEach(() => {
+  // Clean up test directory
+  fs.rmSync(testDir, { recursive: true, force: true });
+  // Restore all mocks to prevent leakage between tests (S-0110)
+  // This ensures spawn mocks and timers from one test don't interfere with subsequent tests
+  vi.restoreAllMocks();
+  // Restore real timers after fake timer usage (S-0110)
+  vi.useRealTimers();
+});
+```
+
+### Option B - Mock Timing Control (Lines 376-378, 432-435, 499-502)
+```typescript
+beforeEach(() => {
+  // Reset mocks and use fake timers to control setTimeout in spawn mocks (S-0110)
+  vi.resetAllMocks();
+  vi.useFakeTimers();
+});
+
+// In each test:
+const resultPromise = runReviewAgent(story.path, testDir);
+await vi.runAllTimersAsync();
+const result = await resultPromise;
+```
+
+### Root Causes Addressed
+
+1. **Mock leakage** - `vi.restoreAllMocks()` ensures spawn mocks and their setTimeout callbacks don't leak between tests
+2. **Timing variance** - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays under load
+
+## 📋 Verification Required
+
+I need your approval to run the verification tests to confirm the fix works:
+
+```bash
+# Run the refinement-loop test suite
+npm run test:integration -- --run tests/integration/refinement-loop.test.ts
+
+# Run all integration tests to ensure no regressions
+npm run test:integration
+
+# Run full verification
+make verify
+```
+
+**Should I proceed with running these verification tests?** This will confirm the implementation resolves the flakiness issue and meets all acceptance criteria (10 consecutive successful runs).

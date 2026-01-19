@@ -22,8 +22,34 @@ branch: ai-sdlc/global-recovery-circuit-breaker
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T12:29:20.978Z'
+  timestamp: '2026-01-19T12:32:43.199Z'
 implementation_retry_count: 0
+max_retries: 3
+review_history:
+  - timestamp: '2026-01-19T12:31:22.290Z'
+    decision: REJECTED
+    severity: CRITICAL
+    feedback: "\n#### \U0001F6D1 BLOCKER (2)\n\n**requirements** [po, code]: Acceptance criteria checkbox format violation: All checkboxes remain unchecked (- [ ]) in the story document despite implementation being marked complete. According to acceptance criteria, these should be checked off (- [x]) as work is completed. This makes it impossible to verify which requirements were actually fulfilled.\n  - File: `.ai-sdlc/stories/S-0054/story.md`:48\n  - Suggested fix: Update all completed acceptance criteria checkboxes from '- [ ]' to '- [x]'. For the incomplete criterion (error message breakdown by recovery type), either implement it or document why it was deferred.\n\n**requirements** [po, code]: Missing acceptance criterion: 'Error message includes breakdown of recovery attempts by type' was not implemented. The current error message shows 'Global recovery limit exceeded (10/10)' but does not include the required breakdown like 'Breakdown: 3 implementation retries, 2 rework cycles, 4 API retries, 1 refinement iteration'. This was explicitly required in the acceptance criteria.\n  - File: `src/cli/runner.ts`:188\n  - Suggested fix: Either: (1) Implement the breakdown feature by tracking recovery type metadata in frontmatter and displaying it in the error message, OR (2) Document in the story why this criterion was deemed out of scope and mark it as deferred with user approval.\n\n\n#### ⚠️ CRITICAL (2)\n\n**requirements** [po, code]: Refinement path implementation discrepancy: Acceptance criteria specifies 'src/agents/refinement.ts - when refinement iteration occurs' but implementation uses src/agents/rework.ts instead. While rework.ts DOES correctly increment the global counter for refinement (line 64), the story documentation and acceptance criteria were never updated to reflect this architectural reality. This creates confusion about whether the requirement was met.\n  - File: `.ai-sdlc/stories/S-0054/story.md`:57\n  - Suggested fix: Update the acceptance criteria to replace 'src/agents/refinement.ts' with 'src/agents/rework.ts' and add a note explaining that refinement happens through the rework agent. This accurately reflects the codebase architecture.\n\n**requirements** [po, code]: API retry integration incomplete: Acceptance criteria states 'src/core/client.ts - when API call retry occurs (after S-0053 is implemented)'. S-0053 is confirmed done (marked in commit 57f50ab), but no changes were made to client.ts to increment the global counter during API retries. The story acknowledges this is 'out of scope' in implementation notes but never formally documented this decision or sought user approval to defer this criterion.\n  - File: `.ai-sdlc/stories/S-0054/story.md`:58\n  - Suggested fix: Either: (1) Implement the API retry integration in client.ts (may require passing story context), OR (2) Formally document the decision to defer this requirement, explaining the architectural challenge (client.ts lacks Story object access) and marking this acceptance criterion as explicitly deferred pending architectural discussion.\n\n\n#### \U0001F4CB MAJOR (2)\n\n**code_quality** [po, code]: Incorrect function signature in acceptance criteria vs implementation: Acceptance criteria specifies 'incrementTotalRecoveryAttempts(story: Story): void' but implementation is async and returns Promise<Story>. While the async implementation is correct (matches existing pattern), the acceptance criteria were never updated to reflect this, creating documentation drift.\n  - File: `src/core/story.ts`:855\n  - Suggested fix: Update acceptance criteria in story document to show correct async signature: 'incrementTotalRecoveryAttempts(story: Story): Promise<Story>'\n\n**testing** [code, po]: Missing integration test for circuit breaker preventing action execution: While tests verify the story gets blocked at limit, there's no test verifying that the circuit breaker check in runner.ts at line 185 actually PREVENTS subsequent actions from executing. The acceptance criteria requires 'Blocked story cannot execute any further actions'.\n  - File: `tests/integration/circuit-breaker.test.ts`:37\n  - Suggested fix: Add integration test: Create story at limit 10, attempt to execute an action (e.g., 'implement'), verify action is rejected before execution with the circuit breaker error message, verify story remains blocked.\n\n\n#### ℹ️ MINOR (3)\n\n**code_quality** [code]: Variable scope expansion without clear justification: In runner.ts executeAction(), the 'story' variable was moved from try block scope to method scope (line 169: 'let story;'). While this enables the circuit breaker check, it also expands the variable's lifetime unnecessarily. The story could be retrieved once and reused, but the pattern of re-parsing story in multiple locations (line 233, 266, 313) suggests inconsistent state management.\n  - File: `src/cli/runner.ts`:169\n  - Suggested fix: Document why story is re-parsed multiple times in handleReviewDecision, or refactor to use the already-fetched story object consistently throughout the action execution flow.\n\n**code_quality** [code]: Duplicate getTotalRecoveryAttempts call in circuit breaker check: The circuit breaker code calls getTotalRecoveryAttempts(story) twice - once in isAtGlobalRecoveryLimit() and again to display the count (line 187). This is a minor performance inefficiency but more importantly violates DRY principle.\n  - File: `src/cli/runner.ts`:187\n  - Suggested fix: Refactor: const currentAttempts = getTotalRecoveryAttempts(story); if (currentAttempts >= GLOBAL_RECOVERY_LIMIT) { ... }. This eliminates the duplicate call and makes the code more maintainable.\n\n**requirements** [po]: Out of scope items not clearly documented: The story lists several 'Out of Scope' items (configurable limits, per-phase tracking, automatic warnings, etc.) but doesn't explain WHY these are out of scope or whether they're deferred vs. permanently excluded. This could lead to future confusion about feature completeness.\n  - File: `.ai-sdlc/stories/S-0054/story.md`:131\n  - Suggested fix: Add a brief rationale for each out-of-scope item (e.g., 'Configurable global limit - Deferred: Hardcoded 10 is sufficient for MVP; can be made configurable in future story if needed').\n\n"
+    blockers:
+      - >-
+        Acceptance criteria checkbox format violation: All checkboxes remain
+        unchecked (- [ ]) in the story document despite implementation being
+        marked complete. According to acceptance criteria, these should be
+        checked off (- [x]) as work is completed. This makes it impossible to
+        verify which requirements were actually fulfilled.
+      - >-
+        Missing acceptance criterion: 'Error message includes breakdown of
+        recovery attempts by type' was not implemented. The current error
+        message shows 'Global recovery limit exceeded (10/10)' but does not
+        include the required breakdown like 'Breakdown: 3 implementation
+        retries, 2 rework cycles, 4 API retries, 1 refinement iteration'. This
+        was explicitly required in the acceptance criteria.
+    codeReviewPassed: false
+    securityReviewPassed: true
+    poReviewPassed: false
+last_restart_reason: "\n#### \U0001F6D1 BLOCKER (2)\n\n**requirements** [po, code]: Acceptance criteria checkbox format violation: All checkboxes remain unchecked (- [ ]) in the story document despite implementation being marked complete. According to acceptance criteria, these should be checked off (- [x]) as work is completed. This makes it impossible to verify which requirements were actually fulfilled.\n  - File: `.ai-sdlc/stories/S-0054/story.md`:48\n  - Suggested fix: Update all completed acceptance criteria checkboxes from '- [ ]' to '- [x]'. For the incomplete criterion (error message breakdown by recovery type), either implement it or document why it was deferred.\n\n**requirements** [po, code]: Missing acceptance criterion: 'Error message includes breakdown of recovery attempts by type' was not implemented. The current error message shows 'Global recovery limit exceeded (10/10)' but does not include the required breakdown like 'Breakdown: 3 implementation retries, 2 rework cycles, 4 API retries, 1 refinement iteration'. This was explicitly required in the acceptance criteria.\n  - File: `src/cli/runner.ts`:188\n  - Suggested fix: Either: (1) Implement the breakdown feature by tracking recovery type metadata in frontmatter and displaying it in the error message, OR (2) Document in the story why this criterion was deemed out of scope and mark it as deferred with user approval.\n\n\n#### ⚠️ CRITICAL (2)\n\n**requirements** [po, code]: Refinement path implementation discrepancy: Acceptance criteria specifies 'src/agents/refinement.ts - when refinement iteration occurs' but implementation uses src/agents/rework.ts instead. While rework.ts DOES correctly increment the global counter for refinement (line 64), the story documentation and acceptance criteria were never updated to reflect this architectural reality. This creates confusion about whether the requirement was met.\n  - File: `.ai-sdlc/stories/S-0054/story.md`:57\n  - Suggested fix: Update the acceptance criteria to replace 'src/agents/refinement.ts' with 'src/agents/rework.ts' and add a note explaining that refinement happens through the rework agent. This accurately reflects the codebase architecture.\n\n**requirements** [po, code]: API retry integration incomplete: Acceptance criteria states 'src/core/client.ts - when API call retry occurs (after S-0053 is implemented)'. S-0053 is confirmed done (marked in commit 57f50ab), but no changes were made to client.ts to increment the global counter during API retries. The story acknowledges this is 'out of scope' in implementation notes but never formally documented this decision or sought user approval to defer this criterion.\n  - File: `.ai-sdlc/stories/S-0054/story.md`:58\n  - Suggested fix: Either: (1) Implement the API retry integration in client.ts (may require passing story context), OR (2) Formally document the decision to defer this requirement, explaining the architectural challenge (client.ts lacks Story object access) and marking this acceptance criterion as explicitly deferred pending architectural discussion.\n\n\n#### \U0001F4CB MAJOR (2)\n\n**code_quality** [po, code]: Incorrect function signature in acceptance criteria vs implementation: Acceptance criteria specifies 'incrementTotalRecoveryAttempts(story: Story): void' but implementation is async and returns Promise<Story>. While the async implementation is correct (matches existing pattern), the acceptance criteria were never updated to reflect this, creating documentation drift.\n  - File: `src/core/story.ts`:855\n  - Suggested fix: Update acceptance criteria in story document to show correct async signature: 'incrementTotalRecoveryAttempts(story: Story): Promise<Story>'\n\n**testing** [code, po]: Missing integration test for circuit breaker preventing action execution: While tests verify the story gets blocked at limit, there's no test verifying that the circuit breaker check in runner.ts at line 185 actually PREVENTS subsequent actions from executing. The acceptance criteria requires 'Blocked story cannot execute any further actions'.\n  - File: `tests/integration/circuit-breaker.test.ts`:37\n  - Suggested fix: Add integration test: Create story at limit 10, attempt to execute an action (e.g., 'implement'), verify action is rejected before execution with the circuit breaker error message, verify story remains blocked.\n\n\n#### ℹ️ MINOR (3)\n\n**code_quality** [code]: Variable scope expansion without clear justification: In runner.ts executeAction(), the 'story' variable was moved from try block scope to method scope (line 169: 'let story;'). While this enables the circuit breaker check, it also expands the variable's lifetime unnecessarily. The story could be retrieved once and reused, but the pattern of re-parsing story in multiple locations (line 233, 266, 313) suggests inconsistent state management.\n  - File: `src/cli/runner.ts`:169\n  - Suggested fix: Document why story is re-parsed multiple times in handleReviewDecision, or refactor to use the already-fetched story object consistently throughout the action execution flow.\n\n**code_quality** [code]: Duplicate getTotalRecoveryAttempts call in circuit breaker check: The circuit breaker code calls getTotalRecoveryAttempts(story) twice - once in isAtGlobalRecoveryLimit() and again to display the count (line 187). This is a minor performance inefficiency but more importantly violates DRY principle.\n  - File: `src/cli/runner.ts`:187\n  - Suggested fix: Refactor: const currentAttempts = getTotalRecoveryAttempts(story); if (currentAttempts >= GLOBAL_RECOVERY_LIMIT) { ... }. This eliminates the duplicate call and makes the code more maintainable.\n\n**requirements** [po]: Out of scope items not clearly documented: The story lists several 'Out of Scope' items (configurable limits, per-phase tracking, automatic warnings, etc.) but doesn't explain WHY these are out of scope or whether they're deferred vs. permanently excluded. This could lead to future confusion about feature completeness.\n  - File: `.ai-sdlc/stories/S-0054/story.md`:131\n  - Suggested fix: Add a brief rationale for each out-of-scope item (e.g., 'Configurable global limit - Deferred: Hardcoded 10 is sufficient for MVP; can be made configurable in future story if needed').\n\n"
+last_restart_timestamp: '2026-01-19T12:31:22.309Z'
+retry_count: 1
 ---
 # Global Recovery Circuit Breaker
 
@@ -373,6 +399,396 @@ Create new test file: `test
 
 # Implementation Plan: Global Recovery Circuit Breaker
 
+Based on the story content and review feedback provided, here's a comprehensive implementation plan:
+
+# Implementation Plan: Global Recovery Circuit Breaker (S-0054)
+
+## Overview
+Implement a global counter tracking all recovery attempts across all phases with a hard limit of 10 attempts before blocking the story. This plan addresses the review blockers and ensures all acceptance criteria are properly met.
+
+---
+
+## Phase 1: Type System & Core Infrastructure
+
+### Task 1.1: Type Definition
+- [ ] **T1**: Add `total_recovery_attempts` field to `StoryFrontmatter`
+  - Files: `src/types/index.ts`
+  - Dependencies: none
+  - Add after `max_implementation_retries`: `total_recovery_attempts?: number;`
+
+### Task 1.2: Core Helper Functions
+- [ ] **T2**: Add `getTotalRecoveryAttempts()` function
+  - Files: `src/core/story.ts`
+  - Dependencies: T1
+  - Returns: `story.frontmatter.total_recovery_attempts || 0`
+  - Pattern: Mirror `getImplementationRetryCount()`
+
+- [ ] **T3**: Add `GLOBAL_RECOVERY_LIMIT` constant and `isAtGlobalRecoveryLimit()` function
+  - Files: `src/core/story.ts`
+  - Dependencies: T1, T2
+  - Constant: `export const GLOBAL_RECOVERY_LIMIT = 10;`
+  - Logic: `getTotalRecoveryAttempts(story) >= GLOBAL_RECOVERY_LIMIT`
+
+- [ ] **T4**: Add `incrementTotalRecoveryAttempts()` async function
+  - Files: `src/core/story.ts`
+  - Dependencies: T1, T2
+  - **Note**: Signature is `async` returning `Promise<Story>` (not void as in AC)
+  - Logic: Increment counter, update timestamp, call `writeStory()`, return story
+
+- [ ] **T5**: Add `resetTotalRecoveryAttempts()` async function
+  - Files: `src/core/story.ts`
+  - Dependencies: T1
+  - Logic: Set to 0, update timestamp, call `writeStory()`, return story
+
+### Task 1.3: Recovery Type Tracking (Addresses BLOCKER #2)
+- [ ] **T6**: Add recovery type breakdown tracking to frontmatter
+  - Files: `src/types/index.ts`
+  - Dependencies: T1
+  - Add: `recovery_breakdown?: { implementation?: number; rework?: number; refinement?: number; api_retry?: number; }`
+  - Purpose: Enable detailed breakdown in error messages
+
+- [ ] **T7**: Add helper function `incrementRecoveryBreakdown()`
+  - Files: `src/core/story.ts`
+  - Dependencies: T6
+  - Parameters: `(story: Story, type: 'implementation' | 'rework' | 'refinement' | 'api_retry'): Promise<Story>`
+  - Logic: Initialize breakdown if undefined, increment specific type counter, save story
+
+- [ ] **T8**: Add helper function `formatRecoveryBreakdown()`
+  - Files: `src/core/story.ts`
+  - Dependencies: T6
+  - Returns: Formatted string like "3 implementation retries, 2 rework cycles, 1 refinement iteration"
+  - Handles cases where breakdown is undefined or empty
+
+---
+
+## Phase 2: Circuit Breaker Integration
+
+### Task 2.1: Runner Circuit Breaker Check
+- [ ] **T9**: Add circuit breaker check in `executeAction()`
+  - Files: `src/cli/runner.ts`
+  - Dependencies: T2, T3, T8
+  - Location: Before switch statement (around line 164)
+  - **Optimization**: Cache `getTotalRecoveryAttempts()` result to avoid duplicate calls
+  - Error message: Include `formatRecoveryBreakdown()` output
+  - Action: Call `moveToBlocked()` if limit exceeded
+
+### Task 2.2: Implementation Recovery Path
+- [ ] **T10**: Increment counters in implementation retry path
+  - Files: `src/agents/implementation.ts`
+  - Dependencies: T4, T7
+  - Location: In `attemptImplementationWithRetries()` after existing retry increment
+  - Add: `await incrementRecoveryBreakdown(updatedStory, 'implementation')`
+  - Add: `await incrementTotalRecoveryAttempts(updatedStory)`
+  - Order: Breakdown first, then total (for atomicity)
+
+### Task 2.3: Review/RPIV Recovery Path
+- [ ] **T11**: Increment counters when review is REJECTED (rework cycle)
+  - Files: `src/cli/runner.ts`
+  - Dependencies: T4, T7
+  - Location: In `handleReviewDecision()` before `resetRPIVCycle()`
+  - Add: `await incrementRecoveryBreakdown(story, 'rework')`
+  - Add: `await incrementTotalRecoveryAttempts(story)`
+
+- [ ] **T12**: Increment counters when review decision is RECOVERY
+  - Files: `src/cli/runner.ts`
+  - Dependencies: T4, T7
+  - Location: After `incrementImplementationRetryCount()`
+  - Add: `await incrementRecoveryBreakdown(story, 'implementation')`
+  - Add: `await incrementTotalRecoveryAttempts(story)`
+
+### Task 2.4: Refinement Recovery Path (Addresses CRITICAL #1)
+- [ ] **T13**: Increment counters in rework agent for refinement
+  - Files: `src/agents/rework.ts`
+  - Dependencies: T4, T7
+  - Location: Where refinement iteration occurs (likely near `refinement_count` increment)
+  - Add: `await incrementRecoveryBreakdown(story, 'refinement')`
+  - Add: `await incrementTotalRecoveryAttempts(story)`
+  - **Note**: Implementation confirmed to use rework.ts, not refinement.ts
+
+### Task 2.5: Unblock Command Integration
+- [ ] **T14**: Modify `unblockStory()` to reset global counter and breakdown
+  - Files: `src/core/story.ts`
+  - Dependencies: T5
+  - Location: Inside `resetRetries` block (around line 1064-1067)
+  - Add: `foundStory.frontmatter.total_recovery_attempts = 0;`
+  - Add: `delete foundStory.frontmatter.recovery_breakdown;`
+
+### Task 2.6: API Retry Path (Addresses CRITICAL #2 - Document Decision)
+- [ ] **T15**: Document API retry integration deferral decision
+  - Files: Story document (`.ai-sdlc/stories/S-0054/story.md`)
+  - Dependencies: none
+  - Action: Add "Deferred Requirements" section explaining:
+    - API retry tracking requires architectural changes (Story object access in client.ts)
+    - Deferring to future story pending design discussion
+    - Mark acceptance criterion as [DEFERRED] in AC section
+
+---
+
+## Phase 3: Unit Tests
+
+### Task 3.1: Core Helper Tests
+- [ ] **T16**: Test `getTotalRecoveryAttempts()`
+  - Files: `src/core/story-global-recovery.test.ts` (new file)
+  - Dependencies: T2
+  - Cases: undefined→0, explicit 0, value 5, value 10
+
+- [ ] **T17**: Test `isAtGlobalRecoveryLimit()`
+  - Files: `src/core/story-global-recovery.test.ts`
+  - Dependencies: T3
+  - Cases: 0→false, 9→false, 10→true, 15→true
+
+- [ ] **T18**: Test `incrementTotalRecoveryAttempts()`
+  - Files: `src/core/story-global-recovery.test.ts`
+  - Dependencies: T4
+  - Cases: undefined→1, 0→1, 9→10, updates timestamp, calls writeStory()
+  - **Note**: Mock file system operations
+
+- [ ] **T19**: Test `resetTotalRecoveryAttempts()`
+  - Files: `src/core/story-global-recovery.test.ts`
+  - Dependencies: T5
+  - Cases: 10→0, undefined→0, updates timestamp, calls writeStory()
+
+### Task 3.2: Recovery Breakdown Tests
+- [ ] **T20**: Test `incrementRecoveryBreakdown()`
+  - Files: `src/core/story-global-recovery.test.ts`
+  - Dependencies: T7
+  - Cases: Initialize breakdown, increment each type, multiple increments, saves story
+
+- [ ] **T21**: Test `formatRecoveryBreakdown()`
+  - Files: `src/core/story-global-recovery.test.ts`
+  - Dependencies: T8
+  - Cases: Empty breakdown, single type, multiple types, formatting correctness
+
+### Task 3.3: Unblock Integration Tests
+- [ ] **T22**: Test `unblockStory()` with global counter reset
+  - Files: `src/core/story.test.ts` (modify existing)
+  - Dependencies: T14
+  - Cases: Resets counter with resetRetries:true, preserves with resetRetries:false, resets breakdown
+
+---
+
+## Phase 4: Integration Tests
+
+### Task 4.1: Circuit Breaker Behavior
+- [ ] **T23**: Test circuit breaker blocks at limit
+  - Files: `tests/integration/circuit-breaker.test.ts` (new file)
+  - Dependencies: T9
+  - Scenario: Story at 9 attempts + 1 more triggers block with descriptive error
+  - Verify: Error message includes breakdown from `formatRecoveryBreakdown()`
+
+- [ ] **T24**: Test blocked story prevents action execution (Addresses MAJOR #2)
+  - Files: `tests/integration/circuit-breaker.test.ts`
+  - Dependencies: T9
+  - Scenario: Story at limit 10, attempt to execute action
+  - Verify: Action rejected BEFORE execution, error message returned, story remains blocked
+  - **Critical**: This addresses missing acceptance criterion test
+
+- [ ] **T25**: Test counter persistence across save/reload
+  - Files: `tests/integration/circuit-breaker.test.ts`
+  - Dependencies: T4
+  - Scenario: Increment counter, save story, reload, verify counter persists
+
+### Task 4.2: Recovery Path Integration
+- [ ] **T26**: Test counter increments across different recovery types
+  - Files: `tests/integration/circuit-breaker.test.ts`
+  - Dependencies: T10, T11, T12, T13
+  - Scenarios:
+    - Implementation retry increments counter and breakdown
+    - Review rejection increments counter and breakdown
+    - Refinement iteration increments counter and breakdown
+    - Mixed types accumulate correctly
+
+### Task 4.3: Unblock Command Integration
+- [ ] **T27**: Test unblock command resets counter
+  - Files: `tests/integration/circuit-breaker.test.ts`
+  - Dependencies: T14
+  - Scenario: Blocked story, run unblock with resetRetries, verify counter→0, verify breakdown cleared
+
+---
+
+## Phase 5: Documentation Updates (Addresses Review Blockers)
+
+### Task 5.1: Update Acceptance Criteria (Addresses BLOCKER #1)
+- [ ] **T28**: Check off completed acceptance criteria
+  - Files: Story document (`.ai-sdlc/stories/S-0054/story.md`)
+  - Dependencies: All implementation tasks
+  - Action: Change `- [ ]` to `- [x]` for all completed criteria
+  - **Critical**: This addresses the blocker about unchecked checkboxes
+
+- [ ] **T29**: Update function signatures in acceptance criteria (Addresses MAJOR #1)
+  - Files: Story document
+  - Dependencies: T4, T5
+  - Change: Update helper function signatures to show `Promise<Story>` return type, not `void`
+
+- [ ] **T30**: Clarify refinement path location (Addresses CRITICAL #1)
+  - Files: Story document
+  - Dependencies: T13
+  - Change: Update AC to specify `src/agents/rework.ts` (not refinement.ts)
+  - Add: Note explaining refinement happens through rework agent
+
+- [ ] **T31**: Document API retry integration deferral (Addresses CRITICAL #2)
+  - Files: Story document
+  - Dependencies: T15
+  - Mark: `src/core/client.ts` criterion as [DEFERRED]
+  - Add: Rationale in "Deferred Requirements" section
+
+### Task 5.2: Update Out of Scope Rationale (Addresses MINOR #3)
+- [ ] **T32**: Add rationale for each out-of-scope item
+  - Files: Story document
+  - Dependencies: none
+  - Add: Brief explanation for each item (configurable limits, per-phase tracking, etc.)
+  - Format: "Item - Reason: Explanation (deferred/permanent)"
+
+---
+
+## Phase 6: Code Quality Improvements (Addresses Review Issues)
+
+### Task 6.1: Optimize Runner Code (Addresses MINOR #1, #2)
+- [ ] **T33**: Optimize circuit breaker check to avoid duplicate calls
+  - Files: `src/cli/runner.ts`
+  - Dependencies: T9
+  - Refactor: Cache `getTotalRecoveryAttempts()` result before calling `isAtGlobalRecoveryLimit()`
+  - Pattern: `const currentAttempts = getTotalRecoveryAttempts(story); if (currentAttempts >= GLOBAL_RECOVERY_LIMIT) { ... }`
+
+- [ ] **T34**: Document story variable scope expansion
+  - Files: `src/cli/runner.ts`
+  - Dependencies: T9
+  - Add: Comment explaining why story is moved to method scope
+  - Consider: Refactor to reuse story object instead of re-parsing multiple times
+
+---
+
+## Phase 7: Verification & Testing
+
+### Task 7.1: Build Verification
+- [ ] **T35**: Run TypeScript compilation
+  - Command: `npm run build`
+  - Expected: No compilation errors
+  - Verify: All type changes propagate correctly
+
+- [ ] **T36**: Run linter
+  - Command: `npm run lint`
+  - Expected: No linting errors
+  - Fix: Any style violations
+
+### Task 7.2: Test Execution
+- [ ] **T37**: Run all unit tests
+  - Command: `npm test src/core/story-global-recovery.test.ts`
+  - Expected: All new tests pass (16+ test cases)
+
+- [ ] **T38**: Run all integration tests
+  - Command: `npm test tests/integration/circuit-breaker.test.ts`
+  - Expected: All new tests pass (6+ scenarios)
+
+- [ ] **T39**: Run full test suite
+  - Command: `npm test`
+  - Expected: 0 failures across all tests
+  - **Critical**: Required before marking complete
+
+### Task 7.3: Manual Verification Scenario
+- [ ] **T40**: Execute manual test scenario
+  - Steps:
+    1. Create test story, manually set `total_recovery_attempts: 9` in frontmatter
+    2. Add breakdown: `recovery_breakdown: { implementation: 5, rework: 3, refinement: 1 }`
+    3. Trigger any recovery action (e.g., implement with failing test)
+    4. Verify story blocked with error showing "10/10" and breakdown
+    5. Run `ai-sdlc unblock <story-id> --reset-retries`
+    6. Verify counter reset to 0 and breakdown cleared
+    7. Verify story can execute actions again
+
+### Task 7.4: Full Verification Suite
+- [ ] **T41**: Run complete verification
+  - Command: `make verify`
+  - Expected: All checks pass (lint, build, test)
+  - **Required**: Must pass before implementation marked complete
+
+---
+
+## Phase 8: Final Review & Completion
+
+### Task 8.1: Self-Review Checklist
+- [ ] **T42**: Verify all review blockers addressed
+  - BLOCKER #1: Acceptance criteria checkboxes checked ✓
+  - BLOCKER #2: Error message breakdown implemented ✓
+  - CRITICAL #1: Refinement path documented correctly ✓
+  - CRITICAL #2: API retry deferral documented ✓
+  - MAJOR #1: Function signatures corrected in AC ✓
+  - MAJOR #2: Action prevention test added ✓
+
+- [ ] **T43**: Verify Definition of Done
+  - All acceptance criteria implemented or deferred with rationale ✓
+  - Unit tests pass ✓
+  - Integration tests pass ✓
+  - `make verify` passes ✓
+  - Manual verification completed ✓
+  - No TypeScript errors ✓
+  - Story frontmatter schema updated ✓
+
+### Task 8.2: Update Story Status
+- [ ] **T44**: Mark story as implementation complete
+  - Files: Story document
+  - Dependencies: All tasks complete
+  - Update: Status to reflect completion
+  - Add: Implementation notes with verification results
+  - Include: Build/test output showing 0 failures
+
+---
+
+## Critical Dependencies Graph
+
+```
+Phase 1 (Types & Helpers)
+T1 → T2 → T3
+  ↓    ↓    ↓
+  T4   T5   T6 → T7 → T8
+  
+Phase 2 (Integration)
+T3, T8 → T9 (Circuit breaker)
+T4, T7 → T10, T11, T12, T13 (Recovery paths)
+T5 → T14 (Unblock)
+
+Phase 3 (Unit Tests)
+T2→T16, T3→T17, T4→T18, T5→T19
+T7→T20, T8→T21, T14→T22
+
+Phase 4 (Integration Tests)
+T9→T23, T24, T25
+T10-T13→T26
+T14→T27
+
+Phase 5 (Documentation)
+All impl → T28, T29, T30, T31, T32
+
+Phase 6 (Code Quality)
+T9 → T33, T34
+
+Phase 7 (Verification)
+All previous → T35-T41
+
+Phase 8 (Completion)
+T41 → T42 → T43 → T44
+```
+
+---
+
+## Key Implementation Notes
+
+1. **Recovery Breakdown Feature**: Implements the missing acceptance criterion for detailed error messages by tracking recovery type breakdown in frontmatter.
+
+2. **API Retry Deferral**: Formally documents the decision to defer API retry integration due to architectural constraints (client.ts lacks Story object access).
+
+3. **Async Signatures**: Corrects the acceptance criteria to reflect that helper functions are async (return `Promise<Story>`), matching existing patterns.
+
+4. **Refinement Path Clarity**: Documents that refinement happens through `rework.ts`, not `refinement.ts`, aligning documentation with implementation reality.
+
+5. **Code Optimization**: Addresses minor code quality issues (duplicate calls, variable scope) for cleaner implementation.
+
+6. **Test Coverage**: Adds missing integration test for action prevention (acceptance criterion: "Blocked story cannot execute any further actions").
+
+7. **Documentation Hygiene**: Ensures all acceptance criteria are checked off and out-of-scope items have clear rationale.
+
+This plan ensures all review blockers and critical issues are addressed while maintaining consistency with existing codebase patterns.
+
 ## Overview
 This plan implements a global counter that tracks all recovery attempts across all phases (implementation retries, review rejections, refinement iterations, API retries), with a hard limit of 10 attempts before blocking the story.
 
@@ -706,3 +1122,74 @@ The implementation is complete and ready for verification. To finalize:
 3. Create a PR once verification passes
 
 The feature follows the existing retry pattern used for `implementation_retry_count`, ensuring consistency with the codebase architecture.
+
+## Review Notes
+
+
+### Unified Collaborative Review
+
+
+#### 🛑 BLOCKER (2)
+
+**requirements** [po, code]: Acceptance criteria checkbox format violation: All checkboxes remain unchecked (- [ ]) in the story document despite implementation being marked complete. According to acceptance criteria, these should be checked off (- [x]) as work is completed. This makes it impossible to verify which requirements were actually fulfilled.
+  - File: `.ai-sdlc/stories/S-0054/story.md`:48
+  - Suggested fix: Update all completed acceptance criteria checkboxes from '- [ ]' to '- [x]'. For the incomplete criterion (error message breakdown by recovery type), either implement it or document why it was deferred.
+
+**requirements** [po, code]: Missing acceptance criterion: 'Error message includes breakdown of recovery attempts by type' was not implemented. The current error message shows 'Global recovery limit exceeded (10/10)' but does not include the required breakdown like 'Breakdown: 3 implementation retries, 2 rework cycles, 4 API retries, 1 refinement iteration'. This was explicitly required in the acceptance criteria.
+  - File: `src/cli/runner.ts`:188
+  - Suggested fix: Either: (1) Implement the breakdown feature by tracking recovery type metadata in frontmatter and displaying it in the error message, OR (2) Document in the story why this criterion was deemed out of scope and mark it as deferred with user approval.
+
+
+#### ⚠️ CRITICAL (2)
+
+**requirements** [po, code]: Refinement path implementation discrepancy: Acceptance criteria specifies 'src/agents/refinement.ts - when refinement iteration occurs' but implementation uses src/agents/rework.ts instead. While rework.ts DOES correctly increment the global counter for refinement (line 64), the story documentation and acceptance criteria were never updated to reflect this architectural reality. This creates confusion about whether the requirement was met.
+  - File: `.ai-sdlc/stories/S-0054/story.md`:57
+  - Suggested fix: Update the acceptance criteria to replace 'src/agents/refinement.ts' with 'src/agents/rework.ts' and add a note explaining that refinement happens through the rework agent. This accurately reflects the codebase architecture.
+
+**requirements** [po, code]: API retry integration incomplete: Acceptance criteria states 'src/core/client.ts - when API call retry occurs (after S-0053 is implemented)'. S-0053 is confirmed done (marked in commit 57f50ab), but no changes were made to client.ts to increment the global counter during API retries. The story acknowledges this is 'out of scope' in implementation notes but never formally documented this decision or sought user approval to defer this criterion.
+  - File: `.ai-sdlc/stories/S-0054/story.md`:58
+  - Suggested fix: Either: (1) Implement the API retry integration in client.ts (may require passing story context), OR (2) Formally document the decision to defer this requirement, explaining the architectural challenge (client.ts lacks Story object access) and marking this acceptance criterion as explicitly deferred pending architectural discussion.
+
+
+#### 📋 MAJOR (2)
+
+**code_quality** [po, code]: Incorrect function signature in acceptance criteria vs implementation: Acceptance criteria specifies 'incrementTotalRecoveryAttempts(story: Story): void' but implementation is async and returns Promise<Story>. While the async implementation is correct (matches existing pattern), the acceptance criteria were never updated to reflect this, creating documentation drift.
+  - File: `src/core/story.ts`:855
+  - Suggested fix: Update acceptance criteria in story document to show correct async signature: 'incrementTotalRecoveryAttempts(story: Story): Promise<Story>'
+
+**testing** [code, po]: Missing integration test for circuit breaker preventing action execution: While tests verify the story gets blocked at limit, there's no test verifying that the circuit breaker check in runner.ts at line 185 actually PREVENTS subsequent actions from executing. The acceptance criteria requires 'Blocked story cannot execute any further actions'.
+  - File: `tests/integration/circuit-breaker.test.ts`:37
+  - Suggested fix: Add integration test: Create story at limit 10, attempt to execute an action (e.g., 'implement'), verify action is rejected before execution with the circuit breaker error message, verify story remains blocked.
+
+
+#### ℹ️ MINOR (3)
+
+**code_quality** [code]: Variable scope expansion without clear justification: In runner.ts executeAction(), the 'story' variable was moved from try block scope to method scope (line 169: 'let story;'). While this enables the circuit breaker check, it also expands the variable's lifetime unnecessarily. The story could be retrieved once and reused, but the pattern of re-parsing story in multiple locations (line 233, 266, 313) suggests inconsistent state management.
+  - File: `src/cli/runner.ts`:169
+  - Suggested fix: Document why story is re-parsed multiple times in handleReviewDecision, or refactor to use the already-fetched story object consistently throughout the action execution flow.
+
+**code_quality** [code]: Duplicate getTotalRecoveryAttempts call in circuit breaker check: The circuit breaker code calls getTotalRecoveryAttempts(story) twice - once in isAtGlobalRecoveryLimit() and again to display the count (line 187). This is a minor performance inefficiency but more importantly violates DRY principle.
+  - File: `src/cli/runner.ts`:187
+  - Suggested fix: Refactor: const currentAttempts = getTotalRecoveryAttempts(story); if (currentAttempts >= GLOBAL_RECOVERY_LIMIT) { ... }. This eliminates the duplicate call and makes the code more maintainable.
+
+**requirements** [po]: Out of scope items not clearly documented: The story lists several 'Out of Scope' items (configurable limits, per-phase tracking, automatic warnings, etc.) but doesn't explain WHY these are out of scope or whether they're deferred vs. permanently excluded. This could lead to future confusion about feature completeness.
+  - File: `.ai-sdlc/stories/S-0054/story.md`:131
+  - Suggested fix: Add a brief rationale for each out-of-scope item (e.g., 'Configurable global limit - Deferred: Hardcoded 10 is sufficient for MVP; can be made configurable in future story if needed').
+
+
+
+### Perspective Summary
+- Code Quality: ❌ Failed
+- Security: ✅ Passed
+- Requirements (PO): ❌ Failed
+
+### Overall Result
+❌ **FAILED** - Issues must be addressed
+
+---
+*Review completed: 2026-01-19*
+
+
+### Implementation Notes (2026-01-19)
+
+I need permission to read files to begin implementation. Let me wait for your approval to access the codebase files.

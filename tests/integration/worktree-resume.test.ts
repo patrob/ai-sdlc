@@ -12,6 +12,7 @@ vi.mock('child_process');
 vi.mock('fs');
 vi.mock('ora');
 vi.mock('readline');
+vi.mock('../../src/core/config.js');
 vi.mock('../../src/core/client.js', () => ({
   runAgentQuery: vi.fn().mockResolvedValue({
     success: true,
@@ -22,6 +23,7 @@ vi.mock('../../src/core/client.js', () => ({
 describe('Worktree Resume Integration', () => {
   let mockSpinner: any;
   let mockReadline: any;
+  let mockConfig: any;
 
   const createMockStory = (overrides: any = {}) => ({
     frontmatter: {
@@ -45,8 +47,19 @@ describe('Worktree Resume Integration', () => {
     content: '# Test Resume Story\n\nTest content',
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+
+    // Import and mock config
+    mockConfig = await import('../../src/core/config.js');
+    vi.mocked(mockConfig.getSdlcRoot).mockReturnValue('/test/.ai-sdlc');
+    vi.mocked(mockConfig.loadConfig).mockReturnValue({
+      theme: 'none',
+      worktree: {
+        enabled: true,
+        basePath: '.ai-sdlc/worktrees',  // Relative path from working dir (/test)
+      },
+    } as any);
 
     // Mock ora spinner
     mockSpinner = {
@@ -75,7 +88,14 @@ describe('Worktree Resume Integration', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     // Default fs mocks - will be customized per test
-    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    vi.spyOn(fs, 'existsSync').mockImplementation((p) => {
+      const pathStr = String(p);
+      // Allow .ai-sdlc directory and subdirectories (stories, worktrees parent)
+      if (pathStr.includes('.ai-sdlc') && !pathStr.includes('worktrees/S-0063')) {
+        return true;
+      }
+      return false;
+    });
     vi.spyOn(fs, 'mkdirSync').mockImplementation(() => '');
     vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
     vi.spyOn(fs, 'readFileSync').mockReturnValue('---\nid: S-0063\n---\n# Test');
@@ -83,13 +103,12 @@ describe('Worktree Resume Integration', () => {
     vi.spyOn(fs, 'statSync').mockReturnValue({ isDirectory: () => true } as any);
 
     // Default git operations mock - clean working directory
-    vi.spyOn(cp, 'spawnSync').mockReturnValue({
-      status: 0,
-      stdout: '',
-      stderr: '',
-      output: [],
-      pid: 0,
-      signal: null,
+    vi.spyOn(cp, 'spawnSync').mockImplementation((cmd: any, args: any) => {
+      // Handle git rev-parse --verify main (for detectBaseBranch)
+      if (args && args.includes('rev-parse') && args.includes('main')) {
+        return { status: 0, stdout: 'abc123\n', stderr: '', output: [], pid: 0, signal: null };
+      }
+      return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
     });
 
     // Mock story operations
@@ -99,9 +118,21 @@ describe('Worktree Resume Integration', () => {
     vi.spyOn(story, 'findStoryById').mockReturnValue(createMockStory());
 
     // Mock kanban operations
-    vi.spyOn(kanban, 'assessState').mockReturnValue({
-      status: 'ready',
-      nextAction: { type: 'research' as const, description: 'Research the story' },
+    vi.spyOn(kanban, 'kanbanExists').mockReturnValue(true);
+    vi.spyOn(kanban, 'assessState').mockResolvedValue({
+      backlogItems: [],
+      readyItems: [],
+      inProgressItems: [],
+      doneItems: [],
+      recommendedActions: [
+        {
+          type: 'research' as const,
+          storyId: 'S-0063',
+          storyPath: '/test/.ai-sdlc/stories/S-0063/story.md',
+          description: 'Research the story',
+          priority: 1,
+        },
+      ],
     });
     vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(createMockStory());
   });
@@ -143,7 +174,7 @@ describe('Worktree Resume Integration', () => {
         return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
       });
 
-      await run(['test-resume-story']);
+      await run({ story: 'test-resume-story', worktree: true });
 
       // Verify resumption messages
       expect(console.log).toHaveBeenCalledWith(
@@ -185,7 +216,7 @@ describe('Worktree Resume Integration', () => {
         return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
       });
 
-      await run(['test-resume-story']);
+      await run({ story: 'test-resume-story', worktree: true });
 
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining('Last completed phase: research')
@@ -225,7 +256,7 @@ describe('Worktree Resume Integration', () => {
         return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
       });
 
-      await run(['test-resume-story']);
+      await run({ story: 'test-resume-story', worktree: true });
 
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining('Last completed phase: implementation')
@@ -277,7 +308,7 @@ describe('Worktree Resume Integration', () => {
         return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
       });
 
-      await run(['test-resume-story']);
+      await run({ story: 'test-resume-story', worktree: true });
 
       // Verify uncommitted changes are displayed
       expect(console.log).toHaveBeenCalledWith(
@@ -335,7 +366,7 @@ describe('Worktree Resume Integration', () => {
         return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
       });
 
-      await run(['test-resume-story']);
+      await run({ story: 'test-resume-story', worktree: true });
 
       // Verify recreation message
       expect(console.log).toHaveBeenCalledWith(
@@ -389,7 +420,7 @@ describe('Worktree Resume Integration', () => {
         return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
       });
 
-      await run(['test-resume-story']);
+      await run({ story: 'test-resume-story', worktree: true });
 
       // Verify recreation occurred
       expect(console.log).toHaveBeenCalledWith(
@@ -451,7 +482,7 @@ branch refs/heads/ai-sdlc/S-0063-test-resume-story
         return false;
       });
 
-      await run(['test-resume-story']);
+      await run({ story: 'test-resume-story', worktree: true });
 
       // Verify updateStoryField was called with worktree_path
       expect(story.updateStoryField).toHaveBeenCalledWith(
@@ -498,7 +529,7 @@ branch refs/heads/ai-sdlc/S-0063-test-resume-story
         return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
       });
 
-      await run(['test-resume-story']);
+      await run({ story: 'test-resume-story', worktree: true });
 
       // Verify divergence warning
       expect(console.log).toHaveBeenCalledWith(
@@ -541,7 +572,7 @@ branch refs/heads/ai-sdlc/S-0063-test-resume-story
         return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
       });
 
-      await run(['test-resume-story']);
+      await run({ story: 'test-resume-story', worktree: true });
 
       // Verify NO divergence warning
       const logCalls = vi.mocked(console.log).mock.calls.map(call => call[0]);
@@ -576,7 +607,7 @@ branch refs/heads/ai-sdlc/S-0063-test-resume-story
         callback('n');
       });
 
-      await run(['test-resume-story']);
+      await run({ story: 'test-resume-story', worktree: true });
 
       // Verify warning was displayed
       expect(console.log).toHaveBeenCalledWith(
@@ -632,7 +663,7 @@ branch refs/heads/ai-sdlc/S-0063-test-resume-story
         callback('y');
       });
 
-      await run(['test-resume-story']);
+      await run({ story: 'test-resume-story', worktree: true });
 
       // Verify warning was displayed
       expect(console.log).toHaveBeenCalledWith(
@@ -677,7 +708,7 @@ branch refs/heads/ai-sdlc/S-0063-test-resume-story
         return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
       });
 
-      await run(['test-resume-story']);
+      await run({ story: 'test-resume-story', worktree: true });
 
       // Verify error message
       expect(console.log).toHaveBeenCalledWith(

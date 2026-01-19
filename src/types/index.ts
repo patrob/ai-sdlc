@@ -4,6 +4,20 @@ export type StoryType = 'feature' | 'bug' | 'chore' | 'spike';
 export type EffortEstimate = 'small' | 'medium' | 'large';
 
 /**
+ * Content type classification for story implementation.
+ * Distinguishes between different kinds of implementation work to enable appropriate validation.
+ *
+ * - 'code': Requires modifications to TypeScript/JavaScript source files in src/
+ * - 'configuration': Only modifies config files (.claude/, .github/, root configs)
+ * - 'documentation': Only modifies documentation files (.md, docs/)
+ * - 'mixed': Requires both source code AND configuration changes
+ *
+ * Note: This is separate from StoryType (feature/bug/chore/spike) which describes
+ * the nature of the work, not the implementation scope.
+ */
+export type ContentType = 'code' | 'configuration' | 'documentation' | 'mixed';
+
+/**
  * Source for loading filesystem-based settings from the Agent SDK.
  * - `'user'` - Global user settings (`~/.claude/settings.json`)
  * - `'project'` - Project settings (`.claude/settings.json` and CLAUDE.md)
@@ -117,6 +131,20 @@ export interface StoryFrontmatter {
   branch?: string;
   worktree_path?: string;
   last_error?: string;
+  // Content type classification for validation
+  /**
+   * Type of implementation content (code, configuration, documentation, or mixed).
+   * Determines which validation rules apply during review.
+   * @default 'code' (backward compatibility - requires src/ changes)
+   */
+  content_type?: ContentType;
+  /**
+   * Manual override for source code change requirement.
+   * When true, forces validation to require src/ changes regardless of content_type.
+   * When false, skips src/ validation regardless of content_type.
+   * When undefined, validation is based on content_type field.
+   */
+  requires_source_changes?: boolean;
   // Refinement tracking
   refinement_iterations?: RefinementIteration[];
   refinement_count?: number;

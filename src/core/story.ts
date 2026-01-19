@@ -414,6 +414,9 @@ export async function createStory(
     plan_complete: false,
     implementation_complete: false,
     reviews_complete: false,
+    // Default content_type to 'code' for backward compatibility
+    // Stories that don't modify src/ should explicitly set content_type: 'configuration' or 'documentation'
+    content_type: 'code',
     ...options,
   };
 

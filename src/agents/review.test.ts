@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
-import { runReviewAgent, validateTDDCycles, generateTDDIssues, generateReviewSummary, removeUnfinishedCheckboxes, getStoryFileURL, formatPRDescription, truncatePRBody, createPullRequest, getSourceCodeChanges, deriveIndividualPassFailFromPerspectives, hasTestFiles } from './review.js';
+import { runReviewAgent, validateTDDCycles, generateTDDIssues, generateReviewSummary, removeUnfinishedCheckboxes, getStoryFileURL, formatPRDescription, truncatePRBody, createPullRequest, getSourceCodeChanges, getConfigurationChanges, determineEffectiveContentType, deriveIndividualPassFailFromPerspectives, hasTestFiles } from './review.js';
 import * as storyModule from '../core/story.js';
 import * as clientModule from '../core/client.js';
 import * as configModule from '../core/config.js';
-import { ReviewDecision, ReviewSeverity, Config, TDDTestCycle, ReviewIssue, Story } from '../types/index.js';
+import { ReviewDecision, ReviewSeverity, Config, TDDTestCycle, ReviewIssue, Story, ContentType } from '../types/index.js';
 import { spawn, spawnSync, execSync } from 'child_process';
 import fs from 'fs';
 
@@ -2995,6 +2995,479 @@ describe('Unified Collaborative Review', () => {
         i.description.includes('No tests found')
       );
       expect(noTestsIssue).toBeUndefined();
+    });
+  });
+});
+
+describe('Content Type Classification and Validation', () => {
+  describe('getConfigurationChanges', () => {
+    const mockWorkingDir = '/test/project';
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should detect changes in .claude/ directory', () => {
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: '.claude/skills/test-skill.md\nsrc/index.ts\n',
+      });
+
+      const result = getConfigurationChanges(mockWorkingDir);
+
+      expect(result).toContain('.claude/skills/test-skill.md');
+      expect(result).not.toContain('src/index.ts');
+    });
+
+    it('should detect changes in .github/ directory', () => {
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: '.github/workflows/ci.yml\n.github/ISSUE_TEMPLATE/bug.md\n',
+      });
+
+      const result = getConfigurationChanges(mockWorkingDir);
+
+      expect(result).toContain('.github/workflows/ci.yml');
+      expect(result).toContain('.github/ISSUE_TEMPLATE/bug.md');
+    });
+
+    it('should detect root configuration files', () => {
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: 'tsconfig.json\npackage.json\n.gitignore\nvitest.config.ts\n',
+      });
+
+      const result = getConfigurationChanges(mockWorkingDir);
+
+      expect(result).toContain('tsconfig.json');
+      expect(result).toContain('package.json');
+      expect(result).toContain('.gitignore');
+      expect(result).toContain('vitest.config.ts');
+    });
+
+    it('should return empty array when no config files changed', () => {
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: 'src/index.ts\nsrc/utils.ts\n',
+      });
+
+      const result = getConfigurationChanges(mockWorkingDir);
+
+      expect(result).toEqual([]);
+    });
+
+    it('should return unknown on git command failure', () => {
+      (spawnSync as Mock).mockReturnValue({
+        status: 1,
+        stdout: '',
+      });
+
+      const result = getConfigurationChanges(mockWorkingDir);
+
+      expect(result).toEqual(['unknown']);
+    });
+
+    it('should handle git diff errors gracefully', () => {
+      (spawnSync as Mock).mockImplementation(() => {
+        throw new Error('Git not found');
+      });
+
+      const result = getConfigurationChanges(mockWorkingDir);
+
+      expect(result).toEqual(['unknown']);
+    });
+  });
+
+  describe('determineEffectiveContentType', () => {
+    it('should default to code when content_type is undefined', () => {
+      const story: Story = {
+        path: '/test/story.md',
+        slug: 'test',
+        frontmatter: {
+          id: 'test-1',
+          title: 'Test',
+          slug: 'test',
+          priority: 1,
+          status: 'in-progress',
+          type: 'feature',
+          created: '2024-01-01',
+          labels: [],
+          research_complete: false,
+          plan_complete: false,
+          implementation_complete: false,
+          reviews_complete: false,
+        },
+        content: 'test content',
+      };
+
+      const result = determineEffectiveContentType(story);
+
+      expect(result).toBe('code');
+    });
+
+    it('should respect explicit content_type field', () => {
+      const story: Story = {
+        path: '/test/story.md',
+        slug: 'test',
+        frontmatter: {
+          id: 'test-1',
+          title: 'Test',
+          slug: 'test',
+          priority: 1,
+          status: 'in-progress',
+          type: 'feature',
+          created: '2024-01-01',
+          labels: [],
+          research_complete: false,
+          plan_complete: false,
+          implementation_complete: false,
+          reviews_complete: false,
+          content_type: 'configuration',
+        },
+        content: 'test content',
+      };
+
+      const result = determineEffectiveContentType(story);
+
+      expect(result).toBe('configuration');
+    });
+
+    it('should override to configuration when requires_source_changes is false', () => {
+      const story: Story = {
+        path: '/test/story.md',
+        slug: 'test',
+        frontmatter: {
+          id: 'test-1',
+          title: 'Test',
+          slug: 'test',
+          priority: 1,
+          status: 'in-progress',
+          type: 'feature',
+          created: '2024-01-01',
+          labels: [],
+          research_complete: false,
+          plan_complete: false,
+          implementation_complete: false,
+          reviews_complete: false,
+          content_type: 'code',
+          requires_source_changes: false,
+        },
+        content: 'test content',
+      };
+
+      const result = determineEffectiveContentType(story);
+
+      expect(result).toBe('configuration');
+    });
+
+    it('should override to code when requires_source_changes is true', () => {
+      const story: Story = {
+        path: '/test/story.md',
+        slug: 'test',
+        frontmatter: {
+          id: 'test-1',
+          title: 'Test',
+          slug: 'test',
+          priority: 1,
+          status: 'in-progress',
+          type: 'feature',
+          created: '2024-01-01',
+          labels: [],
+          research_complete: false,
+          plan_complete: false,
+          implementation_complete: false,
+          reviews_complete: false,
+          content_type: 'configuration',
+          requires_source_changes: true,
+        },
+        content: 'test content',
+      };
+
+      const result = determineEffectiveContentType(story);
+
+      expect(result).toBe('code');
+    });
+
+    it('should respect mixed content type', () => {
+      const story: Story = {
+        path: '/test/story.md',
+        slug: 'test',
+        frontmatter: {
+          id: 'test-1',
+          title: 'Test',
+          slug: 'test',
+          priority: 1,
+          status: 'in-progress',
+          type: 'feature',
+          created: '2024-01-01',
+          labels: [],
+          research_complete: false,
+          plan_complete: false,
+          implementation_complete: false,
+          reviews_complete: false,
+          content_type: 'mixed',
+        },
+        content: 'test content',
+      };
+
+      const result = determineEffectiveContentType(story);
+
+      expect(result).toBe('mixed');
+    });
+
+    it('should respect documentation content type', () => {
+      const story: Story = {
+        path: '/test/story.md',
+        slug: 'test',
+        frontmatter: {
+          id: 'test-1',
+          title: 'Test',
+          slug: 'test',
+          priority: 1,
+          status: 'in-progress',
+          type: 'feature',
+          created: '2024-01-01',
+          labels: [],
+          research_complete: false,
+          plan_complete: false,
+          implementation_complete: false,
+          reviews_complete: false,
+          content_type: 'documentation',
+        },
+        content: 'test content',
+      };
+
+      const result = determineEffectiveContentType(story);
+
+      expect(result).toBe('documentation');
+    });
+  });
+
+  describe('Content Type Validation in runReviewAgent', () => {
+    const mockStoryPath = '/test/stories/test-story.md';
+    const mockWorkingDir = '/test/project';
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(configModule.loadConfig).mockReturnValue({
+        implementation: {
+          maxRetries: 3,
+          maxRetriesUpperBound: 10,
+        },
+      } as Config);
+      vi.mocked(storyModule.snapshotMaxRetries).mockResolvedValue(undefined);
+      vi.mocked(storyModule.isAtMaxRetries).mockReturnValue(false);
+    });
+
+    it('should validate source changes for code stories', async () => {
+      const mockStory: Story = {
+        path: mockStoryPath,
+        slug: 'test-story',
+        frontmatter: {
+          id: 'test-1',
+          title: 'Test Story',
+          slug: 'test-story',
+          priority: 1,
+          status: 'in-progress',
+          type: 'feature',
+          created: '2024-01-01',
+          labels: [],
+          research_complete: true,
+          plan_complete: true,
+          implementation_complete: true,
+          reviews_complete: false,
+          content_type: 'code',
+        },
+        content: 'test content',
+      };
+
+      vi.mocked(storyModule.parseStory).mockReturnValue(mockStory);
+      vi.mocked(storyModule.updateStoryField).mockResolvedValue(undefined);
+
+      // Mock no source changes
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: 'README.md\n',
+      });
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      expect(result.decision).toBe(ReviewDecision.RECOVERY);
+      expect(storyModule.updateStoryField).toHaveBeenCalledWith(
+        mockStory,
+        'last_restart_reason',
+        'No source code changes detected. Implementation wrote documentation only.'
+      );
+    });
+
+    it('should validate config changes for configuration stories', async () => {
+      const mockStory: Story = {
+        path: mockStoryPath,
+        slug: 'test-story',
+        frontmatter: {
+          id: 'test-1',
+          title: 'Test Story',
+          slug: 'test-story',
+          priority: 1,
+          status: 'in-progress',
+          type: 'feature',
+          created: '2024-01-01',
+          labels: [],
+          research_complete: true,
+          plan_complete: true,
+          implementation_complete: true,
+          reviews_complete: false,
+          content_type: 'configuration',
+        },
+        content: 'test content',
+      };
+
+      vi.mocked(storyModule.parseStory).mockReturnValue(mockStory);
+      vi.mocked(storyModule.updateStoryField).mockResolvedValue(undefined);
+
+      // Mock no config changes (only source changes)
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: 'src/index.ts\n',
+      });
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      expect(result.decision).toBe(ReviewDecision.RECOVERY);
+      expect(storyModule.updateStoryField).toHaveBeenCalledWith(
+        mockStory,
+        'last_restart_reason',
+        expect.stringContaining('Configuration story requires changes to config files')
+      );
+    });
+
+    it('should skip validation for documentation stories', async () => {
+      const mockStory: Story = {
+        path: mockStoryPath,
+        slug: 'test-story',
+        frontmatter: {
+          id: 'test-1',
+          title: 'Test Story',
+          slug: 'test-story',
+          priority: 1,
+          status: 'in-progress',
+          type: 'feature',
+          created: '2024-01-01',
+          labels: [],
+          research_complete: true,
+          plan_complete: true,
+          implementation_complete: true,
+          reviews_complete: false,
+          content_type: 'documentation',
+        },
+        content: 'test content',
+      };
+
+      vi.mocked(storyModule.parseStory).mockReturnValue(mockStory);
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue({
+        text: JSON.stringify({
+          decision: 'APPROVED',
+          codeReview: { passed: true, issues: [] },
+          securityReview: { passed: true, issues: [] },
+          poReview: { passed: true, issues: [] },
+        }),
+      });
+
+      // Mock no changes at all
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: '',
+      });
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Should proceed to review, not trigger recovery
+      expect(result.decision).not.toBe(ReviewDecision.RECOVERY);
+    });
+
+    it('should validate both source and config for mixed stories', async () => {
+      const mockStory: Story = {
+        path: mockStoryPath,
+        slug: 'test-story',
+        frontmatter: {
+          id: 'test-1',
+          title: 'Test Story',
+          slug: 'test-story',
+          priority: 1,
+          status: 'in-progress',
+          type: 'feature',
+          created: '2024-01-01',
+          labels: [],
+          research_complete: true,
+          plan_complete: true,
+          implementation_complete: true,
+          reviews_complete: false,
+          content_type: 'mixed',
+        },
+        content: 'test content',
+      };
+
+      vi.mocked(storyModule.parseStory).mockReturnValue(mockStory);
+      vi.mocked(storyModule.updateStoryField).mockResolvedValue(undefined);
+
+      // Mock only source changes (missing config)
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: 'src/index.ts\n',
+      });
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      expect(result.decision).toBe(ReviewDecision.RECOVERY);
+      expect(storyModule.updateStoryField).toHaveBeenCalledWith(
+        mockStory,
+        'last_restart_reason',
+        expect.stringContaining('Mixed story requires both source AND configuration changes')
+      );
+    });
+
+    it('should pass validation when mixed story has both changes', async () => {
+      const mockStory: Story = {
+        path: mockStoryPath,
+        slug: 'test-story',
+        frontmatter: {
+          id: 'test-1',
+          title: 'Test Story',
+          slug: 'test-story',
+          priority: 1,
+          status: 'in-progress',
+          type: 'feature',
+          created: '2024-01-01',
+          labels: [],
+          research_complete: true,
+          plan_complete: true,
+          implementation_complete: true,
+          reviews_complete: false,
+          content_type: 'mixed',
+        },
+        content: 'test content',
+      };
+
+      vi.mocked(storyModule.parseStory).mockReturnValue(mockStory);
+      vi.mocked(clientModule.runAgentQuery).mockResolvedValue({
+        text: JSON.stringify({
+          decision: 'APPROVED',
+          codeReview: { passed: true, issues: [] },
+          securityReview: { passed: true, issues: [] },
+          poReview: { passed: true, issues: [] },
+        }),
+      });
+
+      // Mock both source and config changes
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: 'src/index.ts\n.claude/skills/test.md\n',
+      });
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Should proceed to review
+      expect(result.decision).not.toBe(ReviewDecision.RECOVERY);
     });
   });
 });

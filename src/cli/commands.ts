@@ -7,7 +7,7 @@ import { execSync } from 'child_process';
 import { getSdlcRoot, loadConfig, initConfig, validateWorktreeBasePath, DEFAULT_WORKTREE_CONFIG } from '../core/config.js';
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoriesByStatus } from '../core/kanban.js';
 import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId, autoCompleteStoryAfterReview } from '../core/story.js';
-import { GitWorktreeService } from '../core/worktree.js';
+import { GitWorktreeService, WorktreeStatus } from '../core/worktree.js';
 import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext, WorktreeInfo, PreFlightResult } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
 import {
@@ -437,6 +437,57 @@ function displayGitValidationResult(result: GitValidationResult, c: any): void {
       console.log(c.warning(`  - ${warning}`));
     }
   }
+}
+
+/**
+ * Display detailed information about an existing worktree
+ */
+function displayExistingWorktreeInfo(status: WorktreeStatus, c: any): void {
+  console.log();
+  console.log(c.warning('A worktree already exists for this story:'));
+  console.log();
+  console.log(c.bold('  Worktree Path:'), status.path);
+  console.log(c.bold('  Branch:       '), status.branch);
+
+  if (status.lastCommit) {
+    console.log(c.bold('  Last Commit:  '), `${status.lastCommit.hash.substring(0, 7)} - ${status.lastCommit.message}`);
+    console.log(c.bold('  Committed:    '), status.lastCommit.timestamp);
+  }
+
+  const statusLabel = status.workingDirectoryStatus === 'clean'
+    ? c.success('clean')
+    : c.warning(status.workingDirectoryStatus);
+  console.log(c.bold('  Working Dir:  '), statusLabel);
+
+  if (status.modifiedFiles.length > 0) {
+    console.log();
+    console.log(c.warning('  Modified files:'));
+    for (const file of status.modifiedFiles.slice(0, 5)) {
+      console.log(c.dim(`    M ${file}`));
+    }
+    if (status.modifiedFiles.length > 5) {
+      console.log(c.dim(`    ... and ${status.modifiedFiles.length - 5} more`));
+    }
+  }
+
+  if (status.untrackedFiles.length > 0) {
+    console.log();
+    console.log(c.warning('  Untracked files:'));
+    for (const file of status.untrackedFiles.slice(0, 5)) {
+      console.log(c.dim(`    ? ${file}`));
+    }
+    if (status.untrackedFiles.length > 5) {
+      console.log(c.dim(`    ... and ${status.untrackedFiles.length - 5} more`));
+    }
+  }
+
+  console.log();
+  console.log(c.info('To resume work in this worktree:'));
+  console.log(c.dim(`  cd ${status.path}`));
+  console.log();
+  console.log(c.info('To remove the worktree and start fresh:'));
+  console.log(c.dim(`  ai-sdlc worktrees remove ${status.storyId}`));
+  console.log();
 }
 
 // ANSI escape sequence patterns for sanitization
@@ -1019,6 +1070,17 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       }
 
       const worktreeService = new GitWorktreeService(workingDir, resolvedBasePath);
+
+      // Check for existing worktree NOT recorded in story frontmatter
+      // This catches scenarios where workflow was interrupted after worktree creation
+      // but before the story file was updated
+      const existingWorktree = worktreeService.findByStoryId(targetStory.frontmatter.id);
+      if (existingWorktree && existingWorktree.exists) {
+        const worktreeStatus = worktreeService.getWorktreeStatus(existingWorktree);
+        getLogger().info('worktree', `Detected existing worktree for ${targetStory.frontmatter.id} at ${existingWorktree.path}`);
+        displayExistingWorktreeInfo(worktreeStatus, c);
+        return;
+      }
 
       // Validate git state for worktree creation
       const validation = worktreeService.validateCanCreateWorktree();

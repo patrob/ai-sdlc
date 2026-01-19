@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768784506726-447b76b7",
+  "timestamp": "2026-01-19T01:06:01.244Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0062",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0062-detect-existing-worktree-state/.ai-sdlc/stories/S-0062/story.md",
+      "completedAt": "2026-01-19T01:02:14.225Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0062",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0062-detect-existing-worktree-state/.ai-sdlc/stories/S-0062/story.md",
+      "completedAt": "2026-01-19T01:05:25.358Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0062",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0062-detect-existing-worktree-state/.ai-sdlc/stories/S-0062/story.md",
+      "completedAt": "2026-01-19T01:06:01.244Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0062-detect-existing-worktree-state/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0062",
+      "fullSDLC": true
+    },
+    "storyContentHash": "8dd35ec998abfa73ec4fb8ce12c7f87132dea6fd77f74156ee5bd32ef8ecdc22"
+  }
+}

@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:23:31.119Z'
+  timestamp: '2026-01-19T18:23:47.020Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -2581,3 +2581,18 @@ Looking at the story, I need to:
 3. Run verification tests to confirm the fix works
 
 Could you please grant me permission to read files in the `/Users/probinson/Repos/on-par/pocs/ai-sdlc/` directory? Once granted, I'll analyze the test implementation and apply the necessary fixes to resolve the flakiness issue.
+
+
+### Implementation Notes (2026-01-19)
+
+I need your permission to read files in the codebase to analyze and fix the flaky test. Could you please grant me access to read files in the `/Users/probinson/Repos/on-par/pocs/ai-sdlc/` directory?
+
+Once granted, I'll execute the implementation plan:
+
+1. **Phase 1**: Read and analyze the current test implementation in `tests/integration/refinement-loop.test.ts`
+2. **Phase 2**: Apply Option C (test isolation) - Add `vi.restoreAllMocks()` to the `afterEach` block to prevent mock leakage
+3. **Phase 3**: If needed, apply Option B (mock timing control) - Use `vi.useFakeTimers()` and `vi.runAllTimersAsync()` for deterministic timing
+4. **Phase 4**: Run verification tests to confirm the fix works (10 consecutive successful runs per acceptance criteria)
+5. **Phase 5**: Commit the changes following project conventions
+
+The story indicates this test intermittently times out at 5000ms when run in the full integration suite (~50% failure rate) but passes consistently in isolation, due to mock leakage and timing issues with real `setTimeout` callbacks under load.

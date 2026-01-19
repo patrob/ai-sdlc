@@ -89,6 +89,8 @@ program
   .option('--continue', 'Resume workflow from last checkpoint')
   .option('--story <id-or-slug>', 'Target a specific story by ID or slug')
   .option('--batch <story-ids>', 'Process multiple stories sequentially (comma-separated list, e.g., S-001,S-002,S-003)')
+  .option('--epic <epic-id>', 'Process all stories labeled epic-{epic-id} with parallel execution (e.g., --epic ticketing matches epic-ticketing)')
+  .option('--max-concurrent <n>', 'Maximum parallel stories for --epic (default: 3)', '3')
   .option('--step <phase>', 'Run a specific phase (refine, research, plan, implement, review) - cannot be combined with --auto --story')
   .option('--max-iterations <number>', 'Maximum retry iterations (default: infinite)')
   .option('--watch', 'Run in daemon mode, continuously processing backlog')
@@ -96,6 +98,7 @@ program
   .option('--force', 'Skip git validation and conflict checks (use with caution)')
   .option('--worktree', 'Create isolated git worktree for story execution (requires --story)')
   .option('--no-worktree', 'Disable worktree even when enabled in config')
+  .option('--keep-worktrees', 'Preserve worktrees after completion for debugging (requires --epic)')
   .option('--clean', 'Clean existing worktree and restart from scratch (requires --story)')
   .option('--log-level <level>', 'Set log verbosity (debug, info, warn, error)', 'info')
   .action((options) => {
@@ -141,6 +144,25 @@ program
       },
     });
 
+    // Validate --epic mutual exclusivity
+    if (options.epic) {
+      if (options.story) {
+        const c = getThemedChalk(config);
+        console.log(c.error('Error: --epic cannot be used with --story'));
+        process.exit(1);
+      }
+      if (options.batch) {
+        const c = getThemedChalk(config);
+        console.log(c.error('Error: --epic cannot be used with --batch'));
+        process.exit(1);
+      }
+      if (options.watch) {
+        const c = getThemedChalk(config);
+        console.log(c.error('Error: --epic cannot be used with --watch'));
+        process.exit(1);
+      }
+    }
+
     // Validate --worktree requires --story
     if (options.worktree && !options.story) {
       const c = getThemedChalk(config);
@@ -152,6 +174,13 @@ program
     if (options.clean && !options.story) {
       const c = getThemedChalk(config);
       console.log(c.error('Error: --clean requires --story flag'));
+      process.exit(1);
+    }
+
+    // Validate --keep-worktrees with --epic
+    if (options.keepWorktrees && !options.epic) {
+      const c = getThemedChalk(config);
+      console.log(c.error('Error: --keep-worktrees requires --epic flag'));
       process.exit(1);
     }
 

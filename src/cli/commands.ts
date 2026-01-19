@@ -881,7 +881,7 @@ async function processBatchInternal(
 /**
  * Run the workflow (process one action or all)
  */
-export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; batch?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean; clean?: boolean }): Promise<void> {
+export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; batch?: string; epic?: string; maxConcurrent?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean; clean?: boolean; keepWorktrees?: boolean }): Promise<void> {
   const config = loadConfig();
   // Parse maxIterations from CLI (undefined means use config default which is Infinity)
   const maxIterationsOverride = options.maxIterations !== undefined
@@ -919,6 +919,22 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     const { startDaemon } = await import('./daemon.js');
     await startDaemon({ maxIterations: maxIterationsOverride });
     return; // Daemon runs indefinitely
+  }
+
+  // Handle epic mode
+  if (options.epic) {
+    const { processEpic } = await import('./epic-processor.js');
+    const maxConcurrent = options.maxConcurrent ? parseInt(options.maxConcurrent, 10) : undefined;
+
+    const exitCode = await processEpic({
+      epicId: options.epic,
+      maxConcurrent,
+      dryRun: options.dryRun,
+      force: options.force,
+      keepWorktrees: options.keepWorktrees,
+    });
+
+    process.exit(exitCode);
   }
 
   // Handle batch mode

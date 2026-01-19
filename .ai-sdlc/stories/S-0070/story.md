@@ -2,7 +2,7 @@
 id: S-0070
 title: Fix silent failure when ReviewDecision.RECOVERY is not handled in commands.ts
 priority: 1
-status: in-progress
+status: done
 type: bug
 created: '2026-01-18'
 labels:
@@ -13,8 +13,8 @@ labels:
   - s
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 worktree_path: /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0070-story
 updated: '2026-01-19'
 branch: ai-sdlc/story

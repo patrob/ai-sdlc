@@ -132,7 +132,6 @@ labels:
     });
 
     it('should handle infinite retries correctly', async () => {
-      const story = parseStory(storyPath);
       const config = loadConfig(testDir);
 
       config.implementation.maxRetries = Infinity;

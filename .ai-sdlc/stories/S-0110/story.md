@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:17:51.253Z'
+  timestamp: '2026-01-19T18:18:06.183Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -2176,3 +2176,22 @@ Once you grant these permissions, I'll follow the implementation plan:
 The story indicates this is a test-only fix that addresses mock leakage and timing variance issues causing ~50% failure rate when running in the full test suite.
 
 Should I proceed with the implementation once you grant file access?
+
+
+### Implementation Notes (2026-01-19)
+
+I need your permission to read files in the codebase to implement this fix. Could you please grant me permission to:
+
+1. **Read files** in the `/Users/probinson/Repos/on-par/pocs/ai-sdlc/` directory
+2. **Edit files** to apply the fixes
+3. **Run bash commands** to verify the tests work
+
+Once you grant these permissions, I'll execute the implementation plan:
+
+**Phase 1**: Analyze the current test implementation in `tests/integration/refinement-loop.test.ts`  
+**Phase 2**: Apply Option C (test isolation) - Add `vi.restoreAllMocks()` to `afterEach`  
+**Phase 3**: If needed, apply Option B (fake timers) - Use `vi.useFakeTimers()` and `vi.runAllTimersAsync()`  
+**Phase 4**: Run verification tests (10 consecutive successful runs)  
+**Phase 5**: Commit the changes
+
+This fix addresses the root cause where spawn mocks with `setTimeout` callbacks from one test interfere with subsequent tests in the sequential suite, causing ~50% failure rate under load.

@@ -18,6 +18,7 @@ reviews_complete: false
 slug: parallel-epic-processing
 dependencies:
   - S-0094
+  - S-0096
 ---
 # Parallel Epic Processing with --epic flag
 
@@ -139,7 +140,7 @@ Add an `--epic` flag to the `run` command that finds all stories with a matching
 | `src/index.ts` | Add `--epic` and `--max-concurrent` options |
 | `src/cli/commands.ts` | Add epic processing orchestration |
 | `src/core/config.ts` | Add epic configuration schema |
-| `src/core/kanban.ts` | Add `findStoriesByEpic()` function |
+| `src/core/kanban.ts` | Use `findStoriesByEpic()` from S-0096 |
 
 ## Files to Create
 
@@ -225,6 +226,8 @@ function groupStoriesByPhase(stories: Story[]): Story[][] {
 
 ## References
 
-- Prerequisite: S-0094 (Sequential Batch Processing)
+- Prerequisites:
+  - S-0094 (Sequential Batch Processing) - batch execution foundation
+  - S-0096 (Grouping Query Infrastructure) - `findStoriesByEpic()` and grouping types
 - Existing worktree support: `src/core/worktree.ts`
 - Daemon queue pattern: `src/cli/daemon.ts` (reference for concurrent tracking)

@@ -1,0 +1,59 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768825169583-4b8a3353",
+  "timestamp": "2026-01-19T12:32:50.254Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0054",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0054-global-recovery-circuit-breaker/.ai-sdlc/stories/S-0054/story.md",
+      "completedAt": "2026-01-19T12:19:55.695Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0054",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0054-global-recovery-circuit-breaker/.ai-sdlc/stories/S-0054/story.md",
+      "completedAt": "2026-01-19T12:22:27.772Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0054",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0054-global-recovery-circuit-breaker/.ai-sdlc/stories/S-0054/story.md",
+      "completedAt": "2026-01-19T12:23:09.738Z"
+    },
+    {
+      "type": "implement",
+      "storyId": "S-0054",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0054-global-recovery-circuit-breaker/.ai-sdlc/stories/S-0054/story.md",
+      "completedAt": "2026-01-19T12:29:29.732Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0054",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0054-global-recovery-circuit-breaker/.ai-sdlc/stories/S-0054/story.md",
+      "completedAt": "2026-01-19T12:32:34.867Z"
+    },
+    {
+      "type": "implement",
+      "storyId": "S-0054",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0054-global-recovery-circuit-breaker/.ai-sdlc/stories/S-0054/story.md",
+      "completedAt": "2026-01-19T12:32:50.211Z"
+    },
+    {
+      "type": "review",
+      "storyId": "S-0054",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0054-global-recovery-circuit-breaker/.ai-sdlc/stories/S-0054/story.md",
+      "completedAt": "2026-01-19T12:32:50.254Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0054-global-recovery-circuit-breaker/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0054",
+      "fullSDLC": true
+    },
+    "storyContentHash": "d4b82db5bf333c46ec3857765584aa5edc5176a4a1460ad8afbc04086c719194"
+  }
+}

@@ -10,6 +10,7 @@ import {
   incrementImplementationRetryCount,
   isAtMaxImplementationRetries,
   getEffectiveMaxImplementationRetries,
+  incrementTotalRecoveryAttempts,
 } from '../core/story.js';
 import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
@@ -877,6 +878,9 @@ ${implementationResult}
 
     // Track retry attempt
     await incrementImplementationRetryCount(updatedStory);
+
+    // Increment global recovery counter
+    await incrementTotalRecoveryAttempts(updatedStory);
 
     // Extract first 100 chars of test and build output for history
     const testSnippet = verification.testsOutput.substring(0, 100).replace(/\n/g, ' ');

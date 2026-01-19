@@ -6,6 +6,7 @@ import {
   resetPhaseCompletion,
   appendRefinementNote,
   getRefinementCount,
+  incrementTotalRecoveryAttempts,
 } from '../core/story.js';
 import { loadConfig } from '../core/config.js';
 import { getLogger } from '../core/logger.js';
@@ -58,6 +59,9 @@ export async function runReworkAgent(
     const feedbackSummary = formatFeedbackSummary(reviewFeedback);
     await recordRefinementAttempt(story, targetPhase, feedbackSummary);
     const currentIteration = getRefinementCount(story);
+
+    // Increment global recovery counter
+    await incrementTotalRecoveryAttempts(story);
 
     changesMade.push(`Recorded refinement attempt ${currentIteration}`);
 

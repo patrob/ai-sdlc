@@ -22,7 +22,7 @@ vi.mock('../../src/core/config.js', () => ({
     timeouts: { agentTimeout: 600000 },
     retry: {
       maxRetries: 3,
-      initialDelay: 100, // Use shorter delays for testing
+      initialDelay: 100,
       maxDelay: 1000,
       maxTotalDuration: 5000,
     },
@@ -40,6 +40,47 @@ vi.mock('../../src/core/logger.js', () => ({
   })),
 }));
 
+function createApiError(message: string, status: number): Error {
+  const error = new Error(message);
+  (error as any).status = status;
+  return error;
+}
+
+function createNetworkError(message: string, code: string): Error {
+  const error = new Error(message);
+  (error as any).code = code;
+  return error;
+}
+
+function createThrowingGenerator(error: Error) {
+  let thrown = false;
+  const generator = {
+    [Symbol.asyncIterator]() { return this; },
+    async next() {
+      if (thrown) {
+        return { done: true, value: undefined };
+      }
+      thrown = true;
+      throw error;
+    },
+    async return() {
+      return { done: true, value: undefined };
+    },
+    async throw() {
+      return { done: true, value: undefined };
+    },
+  };
+  return generator;
+}
+
+function createSuccessGenerator(content: string) {
+  return (async function* () {
+    yield { type: 'system', subtype: 'init', session_id: 'session-1' };
+    yield { type: 'assistant', content };
+    yield { type: 'system', subtype: 'completion' };
+  })();
+}
+
 describe('API Retry Integration Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -52,13 +93,7 @@ describe('API Retry Integration Tests', () => {
   });
 
   it('should succeed on first attempt without retry', async () => {
-    const mockResponse = (async function* () {
-      yield { type: 'system', subtype: 'init', session_id: 'session-1' };
-      yield { type: 'assistant', content: 'Success response' };
-      yield { type: 'system', subtype: 'completion' };
-    })();
-
-    vi.mocked(agentSdk.query).mockReturnValue(mockResponse as any);
+    vi.mocked(agentSdk.query).mockReturnValue(createSuccessGenerator('Success response') as any);
 
     const result = await runAgentQuery({
       prompt: 'Test prompt',
@@ -75,19 +110,9 @@ describe('API Retry Integration Tests', () => {
     vi.mocked(agentSdk.query).mockImplementation(() => {
       callCount++;
       if (callCount <= 2) {
-        // First two calls: return 429 error
-        return (async function* () {
-          const error = new Error('Rate limit exceeded');
-          (error as any).status = 429;
-          yield { type: 'error', error: { message: error.message, type: 'rate_limit' } };
-        })() as any;
+        return createThrowingGenerator(createApiError('Rate limit exceeded', 429)) as any;
       } else {
-        // Third call: succeed
-        return (async function* () {
-          yield { type: 'system', subtype: 'init', session_id: 'session-1' };
-          yield { type: 'assistant', content: 'Success after retries' };
-          yield { type: 'system', subtype: 'completion' };
-        })() as any;
+        return createSuccessGenerator('Success after retries') as any;
       }
     });
 
@@ -102,15 +127,12 @@ describe('API Retry Integration Tests', () => {
       onProgress,
     });
 
-    // Fast-forward through retry delays
     await vi.runAllTimersAsync();
-
     const result = await resultPromise;
 
     expect(result).toBe('Success after retries');
-    expect(agentSdk.query).toHaveBeenCalledTimes(3); // Initial + 2 retries
+    expect(agentSdk.query).toHaveBeenCalledTimes(3);
 
-    // Check that retry events were emitted
     const retryEvents = progressEvents.filter(e => e.type === 'retry');
     expect(retryEvents.length).toBe(2);
     expect((retryEvents[0] as any).attempt).toBe(1);
@@ -118,13 +140,9 @@ describe('API Retry Integration Tests', () => {
   });
 
   it('should not retry on HTTP 401 authentication error', async () => {
-    const mockResponse = (async function* () {
-      const error = new Error('Unauthorized');
-      (error as any).status = 401;
-      yield { type: 'error', error: { message: error.message } };
-    })();
-
-    vi.mocked(agentSdk.query).mockReturnValue(mockResponse as any);
+    vi.mocked(agentSdk.query).mockReturnValue(
+      createThrowingGenerator(createApiError('Unauthorized', 401)) as any
+    );
 
     await expect(
       runAgentQuery({
@@ -133,17 +151,12 @@ describe('API Retry Integration Tests', () => {
       })
     ).rejects.toThrow('Unauthorized');
 
-    // Should not retry
     expect(agentSdk.query).toHaveBeenCalledTimes(1);
   });
 
   it('should fail after max retries with 503 errors', async () => {
     vi.mocked(agentSdk.query).mockImplementation(() => {
-      return (async function* () {
-        const error = new Error('Service unavailable');
-        (error as any).status = 503;
-        yield { type: 'error', error: { message: error.message } };
-      })() as any;
+      return createThrowingGenerator(createApiError('Service unavailable', 503)) as any;
     });
 
     const resultPromise = runAgentQuery({
@@ -151,12 +164,13 @@ describe('API Retry Integration Tests', () => {
       workingDirectory: process.cwd(),
     });
 
-    // Fast-forward through all retry delays
+    let caughtError: Error | undefined;
+    resultPromise.catch(e => { caughtError = e; });
+
     await vi.runAllTimersAsync();
 
-    await expect(resultPromise).rejects.toThrow('Service unavailable');
-
-    // Should retry 3 times (initial + 3 retries = 4 total calls)
+    expect(caughtError).toBeDefined();
+    expect(caughtError?.message).toMatch(/API request failed after 3 retry attempts/);
     expect(agentSdk.query).toHaveBeenCalledTimes(4);
   });
 
@@ -166,19 +180,9 @@ describe('API Retry Integration Tests', () => {
     vi.mocked(agentSdk.query).mockImplementation(() => {
       callCount++;
       if (callCount === 1) {
-        // First call: timeout
-        return (async function* () {
-          const error = new Error('Connection timeout');
-          (error as any).code = 'ETIMEDOUT';
-          yield { type: 'error', error: { message: error.message } };
-        })() as any;
+        return createThrowingGenerator(createNetworkError('Connection timeout', 'ETIMEDOUT')) as any;
       } else {
-        // Second call: succeed
-        return (async function* () {
-          yield { type: 'system', subtype: 'init', session_id: 'session-1' };
-          yield { type: 'assistant', content: 'Success after timeout' };
-          yield { type: 'system', subtype: 'completion' };
-        })() as any;
+        return createSuccessGenerator('Success after timeout') as any;
       }
     });
 
@@ -195,12 +199,10 @@ describe('API Retry Integration Tests', () => {
   });
 
   it('should respect total duration cap and stop retrying', async () => {
+    let callCount = 0;
     vi.mocked(agentSdk.query).mockImplementation(() => {
-      return (async function* () {
-        const error = new Error('Rate limit');
-        (error as any).status = 429;
-        yield { type: 'error', error: { message: error.message } };
-      })() as any;
+      callCount++;
+      return createThrowingGenerator(createApiError('Rate limit', 429)) as any;
     });
 
     const resultPromise = runAgentQuery({
@@ -208,15 +210,12 @@ describe('API Retry Integration Tests', () => {
       workingDirectory: process.cwd(),
     });
 
-    // Fast-forward past the total duration cap (5000ms in mock config)
+    let caughtError: Error | undefined;
+    resultPromise.catch(e => { caughtError = e; });
+
     await vi.advanceTimersByTimeAsync(6000);
 
-    await expect(resultPromise).rejects.toThrow('Rate limit');
-
-    // Should stop before max retries due to duration cap
-    // With initialDelay=100, backoffs are: 100, 200, 400, 800
-    // Total: 100 + 200 + 400 + 800 = 1500ms < 5000ms
-    // So it should complete all retries, but we're simulating it stops earlier
+    expect(caughtError).toBeDefined();
     expect(agentSdk.query).toHaveBeenCalled();
   });
 
@@ -224,11 +223,7 @@ describe('API Retry Integration Tests', () => {
     const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     vi.mocked(agentSdk.query).mockImplementation(() => {
-      return (async function* () {
-        const error = new Error('Rate limit');
-        (error as any).status = 429;
-        yield { type: 'error', error: { message: error.message } };
-      })() as any;
+      return createThrowingGenerator(createApiError('Rate limit', 429)) as any;
     });
 
     const resultPromise = runAgentQuery({
@@ -236,11 +231,12 @@ describe('API Retry Integration Tests', () => {
       workingDirectory: process.cwd(),
     });
 
+    let caughtError: Error | undefined;
+    resultPromise.catch(e => { caughtError = e; });
+
     await vi.runAllTimersAsync();
 
-    await expect(resultPromise).rejects.toThrow();
-
-    // Should show warning after 2nd retry (attempt 1 indexed from 0)
+    expect(caughtError).toBeDefined();
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining('Experiencing temporary issues')
     );
@@ -249,18 +245,8 @@ describe('API Retry Integration Tests', () => {
   });
 
   it('should apply exponential backoff with correct delays', async () => {
-    let callCount = 0;
-    const callTimestamps: number[] = [];
-
     vi.mocked(agentSdk.query).mockImplementation(() => {
-      callCount++;
-      callTimestamps.push(Date.now());
-
-      return (async function* () {
-        const error = new Error('Rate limit');
-        (error as any).status = 429;
-        yield { type: 'error', error: { message: error.message } };
-      })() as any;
+      return createThrowingGenerator(createApiError('Rate limit', 429)) as any;
     });
 
     const resultPromise = runAgentQuery({
@@ -268,14 +254,15 @@ describe('API Retry Integration Tests', () => {
       workingDirectory: process.cwd(),
     });
 
-    // Advance timers step by step to observe delays
-    await vi.advanceTimersByTimeAsync(0); // Initial call
-    await vi.advanceTimersByTimeAsync(150); // First retry (100ms + jitter)
-    await vi.advanceTimersByTimeAsync(250); // Second retry (200ms + jitter)
-    await vi.advanceTimersByTimeAsync(500); // Third retry (400ms + jitter)
+    let caughtError: Error | undefined;
+    resultPromise.catch(e => { caughtError = e; });
 
-    await expect(resultPromise).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(150);
+    await vi.advanceTimersByTimeAsync(250);
+    await vi.advanceTimersByTimeAsync(500);
 
-    expect(agentSdk.query).toHaveBeenCalledTimes(4); // Initial + 3 retries
+    expect(caughtError).toBeDefined();
+    expect(agentSdk.query).toHaveBeenCalledTimes(4);
   });
 });

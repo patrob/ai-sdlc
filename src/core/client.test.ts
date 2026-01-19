@@ -68,6 +68,24 @@ describe('classifyApiError', () => {
     expect(classifyApiError(error)).toBe('transient');
   });
 
+  it('should classify ECONNREFUSED as transient', () => {
+    const error = new Error('Connection refused');
+    (error as any).code = 'ECONNREFUSED';
+    expect(classifyApiError(error)).toBe('transient');
+  });
+
+  it('should classify EHOSTUNREACH as transient', () => {
+    const error = new Error('Host unreachable');
+    (error as any).code = 'EHOSTUNREACH';
+    expect(classifyApiError(error)).toBe('transient');
+  });
+
+  it('should classify EPIPE as transient', () => {
+    const error = new Error('Broken pipe');
+    (error as any).code = 'EPIPE';
+    expect(classifyApiError(error)).toBe('transient');
+  });
+
   it('should classify AuthenticationError as permanent', () => {
     const error = new AuthenticationError('Token expired');
     expect(classifyApiError(error)).toBe('permanent');

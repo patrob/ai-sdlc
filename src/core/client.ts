@@ -107,9 +107,15 @@ export function classifyApiError(error: Error): 'transient' | 'permanent' {
   // Check for network errors (should retry)
   if ('code' in error) {
     const code = (error as any).code;
-    if (code === 'ETIMEDOUT') return 'transient';
-    if (code === 'ECONNRESET') return 'transient';
-    if (code === 'ENOTFOUND') return 'transient';
+    const transientNetworkCodes = [
+      'ETIMEDOUT',
+      'ECONNRESET',
+      'ENOTFOUND',
+      'ECONNREFUSED',
+      'EHOSTUNREACH',
+      'EPIPE',
+    ];
+    if (transientNetworkCodes.includes(code)) return 'transient';
   }
 
   // Default to permanent (fail-safe)
@@ -169,7 +175,10 @@ function getErrorTypeLabel(error: Error): string {
     const code = (error as any).code;
     if (code === 'ETIMEDOUT') return 'network timeout';
     if (code === 'ECONNRESET') return 'connection reset';
-    if (code === 'ENOTFOUND') return 'network error';
+    if (code === 'ENOTFOUND') return 'DNS lookup failed';
+    if (code === 'ECONNREFUSED') return 'connection refused';
+    if (code === 'EHOSTUNREACH') return 'host unreachable';
+    if (code === 'EPIPE') return 'broken pipe';
   }
 
   return 'error';
@@ -373,8 +382,14 @@ export async function runAgentQuery(options: AgentQueryOptions): Promise<string>
 
       // Check if we should retry
       if (!shouldRetry(lastError, attempt, retryConfig.maxRetries)) {
-        // Permanent error or max retries exceeded - fail immediately
-        throw lastError;
+        // Check if this is a permanent error (not retryable) vs max retries exceeded
+        const errorType = classifyApiError(lastError);
+        if (errorType === 'permanent') {
+          // Permanent error - fail immediately with original error
+          throw lastError;
+        }
+        // Max retries exceeded for transient error - break to enhance the error message
+        break;
       }
 
       // Check total duration cap
@@ -412,8 +427,8 @@ export async function runAgentQuery(options: AgentQueryOptions): Promise<string>
         errorType: errorTypeLabel,
       });
 
-      // Show warning after 2nd retry
-      if (attempt >= 1) {
+      // Show warning after 2nd retry (attempt 2+)
+      if (attempt >= 2) {
         console.warn('⚠️  Experiencing temporary issues with API...');
       }
 
@@ -422,8 +437,24 @@ export async function runAgentQuery(options: AgentQueryOptions): Promise<string>
     }
   }
 
-  // If we get here, we've exhausted retries
-  throw lastError || new Error('Max retries exceeded');
+  // If we get here, we've exhausted retries - enhance error message with context
+  if (lastError) {
+    const errorTypeLabel = getErrorTypeLabel(lastError);
+    const isRateLimit = 'status' in lastError && (lastError as any).status === 429;
+
+    if (isRateLimit) {
+      throw new Error(
+        `Rate limit exceeded after ${retryConfig.maxRetries} retry attempts. ` +
+        `API may be rate limiting your requests. Try again in a few minutes or reduce concurrent requests.`
+      );
+    }
+
+    throw new Error(
+      `API request failed after ${retryConfig.maxRetries} retry attempts. ` +
+      `Last error (${errorTypeLabel}): ${lastError.message}`
+    );
+  }
+  throw new Error('Max retries exceeded');
 }
 
 /**

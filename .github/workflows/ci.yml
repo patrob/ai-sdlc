@@ -53,20 +53,24 @@ jobs:
       - name: Get next alpha version
         id: version
         run: |
-          # Get the latest alpha version from npm, default to 0.0.0-alpha.0 if none exists
-          LATEST=$(npm view ai-sdlc@alpha version 2>/dev/null || echo "0.0.0-alpha.0")
-          echo "Latest alpha: ${LATEST}"
+          # Get base version from package.json (source of truth)
+          BASE=$(node -p "require('./package.json').version")
+          echo "Base version from package.json: ${BASE}"
 
-          # Extract base version and alpha number
-          # Format: X.Y.Z-alpha.N
-          BASE=$(echo "${LATEST}" | sed 's/-alpha.*//')
-          ALPHA_NUM=$(echo "${LATEST}" | sed -n 's/.*alpha\.\([0-9]*\).*/\1/p')
-          ALPHA_NUM=${ALPHA_NUM:-0}
+          # Get all published versions and find the highest alpha for this base
+          ALPHAS=$(npm view ai-sdlc versions --json 2>/dev/null | grep "\"${BASE}-alpha\." | sed 's/[", ]//g' || echo "")
+          echo "Existing alphas for ${BASE}: ${ALPHAS}"
 
-          # Increment alpha number
-          NEXT_ALPHA=$((ALPHA_NUM + 1))
+          if [ -z "$ALPHAS" ]; then
+            # No alphas for this base version yet, start at 1
+            NEXT_ALPHA=1
+          else
+            # Find the highest alpha number
+            HIGHEST=$(echo "$ALPHAS" | sed -n 's/.*alpha\.\([0-9]*\).*/\1/p' | sort -n | tail -1)
+            NEXT_ALPHA=$((HIGHEST + 1))
+          fi
+
           NEXT_VERSION="${BASE}-alpha.${NEXT_ALPHA}"
-
           echo "Next version: ${NEXT_VERSION}"
           echo "version=${NEXT_VERSION}" >> $GITHUB_OUTPUT
 

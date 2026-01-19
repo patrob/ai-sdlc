@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
-import { runReviewAgent, validateTDDCycles, generateTDDIssues, generateReviewSummary, removeUnfinishedCheckboxes, getStoryFileURL, formatPRDescription, truncatePRBody, createPullRequest, getSourceCodeChanges, getConfigurationChanges, determineEffectiveContentType, deriveIndividualPassFailFromPerspectives, hasTestFiles } from './review.js';
+import { runReviewAgent, validateTDDCycles, generateTDDIssues, generateReviewSummary, removeUnfinishedCheckboxes, getStoryFileURL, formatPRDescription, truncatePRBody, createPullRequest, getSourceCodeChanges, getConfigurationChanges, getDocumentationChanges, determineEffectiveContentType, deriveIndividualPassFailFromPerspectives, hasTestFiles } from './review.js';
 import * as storyModule from '../core/story.js';
 import * as clientModule from '../core/client.js';
 import * as configModule from '../core/config.js';
@@ -3078,6 +3078,86 @@ describe('Content Type Classification and Validation', () => {
     });
   });
 
+  describe('getDocumentationChanges', () => {
+    const mockWorkingDir = '/test/project';
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should detect markdown files (excluding story files)', () => {
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: 'README.md\ndocs/guide.md\nsrc/index.ts\n.ai-sdlc/stories/S-001/story.md\n',
+      });
+
+      const result = getDocumentationChanges(mockWorkingDir);
+
+      expect(result).toContain('README.md');
+      expect(result).toContain('docs/guide.md');
+      expect(result).not.toContain('src/index.ts');
+      expect(result).not.toContain('.ai-sdlc/stories/S-001/story.md');
+    });
+
+    it('should detect files in docs/ directory', () => {
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: 'docs/architecture.png\ndocs/api.json\nsrc/index.ts\n',
+      });
+
+      const result = getDocumentationChanges(mockWorkingDir);
+
+      expect(result).toContain('docs/architecture.png');
+      expect(result).toContain('docs/api.json');
+      expect(result).not.toContain('src/index.ts');
+    });
+
+    it('should return unknown on git command failure', () => {
+      (spawnSync as Mock).mockReturnValue({
+        status: 1,
+        stderr: 'fatal: not a git repository',
+      });
+
+      const result = getDocumentationChanges(mockWorkingDir);
+
+      expect(result).toEqual(['unknown']);
+    });
+
+    it('should return empty array when no documentation changes exist', () => {
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: 'src/index.ts\nsrc/util.ts\n',
+      });
+
+      const result = getDocumentationChanges(mockWorkingDir);
+
+      expect(result).toEqual([]);
+    });
+
+    it('should handle git diff errors gracefully', () => {
+      (spawnSync as Mock).mockImplementation(() => {
+        throw new Error('Git not found');
+      });
+
+      const result = getDocumentationChanges(mockWorkingDir);
+
+      expect(result).toEqual(['unknown']);
+    });
+
+    it('should exclude story files but include other markdown', () => {
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: '.ai-sdlc/stories/S-0071/story.md\nCLAUDE.md\ndocs/testing.md\n',
+      });
+
+      const result = getDocumentationChanges(mockWorkingDir);
+
+      expect(result).not.toContain('.ai-sdlc/stories/S-0071/story.md');
+      expect(result).toContain('CLAUDE.md');
+      expect(result).toContain('docs/testing.md');
+    });
+  });
+
   describe('determineEffectiveContentType', () => {
     it('should default to code when content_type is undefined', () => {
       const story: Story = {
@@ -3341,7 +3421,7 @@ describe('Content Type Classification and Validation', () => {
       );
     });
 
-    it('should skip validation for documentation stories', async () => {
+    it('should validate documentation files for documentation stories', async () => {
       const mockStory: Story = {
         path: mockStoryPath,
         slug: 'test-story',
@@ -3373,16 +3453,65 @@ describe('Content Type Classification and Validation', () => {
         }),
       });
 
-      // Mock no changes at all
+      // Mock documentation changes (docs/ and .md files modified)
       (spawnSync as Mock).mockReturnValue({
         status: 0,
-        stdout: '',
+        stdout: 'docs/config.md\nREADME.md\n',
       });
 
       const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
 
       // Should proceed to review, not trigger recovery
       expect(result.decision).not.toBe(ReviewDecision.RECOVERY);
+    });
+
+    it('should trigger recovery when documentation story has no documentation changes', async () => {
+      const mockStory: Story = {
+        path: mockStoryPath,
+        slug: 'test-story',
+        frontmatter: {
+          id: 'test-1',
+          title: 'Test Story',
+          slug: 'test-story',
+          priority: 1,
+          status: 'in-progress',
+          type: 'feature',
+          created: '2024-01-01',
+          labels: [],
+          research_complete: true,
+          plan_complete: true,
+          implementation_complete: true,
+          reviews_complete: false,
+          content_type: 'documentation',
+          implementation_retry_count: 0,
+          max_implementation_retries: 3,
+        },
+        content: 'test content',
+      };
+
+      vi.mocked(storyModule.parseStory).mockReturnValue(mockStory);
+      vi.mocked(storyModule.updateStoryField).mockResolvedValue(undefined);
+
+      // Mock no documentation changes (only story file, which should be excluded)
+      (spawnSync as Mock).mockReturnValue({
+        status: 0,
+        stdout: '.ai-sdlc/stories/S-0071/story.md\n',
+      });
+
+      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+
+      // Should trigger recovery since no valid documentation changes
+      expect(result.decision).toBe(ReviewDecision.RECOVERY);
+      expect(storyModule.updateStoryField).toHaveBeenCalledWith(
+        mockStory,
+        'implementation_complete',
+        false
+      );
+      expect(storyModule.updateStoryField).toHaveBeenCalledWith(
+        mockStory,
+        'last_restart_reason',
+        expect.stringContaining('Documentation story requires changes to markdown files')
+      );
     });
 
     it('should validate both source and config for mixed stories', async () => {

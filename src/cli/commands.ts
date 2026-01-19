@@ -3,6 +3,7 @@ import ora from 'ora';
 import fs from 'fs';
 import path from 'path';
 import * as readline from 'readline';
+import { execSync } from 'child_process';
 import { getSdlcRoot, loadConfig, initConfig, validateWorktreeBasePath, DEFAULT_WORKTREE_CONFIG } from '../core/config.js';
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoriesByStatus } from '../core/kanban.js';
 import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId, autoCompleteStoryAfterReview } from '../core/story.js';
@@ -1447,6 +1448,39 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
             spinner.text = c.success('Review approved - auto-completing story');
             storyLogger?.log('INFO', `Story auto-completed after review approval: "${story.frontmatter.title}"`);
 
+            // Auto-create PR in automated mode
+            const workflowState = await loadWorkflowState(sdlcRoot, story.frontmatter.id);
+            const isAutoMode = workflowState?.context.options.auto ?? false;
+
+            if (isAutoMode || config.reviewConfig.autoCreatePROnApproval) {
+              try {
+                // Create PR (this will automatically commit any uncommitted changes)
+                spinner.text = c.dim('Creating pull request...');
+                const { createPullRequest } = await import('../agents/review.js');
+                const prResult = await createPullRequest(action.storyPath, sdlcRoot);
+
+                if (prResult.success) {
+                  spinner.text = c.success('Review approved - PR created');
+                  storyLogger?.log('INFO', `PR created successfully for ${story.frontmatter.id}`);
+                } else {
+                  // PR creation failed - mark as blocked
+                  const { updateStoryStatus } = await import('../core/story.js');
+                  const blockedStory = await updateStoryStatus(story, 'blocked');
+                  await writeStory(blockedStory);
+                  spinner.text = c.warning('Review approved but PR creation failed - story marked as blocked');
+                  storyLogger?.log('WARN', `PR creation failed for ${story.frontmatter.id}: ${prResult.error || 'Unknown error'}`);
+                }
+              } catch (error) {
+                // Error during PR creation - mark as blocked
+                const { updateStoryStatus } = await import('../core/story.js');
+                const blockedStory = await updateStoryStatus(story, 'blocked');
+                await writeStory(blockedStory);
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                spinner.text = c.warning(`Review approved but auto-PR failed: ${errorMsg}`);
+                storyLogger?.log('ERROR', `Auto-PR failed for ${story.frontmatter.id}: ${errorMsg}`);
+              }
+            }
+
             // Handle worktree cleanup if story has a worktree
             if (story.frontmatter.worktree_path) {
               await handleWorktreeCleanup(story, config, c);
@@ -2322,6 +2356,16 @@ async function handleWorktreeCleanup(
     const updated = await updateStoryField(story, 'worktree_path', undefined);
     await writeStory(updated);
   }
+}
+
+/**
+ * Security: Escape shell arguments for safe use in commands
+ * For use with execSync when shell execution is required
+ * @internal Exported for testing
+ */
+export function escapeShellArg(arg: string): string {
+  // Replace single quotes with '\'' and wrap in single quotes
+  return `'${arg.replace(/'/g, "'\\''")}'`;
 }
 
 /**

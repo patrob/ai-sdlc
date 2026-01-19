@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Story, ActionType, KanbanFolder } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
-import { getPhaseInfo, calculatePhaseProgress, truncateForTerminal, sanitizeStorySlug, determineWorktreeMode } from './commands.js';
+import { getPhaseInfo, calculatePhaseProgress, truncateForTerminal, sanitizeStorySlug, determineWorktreeMode, escapeShellArg } from './commands.js';
 
 describe('CLI Commands - Phase Helpers', () => {
   let originalEnv: NodeJS.ProcessEnv;
@@ -705,5 +705,49 @@ describe('determineWorktreeMode', () => {
       expect(determineWorktreeMode({}, { enabled: true }, storyNoWorktree)).toBe(true);
       expect(determineWorktreeMode({}, { enabled: false }, storyNoWorktree)).toBe(false);
     });
+  });
+});
+
+describe('escapeShellArg (Security)', () => {
+  it('should wrap simple arguments in single quotes', () => {
+    const result = escapeShellArg('hello');
+    expect(result).toBe("'hello'");
+  });
+
+  it('should escape single quotes in arguments', () => {
+    const result = escapeShellArg("it's");
+    expect(result).toBe("'it'\\''s'");
+  });
+
+  it('should handle multiple single quotes', () => {
+    const result = escapeShellArg("don't can't won't");
+    expect(result).toBe("'don'\\''t can'\\''t won'\\''t'");
+  });
+
+  it('should handle empty strings', () => {
+    const result = escapeShellArg('');
+    expect(result).toBe("''");
+  });
+
+  it('should preserve spaces and special characters safely', () => {
+    const result = escapeShellArg('hello world $VAR');
+    expect(result).toBe("'hello world $VAR'");
+  });
+
+  it('should escape command injection attempts', () => {
+    const malicious = "'; rm -rf /; echo '";
+    const result = escapeShellArg(malicious);
+    expect(result).toBe("''\\'';" + " rm -rf /; echo " + "'\\'''");
+    // When used in a command, this will be treated as literal text, not executed
+  });
+
+  it('should handle backticks safely', () => {
+    const result = escapeShellArg('`whoami`');
+    expect(result).toBe("'`whoami`'");
+  });
+
+  it('should handle dollar signs and parentheses', () => {
+    const result = escapeShellArg('$(rm -rf /)');
+    expect(result).toBe("'$(rm -rf /)'");
   });
 });

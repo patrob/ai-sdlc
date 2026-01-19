@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { getSdlcRoot, loadConfig, isStageGateEnabled } from '../core/config.js';
 import { assessState, kanbanExists } from '../core/kanban.js';
-import { parseStory, resetRPIVCycle, markStoryComplete, updateStoryStatus, isAtMaxRetries, getStory, incrementImplementationRetryCount, updateStoryField, autoCompleteStoryAfterReview } from '../core/story.js';
+import { parseStory, resetRPIVCycle, markStoryComplete, updateStoryStatus, isAtMaxRetries, getStory, incrementImplementationRetryCount, updateStoryField, autoCompleteStoryAfterReview, isAtGlobalRecoveryLimit, getTotalRecoveryAttempts, incrementTotalRecoveryAttempts, moveToBlocked } from '../core/story.js';
 import { Action, StateAssessment, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
 import { runRefinementAgent } from '../agents/refinement.js';
 import { runResearchAgent } from '../agents/research.js';
@@ -166,8 +166,9 @@ export class WorkflowRunner {
 
     // Resolve story by ID to get current path (handles moves between folders)
     let currentStoryPath: string;
+    let story;
     try {
-      const story = getStory(this.sdlcRoot, action.storyId);
+      story = getStory(this.sdlcRoot, action.storyId);
       currentStoryPath = story.path;
     } catch (error) {
       const c = getThemedChalk(config);
@@ -178,6 +179,17 @@ export class WorkflowRunner {
         console.log(c.dim(`  ${error.message}`));
       }
       return { success: false, error: error instanceof Error ? error.message : 'Story not found', changesMade: [] };
+    }
+
+    // Check global recovery circuit breaker
+    if (isAtGlobalRecoveryLimit(story)) {
+      const c = getThemedChalk(config);
+      const currentAttempts = getTotalRecoveryAttempts(story);
+      const reason = `Global recovery limit exceeded (${currentAttempts}/10)`;
+      console.log(c.error(`\n⚠️  ${reason}`));
+      console.log(c.warning('Story has been blocked. Use "ai-sdlc unblock --reset-retries" to reset the counter.'));
+      await moveToBlocked(currentStoryPath, reason);
+      return { success: false, error: reason, changesMade: [] };
     }
 
     switch (action.type) {
@@ -284,6 +296,9 @@ export class WorkflowRunner {
         const summary = generateReviewSummary(reviewResult.issues, getTerminalWidth());
         console.log(c.dim(`  Summary: ${summary}`));
 
+        // Increment global recovery counter
+        await incrementTotalRecoveryAttempts(story);
+
         await resetRPIVCycle(story, reviewResult.feedback);
         console.log(c.info('RPIV cycle reset. Planning phase will restart on next run.'));
       }
@@ -299,6 +314,9 @@ export class WorkflowRunner {
 
       // Increment implementation retry count
       await incrementImplementationRetryCount(story);
+
+      // Increment global recovery counter
+      await incrementTotalRecoveryAttempts(story);
 
       console.log(c.info('Implementation phase will re-run on next execution.'));
     } else if (reviewResult.decision === ReviewDecision.FAILED) {

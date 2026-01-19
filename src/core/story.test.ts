@@ -606,6 +606,20 @@ Test content`;
     expect(unblockedStory.frontmatter.refinement_count).toBe(0);
   });
 
+  it('should reset total_recovery_attempts when resetRetries option is true', async () => {
+    createBlockedStory('test-story', {
+      retry_count: 5,
+      refinement_count: 3,
+      total_recovery_attempts: 10,
+    });
+
+    const unblockedStory = await unblockStory('test-story', sdlcRoot, { resetRetries: true });
+
+    expect(unblockedStory.frontmatter.retry_count).toBe(0);
+    expect(unblockedStory.frontmatter.refinement_count).toBe(0);
+    expect(unblockedStory.frontmatter.total_recovery_attempts).toBe(0);
+  });
+
   it('should preserve retry counts when resetRetries is false', async () => {
     createBlockedStory('test-story', {
       retry_count: 5,
@@ -616,6 +630,20 @@ Test content`;
 
     expect(unblockedStory.frontmatter.retry_count).toBe(5);
     expect(unblockedStory.frontmatter.refinement_count).toBe(3);
+  });
+
+  it('should NOT reset total_recovery_attempts when resetRetries is false', async () => {
+    createBlockedStory('test-story', {
+      retry_count: 5,
+      refinement_count: 3,
+      total_recovery_attempts: 7,
+    });
+
+    const unblockedStory = await unblockStory('test-story', sdlcRoot, { resetRetries: false });
+
+    expect(unblockedStory.frontmatter.retry_count).toBe(5);
+    expect(unblockedStory.frontmatter.refinement_count).toBe(3);
+    expect(unblockedStory.frontmatter.total_recovery_attempts).toBe(7);
   });
 
   it('should preserve other frontmatter fields', async () => {

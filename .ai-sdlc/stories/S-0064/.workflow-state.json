@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768825380669-fba37f45",
+  "timestamp": "2026-01-19T12:26:39.470Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0064",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0064-clean-restart-existing-worktree/.ai-sdlc/stories/S-0064/story.md",
+      "completedAt": "2026-01-19T12:23:32.778Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0064",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0064-clean-restart-existing-worktree/.ai-sdlc/stories/S-0064/story.md",
+      "completedAt": "2026-01-19T12:25:55.880Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0064",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0064-clean-restart-existing-worktree/.ai-sdlc/stories/S-0064/story.md",
+      "completedAt": "2026-01-19T12:26:39.470Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0064-clean-restart-existing-worktree/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0064",
+      "fullSDLC": true
+    },
+    "storyContentHash": "ef3b7c518ce48416e7d2e52688a119cb8b8e9babff647892fcc8fdde6c33efb8"
+  }
+}

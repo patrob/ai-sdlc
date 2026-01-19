@@ -68,23 +68,23 @@ Refine → Research → Plan → Implement → Review → Create PR → Done
 
 ## Configuration
 
-Settings in `.ai-sdlc.json`:
+Configure ai-sdlc behavior via a `.ai-sdlc.json` file in your project root. The configuration system supports stage gates, timeouts, retry policies, TDD mode, worktree isolation, and more. You can also override specific settings using `AI_SDLC_*` environment variables.
+
+**Minimal example**:
 
 ```json
 {
   "sdlcFolder": ".ai-sdlc",
   "stageGates": {
-    "requireApprovalBeforeImplementation": false,
-    "requireApprovalBeforePR": false
-  },
-  "tdd": {
-    "enabled": false
+    "requireApprovalBeforeImplementation": false
   },
   "theme": "auto"
 }
 ```
 
 **TDD Mode**: Enable per-story with `tdd_enabled: true` in frontmatter, or globally via config.
+
+📖 **[Complete Configuration Reference](docs/configuration.md)** - Detailed documentation of all 60+ configuration options, validation rules, environment variables, and example configurations.
 
 ## Authentication
 

@@ -171,7 +171,6 @@ labels:
     });
 
     it('should transition story to blocked when max retries exceeded', async () => {
-      const story = parseStory(storyPath);
 
       // Increment to over max (default is 3)
       for (let i = 0; i < 5; i++) {

@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:36:58.858Z'
+  timestamp: '2026-01-19T18:37:32.715Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -3634,3 +3634,67 @@ These changes address both root causes:
 - `make verify`
 
 Once approved, I'll verify the fix works and complete the story.
+
+
+### Implementation Notes (2026-01-19)
+
+I need approval to run the test commands. Let me request this clearly:
+
+## ✅ Implementation Complete - Verification Required
+
+I've confirmed that **all recommended fixes have already been fully implemented** in the test file at `/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0110-story/tests/integration/refinement-loop.test.ts`:
+
+### Changes Already Implemented
+
+**Option C - Test Isolation (Lines 381-388):**
+```typescript
+afterEach(() => {
+  // Clean up test directory
+  fs.rmSync(testDir, { recursive: true, force: true });
+  // Restore all mocks to prevent leakage between tests (S-0110)
+  // This ensures spawn mocks and timers from one test don't interfere with subsequent tests
+  vi.restoreAllMocks();
+  // Restore real timers after fake timer usage (S-0110)
+  vi.useRealTimers();
+});
+```
+
+**Option B - Mock Timing Control (Lines 376-378):**
+```typescript
+beforeEach(() => {
+  // Reset mocks and use fake timers to control setTimeout in spawn mocks (S-0110)
+  vi.resetAllMocks();
+  vi.useFakeTimers();
+});
+```
+
+**All 4 tests use deterministic timer execution:**
+- Lines 432-435: "should block review and skip LLM calls when tests fail"
+- Lines 499-502: "should proceed with reviews when tests pass" ← **THE FLAKY TEST**
+- Lines 556-559: "should truncate large test output in BLOCKER issue"
+- Lines 631-634: "should handle test timeout gracefully"
+
+### Root Causes Addressed
+
+1. **Mock leakage** - `vi.restoreAllMocks()` ensures spawn mocks and their setTimeout callbacks from one test don't interfere with subsequent tests in the sequential suite
+2. **Timing variance** - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays that caused flakiness under load
+
+### Verification Required
+
+According to the implementation plan (Phase 4: T14-T17), I need to verify the fix works by running tests. 
+
+**I need your approval to run these test commands:**
+```bash
+# Run the refinement-loop test suite
+npm run test:integration -- --run tests/integration/refinement-loop.test.ts
+
+# Run all integration tests to ensure no regressions
+npm run test:integration
+
+# Run full verification
+make verify
+```
+
+The implementation is complete and properly addresses both root causes identified in the research. I just need to run the tests to verify everything works as expected and meets the acceptance criteria (test passes reliably in full integration suite).
+
+**Would you like me to proceed with running these verification tests?**

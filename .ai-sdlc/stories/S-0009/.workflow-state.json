@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768784198346-36862ad1",
+  "timestamp": "2026-01-19T00:59:43.475Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0009",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0009-robust-llm-response-parsing/.ai-sdlc/stories/S-0009/story.md",
+      "completedAt": "2026-01-19T00:57:04.894Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0009",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0009-robust-llm-response-parsing/.ai-sdlc/stories/S-0009/story.md",
+      "completedAt": "2026-01-19T00:58:50.378Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0009",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0009-robust-llm-response-parsing/.ai-sdlc/stories/S-0009/story.md",
+      "completedAt": "2026-01-19T00:59:43.475Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0009-robust-llm-response-parsing/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0009",
+      "fullSDLC": true
+    },
+    "storyContentHash": "347c88b416b647950aec6ca50000cf560bf8fb921e3c9864e9278d4b1175b3ed"
+  }
+}

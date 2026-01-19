@@ -2,7 +2,7 @@
 id: S-0063
 title: Resume work in existing worktree
 priority: 10
-status: in-progress
+status: done
 type: feature
 created: '2026-01-18'
 labels:
@@ -13,8 +13,8 @@ labels:
   - s
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 slug: resume-work-existing-worktree
 depends_on:
   - S-0062

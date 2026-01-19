@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:41:23.301Z'
+  timestamp: '2026-01-19T18:41:56.749Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -3927,3 +3927,36 @@ According to the story's acceptance criteria, I need to verify:
 The implementation is complete and properly addresses both root causes identified in the research. Once you approve, I'll run the verification tests to confirm the fix resolves the flakiness issue and meets all acceptance criteria.
 
 **Would you like me to proceed with running the verification tests?**
+
+
+### Implementation Notes (2026-01-19)
+
+I need your approval to run the verification tests. The implementation is complete - both Option C (test isolation) and Option B (mock timing control) have been properly applied to fix the flaky test. 
+
+**Summary of what's been implemented:**
+
+✅ **Option C - Test Isolation (Lines 381-388)**:
+- Added `vi.restoreAllMocks()` to prevent mock leakage between tests
+- Added `vi.useRealTimers()` to restore real timers after each test
+- Added detailed comments referencing S-0110
+
+✅ **Option B - Mock Timing Control (Lines 376-378)**:
+- Added `vi.useFakeTimers()` in `beforeEach` to use deterministic fake timers
+- All 4 tests in the "Review Agent Pre-check Integration" suite now use `await vi.runAllTimersAsync()` to deterministically execute timers
+- Added detailed comments explaining the timing control
+
+**These changes address both root causes:**
+1. **Mock leakage** - `vi.restoreAllMocks()` ensures spawn mocks and their setTimeout callbacks don't leak between tests
+2. **Timing variance** - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays under load
+
+**To complete the story, I need to run verification tests to confirm:**
+- The test passes reliably in the full integration suite (minimum 10 consecutive successful runs)
+- Test execution time remains under 5 seconds
+- No regression in other integration tests
+
+**Could you approve running these test commands?**
+1. `npm run test:integration -- --run tests/integration/refinement-loop.test.ts` - Run the specific test suite
+2. `npm run test:integration` - Run all integration tests to ensure no regressions
+3. `make verify` - Run full verification
+
+Once approved, I'll verify the fix works and complete the story!

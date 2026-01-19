@@ -547,8 +547,14 @@ export function getNextPhase(story: Story): ActionType | null {
     return 'implement';
   }
 
-  // For in-progress stories, follow: implement → review → create_pr
+  // For in-progress stories, check all phases in order: research → plan → implement → review → create_pr
   if (story.frontmatter.status === 'in-progress') {
+    if (!story.frontmatter.research_complete) {
+      return 'research';
+    }
+    if (!story.frontmatter.plan_complete) {
+      return 'plan';
+    }
     if (!story.frontmatter.implementation_complete) {
       return 'implement';
     }

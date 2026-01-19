@@ -577,8 +577,8 @@ export async function preFlightConflictCheck(
     throw new Error('Invalid project path');
   }
 
-  // Check if target story is already in-progress
-  if (targetStory.frontmatter.status === 'in-progress') {
+  // Check if target story is already in-progress (allow if resuming existing worktree)
+  if (targetStory.frontmatter.status === 'in-progress' && !targetStory.frontmatter.worktree_path) {
     console.log(c.error('❌ Story is already in-progress'));
     return { proceed: false, warnings: ['Story already in progress'] };
   }
@@ -1053,8 +1053,10 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     const workingDir = path.dirname(sdlcRoot);
 
     // Check if story already has an existing worktree (resume scenario)
+    // Note: We check only if existingWorktreePath is set, not if it exists.
+    // The validation logic will handle missing directories/branches.
     const existingWorktreePath = targetStory.frontmatter.worktree_path;
-    if (existingWorktreePath && fs.existsSync(existingWorktreePath)) {
+    if (existingWorktreePath) {
       // Validate worktree before resuming
       const resolvedBasePath = validateWorktreeBasePath(worktreeConfig.basePath, workingDir);
 
@@ -1105,16 +1107,21 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
         validation.issues.forEach(issue => console.log(c.dim(`  ✗ ${issue}`)));
 
         if (validation.requiresRecreation) {
-          // Check if only directory is missing but branch exists - auto-recreate
           const branchExists = !validation.issues.includes('Branch does not exist');
           const dirMissing = validation.issues.includes('Worktree directory does not exist');
+          const dirExists = !dirMissing;
 
-          if (branchExists && dirMissing) {
-            console.log(c.dim('\n✓ Branch exists - automatically recreating worktree directory'));
+          // Case 1: Directory missing but branch exists - recreate worktree from existing branch
+          // Case 2: Directory exists but branch missing - recreate with new branch
+          if ((branchExists && dirMissing) || (!branchExists && dirExists)) {
+            const reason = branchExists
+              ? 'Branch exists - automatically recreating worktree directory'
+              : 'Directory exists - automatically recreating worktree with new branch';
+            console.log(c.dim(`\n✓ ${reason}`));
 
             try {
               // Remove the old worktree reference if it exists
-              const removeResult = spawnSync('git', ['worktree', 'remove', existingWorktreePath], {
+              const removeResult = spawnSync('git', ['worktree', 'remove', existingWorktreePath, '--force'], {
                 cwd: workingDir,
                 encoding: 'utf-8',
                 shell: false,
@@ -1122,7 +1129,12 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
               });
 
               // Create the worktree at the same path
-              const addResult = spawnSync('git', ['worktree', 'add', existingWorktreePath, branchName], {
+              // If branch exists, checkout that branch; otherwise create a new branch
+              const baseBranch = worktreeService.detectBaseBranch();
+              const worktreeAddArgs = branchExists
+                ? ['worktree', 'add', existingWorktreePath, branchName]
+                : ['worktree', 'add', '-b', branchName, existingWorktreePath, baseBranch];
+              const addResult = spawnSync('git', worktreeAddArgs, {
                 cwd: workingDir,
                 encoding: 'utf-8',
                 shell: false,
@@ -1245,16 +1257,21 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
           validation.issues.forEach(issue => console.log(c.dim(`  ✗ ${issue}`)));
 
           if (validation.requiresRecreation) {
-            // Check if only directory is missing but branch exists - auto-recreate
             const branchExists = !validation.issues.includes('Branch does not exist');
             const dirMissing = validation.issues.includes('Worktree directory does not exist');
+            const dirExists = !dirMissing;
 
-            if (branchExists && dirMissing) {
-              console.log(c.dim('\n✓ Branch exists - automatically recreating worktree directory'));
+            // Case 1: Directory missing but branch exists - recreate worktree from existing branch
+            // Case 2: Directory exists but branch missing - recreate with new branch
+            if ((branchExists && dirMissing) || (!branchExists && dirExists)) {
+              const reason = branchExists
+                ? 'Branch exists - automatically recreating worktree directory'
+                : 'Directory exists - automatically recreating worktree with new branch';
+              console.log(c.dim(`\n✓ ${reason}`));
 
               try {
                 // Remove the old worktree reference if it exists
-                const removeResult = spawnSync('git', ['worktree', 'remove', existingWorktree.path], {
+                const removeResult = spawnSync('git', ['worktree', 'remove', existingWorktree.path, '--force'], {
                   cwd: workingDir,
                   encoding: 'utf-8',
                   shell: false,
@@ -1262,7 +1279,12 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
                 });
 
                 // Create the worktree at the same path
-                const addResult = spawnSync('git', ['worktree', 'add', existingWorktree.path, branchName], {
+                // If branch exists, checkout that branch; otherwise create a new branch
+                const baseBranch = worktreeService.detectBaseBranch();
+                const worktreeAddArgs = branchExists
+                  ? ['worktree', 'add', existingWorktree.path, branchName]
+                  : ['worktree', 'add', '-b', branchName, existingWorktree.path, baseBranch];
+                const addResult = spawnSync('git', worktreeAddArgs, {
                   cwd: workingDir,
                   encoding: 'utf-8',
                   shell: false,

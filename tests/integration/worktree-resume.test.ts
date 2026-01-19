@@ -12,7 +12,57 @@ vi.mock('child_process');
 vi.mock('fs');
 vi.mock('ora');
 vi.mock('readline');
-vi.mock('../../src/core/config.js');
+vi.mock('../../src/core/config.js', () => ({
+  getSdlcRoot: vi.fn().mockReturnValue('/test/project/.ai-sdlc'),
+  loadConfig: vi.fn().mockReturnValue({
+    theme: 'none',
+    worktree: {
+      enabled: true,
+      basePath: '.ai-sdlc/worktrees',
+    },
+  }),
+  initConfig: vi.fn(),
+  validateWorktreeBasePath: vi.fn().mockImplementation((basePath: string, projectRoot: string) => {
+    if (basePath.startsWith('/')) return basePath;
+    return `${projectRoot}/${basePath}`;
+  }),
+  getThemedChalk: vi.fn().mockReturnValue({
+    info: (s: string) => s,
+    success: (s: string) => s,
+    error: (s: string) => s,
+    warning: (s: string) => s,
+    dim: (s: string) => s,
+    bold: (s: string) => s,
+    green: (s: string) => s,
+    yellow: (s: string) => s,
+    red: (s: string) => s,
+    gray: (s: string) => s,
+    cyan: (s: string) => s,
+  }),
+  DEFAULT_WORKTREE_CONFIG: {
+    enabled: true,
+    basePath: '.ai-sdlc/worktrees',
+  },
+}));
+vi.mock('../../src/core/story.js', () => ({
+  createStory: vi.fn(),
+  parseStory: vi.fn(),
+  resetRPIVCycle: vi.fn(),
+  isAtMaxRetries: vi.fn().mockReturnValue(false),
+  unblockStory: vi.fn(),
+  getStory: vi.fn(),
+  findStoryById: vi.fn(),
+  updateStoryField: vi.fn(),
+  writeStory: vi.fn().mockResolvedValue(undefined),
+  sanitizeStoryId: vi.fn().mockImplementation((id: string) => id.replace(/[^a-zA-Z0-9-_]/g, '')),
+  autoCompleteStoryAfterReview: vi.fn(),
+}));
+vi.mock('../../src/core/kanban.js', () => ({
+  kanbanExists: vi.fn().mockReturnValue(true),
+  assessState: vi.fn(),
+  findStoryBySlug: vi.fn(),
+  findStoriesByStatus: vi.fn().mockReturnValue([]),
+}));
 vi.mock('../../src/core/client.js', () => ({
   runAgentQuery: vi.fn().mockResolvedValue({
     success: true,
@@ -42,7 +92,7 @@ describe('Worktree Resume Integration', () => {
       worktree_path: undefined,
       ...overrides,
     },
-    path: '/test/.ai-sdlc/stories/S-0063/story.md',
+    path: '/test/project/.ai-sdlc/stories/S-0063/story.md',
     slug: 'test-resume-story',
     content: '# Test Resume Story\n\nTest content',
   });
@@ -50,16 +100,8 @@ describe('Worktree Resume Integration', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
-    // Import and mock config
+    // Re-import mocked modules and set up test-specific values
     mockConfig = await import('../../src/core/config.js');
-    vi.mocked(mockConfig.getSdlcRoot).mockReturnValue('/test/.ai-sdlc');
-    vi.mocked(mockConfig.loadConfig).mockReturnValue({
-      theme: 'none',
-      worktree: {
-        enabled: true,
-        basePath: '.ai-sdlc/worktrees',  // Relative path from working dir (/test)
-      },
-    } as any);
 
     // Mock ora spinner
     mockSpinner = {
@@ -88,7 +130,7 @@ describe('Worktree Resume Integration', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     // Default fs mocks - will be customized per test
-    vi.spyOn(fs, 'existsSync').mockImplementation((p) => {
+    vi.mocked(fs.existsSync).mockImplementation((p) => {
       const pathStr = String(p);
       // Allow .ai-sdlc directory and subdirectories (stories, worktrees parent)
       if (pathStr.includes('.ai-sdlc') && !pathStr.includes('worktrees/S-0063')) {
@@ -96,14 +138,14 @@ describe('Worktree Resume Integration', () => {
       }
       return false;
     });
-    vi.spyOn(fs, 'mkdirSync').mockImplementation(() => '');
-    vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
-    vi.spyOn(fs, 'readFileSync').mockReturnValue('---\nid: S-0063\n---\n# Test');
-    vi.spyOn(fs, 'readdirSync').mockReturnValue([]);
-    vi.spyOn(fs, 'statSync').mockReturnValue({ isDirectory: () => true } as any);
+    vi.mocked(fs.mkdirSync).mockImplementation(() => '');
+    vi.mocked(fs.writeFileSync).mockImplementation(() => {});
+    vi.mocked(fs.readFileSync).mockReturnValue('---\nid: S-0063\n---\n# Test');
+    vi.mocked(fs.readdirSync).mockReturnValue([]);
+    vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as any);
 
     // Default git operations mock - clean working directory
-    vi.spyOn(cp, 'spawnSync').mockImplementation((cmd: any, args: any) => {
+    vi.mocked(cp.spawnSync).mockImplementation((cmd: any, args: any) => {
       // Handle git rev-parse --verify main (for detectBaseBranch)
       if (args && args.includes('rev-parse') && args.includes('main')) {
         return { status: 0, stdout: 'abc123\n', stderr: '', output: [], pid: 0, signal: null };
@@ -111,15 +153,15 @@ describe('Worktree Resume Integration', () => {
       return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
     });
 
-    // Mock story operations
-    vi.spyOn(story, 'parseStory').mockReturnValue(createMockStory());
-    vi.spyOn(story, 'writeStory').mockResolvedValue(undefined);
-    vi.spyOn(story, 'updateStoryField').mockReturnValue(createMockStory());
-    vi.spyOn(story, 'findStoryById').mockReturnValue(createMockStory());
+    // Mock story operations (use vi.mocked since module is factory-mocked)
+    vi.mocked(story.parseStory).mockReturnValue(createMockStory());
+    vi.mocked(story.writeStory).mockResolvedValue(undefined);
+    vi.mocked(story.updateStoryField).mockReturnValue(createMockStory());
+    vi.mocked(story.findStoryById).mockReturnValue(createMockStory());
 
-    // Mock kanban operations
-    vi.spyOn(kanban, 'kanbanExists').mockReturnValue(true);
-    vi.spyOn(kanban, 'assessState').mockResolvedValue({
+    // Mock kanban operations (use vi.mocked since module is factory-mocked)
+    vi.mocked(kanban.kanbanExists).mockReturnValue(true);
+    vi.mocked(kanban.assessState).mockResolvedValue({
       backlogItems: [],
       readyItems: [],
       inProgressItems: [],
@@ -128,13 +170,13 @@ describe('Worktree Resume Integration', () => {
         {
           type: 'research' as const,
           storyId: 'S-0063',
-          storyPath: '/test/.ai-sdlc/stories/S-0063/story.md',
+          storyPath: '/test/project/.ai-sdlc/stories/S-0063/story.md',
           description: 'Research the story',
           priority: 1,
         },
       ],
     });
-    vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(createMockStory());
+    vi.mocked(kanban.findStoryBySlug).mockReturnValue(createMockStory());
   });
 
   describe('Resume after interrupted phases', () => {
@@ -144,9 +186,9 @@ describe('Worktree Resume Integration', () => {
         research_complete: false,
       });
 
-      vi.spyOn(story, 'parseStory').mockReturnValue(storyWithWorktree);
-      vi.spyOn(story, 'findStoryById').mockReturnValue(storyWithWorktree);
-      vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(storyWithWorktree);
+      vi.mocked(story.parseStory).mockReturnValue(storyWithWorktree);
+      vi.mocked(story.findStoryById).mockReturnValue(storyWithWorktree);
+      vi.mocked(kanban.findStoryBySlug).mockReturnValue(storyWithWorktree);
 
       // Mock worktree exists
       vi.mocked(fs.existsSync).mockImplementation((p) => {
@@ -196,9 +238,9 @@ describe('Worktree Resume Integration', () => {
         status: 'in-progress' as const,
       });
 
-      vi.spyOn(story, 'parseStory').mockReturnValue(storyWithResearchComplete);
-      vi.spyOn(story, 'findStoryById').mockReturnValue(storyWithResearchComplete);
-      vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(storyWithResearchComplete);
+      vi.mocked(story.parseStory).mockReturnValue(storyWithResearchComplete);
+      vi.mocked(story.findStoryById).mockReturnValue(storyWithResearchComplete);
+      vi.mocked(kanban.findStoryBySlug).mockReturnValue(storyWithResearchComplete);
 
       // Mock worktree exists
       vi.mocked(fs.existsSync).mockImplementation((p) => {
@@ -236,9 +278,9 @@ describe('Worktree Resume Integration', () => {
         status: 'in-progress' as const,
       });
 
-      vi.spyOn(story, 'parseStory').mockReturnValue(storyWithImplementationComplete);
-      vi.spyOn(story, 'findStoryById').mockReturnValue(storyWithImplementationComplete);
-      vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(storyWithImplementationComplete);
+      vi.mocked(story.parseStory).mockReturnValue(storyWithImplementationComplete);
+      vi.mocked(story.findStoryById).mockReturnValue(storyWithImplementationComplete);
+      vi.mocked(kanban.findStoryBySlug).mockReturnValue(storyWithImplementationComplete);
 
       // Mock worktree exists
       vi.mocked(fs.existsSync).mockImplementation((p) => {
@@ -274,9 +316,9 @@ describe('Worktree Resume Integration', () => {
         research_complete: true,
       });
 
-      vi.spyOn(story, 'parseStory').mockReturnValue(storyWithWorktree);
-      vi.spyOn(story, 'findStoryById').mockReturnValue(storyWithWorktree);
-      vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(storyWithWorktree);
+      vi.mocked(story.parseStory).mockReturnValue(storyWithWorktree);
+      vi.mocked(story.findStoryById).mockReturnValue(storyWithWorktree);
+      vi.mocked(kanban.findStoryBySlug).mockReturnValue(storyWithWorktree);
 
       // Mock worktree exists
       vi.mocked(fs.existsSync).mockImplementation((p) => {
@@ -341,9 +383,9 @@ describe('Worktree Resume Integration', () => {
         worktree_path: '/test/project/.ai-sdlc/worktrees/S-0063-test-resume-story',
       });
 
-      vi.spyOn(story, 'parseStory').mockReturnValue(storyWithWorktree);
-      vi.spyOn(story, 'findStoryById').mockReturnValue(storyWithWorktree);
-      vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(storyWithWorktree);
+      vi.mocked(story.parseStory).mockReturnValue(storyWithWorktree);
+      vi.mocked(story.findStoryById).mockReturnValue(storyWithWorktree);
+      vi.mocked(kanban.findStoryBySlug).mockReturnValue(storyWithWorktree);
 
       // Mock worktree directory exists
       vi.mocked(fs.existsSync).mockImplementation((p) => {
@@ -353,10 +395,14 @@ describe('Worktree Resume Integration', () => {
         return false;
       });
 
-      // Mock git commands - branch does NOT exist
+      // Mock git commands - story branch does NOT exist, but 'main' branch exists
       vi.mocked(cp.spawnSync).mockImplementation((cmd: any, args: any) => {
         if (args && args.includes('rev-parse') && args.includes('--verify')) {
-          // Branch doesn't exist
+          // Check if this is a 'main' or 'master' branch check (base branch detection)
+          if (args.includes('main')) {
+            return { status: 0, stdout: 'abc123', stderr: '', output: [], pid: 0, signal: null };
+          }
+          // Story branch doesn't exist
           return { status: 1, stdout: '', stderr: 'fatal: branch not found', output: [], pid: 0, signal: null };
         }
         if (args && args.includes('worktree') && args.includes('add')) {
@@ -370,7 +416,7 @@ describe('Worktree Resume Integration', () => {
 
       // Verify recreation message
       expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('automatically recreating worktree')
+        expect.stringContaining('automatically recreating')
       );
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining('Worktree recreated')
@@ -391,9 +437,9 @@ describe('Worktree Resume Integration', () => {
         worktree_path: '/test/project/.ai-sdlc/worktrees/S-0063-test-resume-story',
       });
 
-      vi.spyOn(story, 'parseStory').mockReturnValue(storyWithWorktree);
-      vi.spyOn(story, 'findStoryById').mockReturnValue(storyWithWorktree);
-      vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(storyWithWorktree);
+      vi.mocked(story.parseStory).mockReturnValue(storyWithWorktree);
+      vi.mocked(story.findStoryById).mockReturnValue(storyWithWorktree);
+      vi.mocked(kanban.findStoryBySlug).mockReturnValue(storyWithWorktree);
 
       // Mock worktree directory does NOT exist
       vi.mocked(fs.existsSync).mockImplementation((p) => {
@@ -443,9 +489,9 @@ describe('Worktree Resume Integration', () => {
         worktree_path: undefined,
       });
 
-      vi.spyOn(story, 'parseStory').mockReturnValue(storyWithoutPath);
-      vi.spyOn(story, 'findStoryById').mockReturnValue(storyWithoutPath);
-      vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(storyWithoutPath);
+      vi.mocked(story.parseStory).mockReturnValue(storyWithoutPath);
+      vi.mocked(story.findStoryById).mockReturnValue(storyWithoutPath);
+      vi.mocked(kanban.findStoryBySlug).mockReturnValue(storyWithoutPath);
 
       // Mock that git worktree list finds an existing worktree
       vi.mocked(cp.spawnSync).mockImplementation((cmd: any, args: any) => {
@@ -502,9 +548,9 @@ branch refs/heads/ai-sdlc/S-0063-test-resume-story
         worktree_path: '/test/project/.ai-sdlc/worktrees/S-0063-test-resume-story',
       });
 
-      vi.spyOn(story, 'parseStory').mockReturnValue(storyWithWorktree);
-      vi.spyOn(story, 'findStoryById').mockReturnValue(storyWithWorktree);
-      vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(storyWithWorktree);
+      vi.mocked(story.parseStory).mockReturnValue(storyWithWorktree);
+      vi.mocked(story.findStoryById).mockReturnValue(storyWithWorktree);
+      vi.mocked(kanban.findStoryBySlug).mockReturnValue(storyWithWorktree);
 
       // Mock worktree exists
       vi.mocked(fs.existsSync).mockImplementation((p) => {
@@ -545,9 +591,9 @@ branch refs/heads/ai-sdlc/S-0063-test-resume-story
         worktree_path: '/test/project/.ai-sdlc/worktrees/S-0063-test-resume-story',
       });
 
-      vi.spyOn(story, 'parseStory').mockReturnValue(storyWithWorktree);
-      vi.spyOn(story, 'findStoryById').mockReturnValue(storyWithWorktree);
-      vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(storyWithWorktree);
+      vi.mocked(story.parseStory).mockReturnValue(storyWithWorktree);
+      vi.mocked(story.findStoryById).mockReturnValue(storyWithWorktree);
+      vi.mocked(kanban.findStoryBySlug).mockReturnValue(storyWithWorktree);
 
       // Mock worktree exists
       vi.mocked(fs.existsSync).mockImplementation((p) => {
@@ -590,9 +636,9 @@ branch refs/heads/ai-sdlc/S-0063-test-resume-story
         worktree_path: '/test/project/.ai-sdlc/worktrees/S-0063-test-resume-story',
       });
 
-      vi.spyOn(story, 'parseStory').mockReturnValue(doneStoryWithWorktree);
-      vi.spyOn(story, 'findStoryById').mockReturnValue(doneStoryWithWorktree);
-      vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(doneStoryWithWorktree);
+      vi.mocked(story.parseStory).mockReturnValue(doneStoryWithWorktree);
+      vi.mocked(story.findStoryById).mockReturnValue(doneStoryWithWorktree);
+      vi.mocked(kanban.findStoryBySlug).mockReturnValue(doneStoryWithWorktree);
 
       // Mock worktree exists
       vi.mocked(fs.existsSync).mockImplementation((p) => {
@@ -632,9 +678,9 @@ branch refs/heads/ai-sdlc/S-0063-test-resume-story
         worktree_path: '/test/project/.ai-sdlc/worktrees/S-0063-test-resume-story',
       });
 
-      vi.spyOn(story, 'parseStory').mockReturnValue(doneStoryWithWorktree);
-      vi.spyOn(story, 'findStoryById').mockReturnValue(doneStoryWithWorktree);
-      vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(doneStoryWithWorktree);
+      vi.mocked(story.parseStory).mockReturnValue(doneStoryWithWorktree);
+      vi.mocked(story.findStoryById).mockReturnValue(doneStoryWithWorktree);
+      vi.mocked(kanban.findStoryBySlug).mockReturnValue(doneStoryWithWorktree);
 
       // Mock worktree exists
       vi.mocked(fs.existsSync).mockImplementation((p) => {
@@ -683,9 +729,9 @@ branch refs/heads/ai-sdlc/S-0063-test-resume-story
         worktree_path: '/test/project/.ai-sdlc/worktrees/S-0063-test-resume-story',
       });
 
-      vi.spyOn(story, 'parseStory').mockReturnValue(storyWithWorktree);
-      vi.spyOn(story, 'findStoryById').mockReturnValue(storyWithWorktree);
-      vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(storyWithWorktree);
+      vi.mocked(story.parseStory).mockReturnValue(storyWithWorktree);
+      vi.mocked(story.findStoryById).mockReturnValue(storyWithWorktree);
+      vi.mocked(kanban.findStoryBySlug).mockReturnValue(storyWithWorktree);
 
       // Mock worktree directory does NOT exist
       vi.mocked(fs.existsSync).mockImplementation((p) => {

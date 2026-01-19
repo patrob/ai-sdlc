@@ -830,6 +830,47 @@ export async function incrementImplementationRetryCount(story: Story): Promise<S
 }
 
 /**
+ * Global recovery circuit breaker limit
+ */
+const GLOBAL_RECOVERY_LIMIT = 10;
+
+/**
+ * Get the current total recovery attempts for a story
+ */
+export function getTotalRecoveryAttempts(story: Story): number {
+  return story.frontmatter.total_recovery_attempts || 0;
+}
+
+/**
+ * Check if a story has reached the global recovery limit
+ */
+export function isAtGlobalRecoveryLimit(story: Story): boolean {
+  const currentAttempts = getTotalRecoveryAttempts(story);
+  return currentAttempts >= GLOBAL_RECOVERY_LIMIT;
+}
+
+/**
+ * Increment the total recovery attempts counter for a story
+ */
+export async function incrementTotalRecoveryAttempts(story: Story): Promise<Story> {
+  const currentCount = story.frontmatter.total_recovery_attempts || 0;
+  story.frontmatter.total_recovery_attempts = currentCount + 1;
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+  await writeStory(story);
+  return story;
+}
+
+/**
+ * Reset the total recovery attempts counter to 0
+ */
+export async function resetTotalRecoveryAttempts(story: Story): Promise<Story> {
+  story.frontmatter.total_recovery_attempts = 0;
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+  await writeStory(story);
+  return story;
+}
+
+/**
  * Sanitize story ID for safe path construction.
  * Prevents path traversal attacks by rejecting dangerous characters.
  *
@@ -1064,6 +1105,7 @@ export async function unblockStory(
   if (options?.resetRetries) {
     foundStory.frontmatter.retry_count = 0;
     foundStory.frontmatter.refinement_count = 0;
+    foundStory.frontmatter.total_recovery_attempts = 0;
   }
 
   // Determine appropriate status based on completion flags

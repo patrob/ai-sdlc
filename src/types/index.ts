@@ -158,6 +158,8 @@ export interface StoryFrontmatter {
   // Implementation retry tracking
   implementation_retry_count?: number;
   max_implementation_retries?: number;
+  // Global recovery tracking
+  total_recovery_attempts?: number;
   // Blocked tracking
   blocked_reason?: string;
   blocked_at?: string;

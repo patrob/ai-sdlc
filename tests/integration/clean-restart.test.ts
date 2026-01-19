@@ -26,7 +26,7 @@ describe('Clean and Restart Integration', () => {
       id: 'S-0064',
       title: 'Test Clean Restart',
       slug: 'test-clean-restart',
-      status: 'in-progress' as const,
+      status: 'ready' as const,
       priority: 1,
       labels: [],
       effort: 'medium' as const,
@@ -34,8 +34,6 @@ describe('Clean and Restart Integration', () => {
       plan_complete: true,
       implementation_complete: false,
       reviews_complete: false,
-      worktree_path: '/test/project/.ai-sdlc/worktrees/S-0064-test-clean-restart',
-      branch: 'ai-sdlc/S-0064-test-clean-restart',
       next_action: {
         type: 'implement' as const,
         description: 'Test implementation',
@@ -49,9 +47,11 @@ describe('Clean and Restart Integration', () => {
   let mockSpinner: any;
   let consoleLogSpy: any;
   let consoleErrorSpy: any;
+  let worktreeCleanedUp: boolean;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    worktreeCleanedUp = false;
 
     // Mock ora spinner
     mockSpinner = {
@@ -78,9 +78,9 @@ describe('Clean and Restart Integration', () => {
       if (pathStr.includes('.ai-sdlc') && !pathStr.includes('worktrees/')) {
         return true;
       }
-      // Worktree path exists (for cleanup tests)
+      // Worktree path exists only if not cleaned up yet
       if (pathStr.includes('worktrees/S-0064')) {
-        return true;
+        return !worktreeCleanedUp;
       }
       return false;
     });
@@ -121,6 +121,7 @@ describe('Clean and Restart Integration', () => {
     // Mock kanban operations
     vi.spyOn(kanban, 'findStoryBySlug').mockReturnValue(null);
     vi.spyOn(kanban, 'kanbanExists').mockReturnValue(true);
+    vi.spyOn(kanban, 'findStoriesByStatus').mockReturnValue([]);
     vi.spyOn(kanban, 'assessState').mockReturnValue({
       ready: [],
       inProgress: [mockStory],
@@ -151,11 +152,15 @@ describe('Clean and Restart Integration', () => {
       // Setup: Mock existing worktree with commits and uncommitted changes
       const spawnSyncSpy = vi.spyOn(cp, 'spawnSync');
 
-      // Mock git worktree list to show existing worktree
+      // Mock git worktree list to show existing worktree (until cleaned up)
       spawnSyncSpy.mockImplementation((cmd, args) => {
         if (cmd === 'git' && Array.isArray(args)) {
-          // Git worktree list --porcelain (shows existing worktree)
+          // Git worktree list --porcelain (shows existing worktree until cleanup)
           if (args[0] === 'worktree' && args[1] === 'list' && args[2] === '--porcelain') {
+            if (worktreeCleanedUp) {
+              // After cleanup, worktree no longer exists
+              return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
+            }
             return {
               status: 0,
               stdout: `worktree /test/project/.ai-sdlc/worktrees/S-0064-test-clean-restart
@@ -169,8 +174,12 @@ branch refs/heads/ai-sdlc/S-0064-test-clean-restart
             };
           }
 
-          // Git status --porcelain (show uncommitted changes)
+          // Git status --porcelain (show uncommitted changes until cleanup)
           if (args[0] === 'status' && args[1] === '--porcelain') {
+            if (worktreeCleanedUp) {
+              // After cleanup, working directory is clean
+              return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
+            }
             return {
               status: 0,
               stdout: 'M src/file.ts\n?? temp.txt\n',
@@ -198,6 +207,7 @@ branch refs/heads/ai-sdlc/S-0064-test-clean-restart
 
           // Git worktree remove --force (cleanup)
           if (args[0] === 'worktree' && args[1] === 'remove' && args[2] === '--force') {
+            worktreeCleanedUp = true;
             return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
           }
 
@@ -658,6 +668,7 @@ branch refs/heads/ai-sdlc/S-0064-test-clean-restart
           }
 
           if (args[0] === 'worktree' && args[1] === 'remove') {
+            worktreeCleanedUp = true;
             return { status: 0, stdout: '', stderr: '', output: [], pid: 0, signal: null };
           }
 

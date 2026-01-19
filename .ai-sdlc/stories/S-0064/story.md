@@ -51,7 +51,7 @@ review_history:
     codeReviewPassed: true
     securityReviewPassed: true
     poReviewPassed: true
-last_restart_reason: "\n#### \U0001F6D1 BLOCKER (1)\n\n**unified_review**: Now let me review the key aspects. Based on my analysis of the diffs and the story, I can now provide a comprehensive review:\n\n```json\n{\n  \"passed\": false,\n  \"issues\": [\n    {\n      \"severity\": \"blocker\",\n      \"category\": \"testing\",\n      \"description\": \"No integration tests exist for the --clean flag functionality. The implementation plan specified creating 'tests/integration/clean-restart.test.ts' with 7 comprehensive integration test scenarios (T29-T35), but this file was never created. Inte\n\n"
+last_restart_reason: No source code changes detected. Implementation wrote documentation only.
 last_restart_timestamp: '2026-01-19T12:33:22.463Z'
 retry_count: 1
 ---

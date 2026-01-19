@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:36:01.918Z'
+  timestamp: '2026-01-19T18:36:28.479Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -3575,3 +3575,29 @@ make verify
 The implementation is complete and properly addresses both root causes identified in the research. I just need to run the tests to verify everything works as expected and meets the acceptance criteria (test passes reliably in full integration suite).
 
 **Would you like me to proceed with running these verification tests?**
+
+
+### Implementation Notes (2026-01-19)
+
+I need your approval to run the verification tests. The implementation is complete - both Option C (test isolation) and Option B (mock timing control) have been properly applied to the test file. 
+
+**Summary of what's been implemented:**
+
+✅ **Option C - Test Isolation (Lines 381-388):**
+- Added `vi.restoreAllMocks()` to prevent mock leakage between tests
+- Added `vi.useRealTimers()` to restore real timers after each test
+
+✅ **Option B - Mock Timing Control (Lines 376-378):**
+- Added `vi.useFakeTimers()` in `beforeEach` to use deterministic fake timers
+- All 4 tests use `await vi.runAllTimersAsync()` to deterministically execute timers (lines 433-434, 500-501, 557-558, 632-633)
+
+These changes address both root causes:
+1. **Mock leakage** - `vi.restoreAllMocks()` ensures spawn mocks don't leak between tests
+2. **Timing variance** - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays under load
+
+**To complete the story, I need to run verification tests:**
+1. `npm run test:integration -- --run tests/integration/refinement-loop.test.ts` - Run the specific test suite
+2. `npm run test:integration` - Run all integration tests to ensure no regressions
+3. `make verify` - Run full verification
+
+Would you like to approve these test commands so I can verify the fix resolves the flakiness issue?

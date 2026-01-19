@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:12:22.121Z'
+  timestamp: '2026-01-19T18:13:01.453Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -1750,3 +1750,54 @@ Once these tests pass, I'll:
 3. Complete the story
 
 The implementation is done - I just need to confirm it resolves the flakiness issue and meets all acceptance criteria.
+
+
+### Implementation Notes (2026-01-19)
+
+I need your approval to run the test commands to verify the fix works. Let me create a comprehensive summary:
+
+## Implementation Complete - Verification Required
+
+The fix for the flaky refinement-loop integration test has been **fully implemented**. Here's what was applied:
+
+### ✅ Changes Implemented
+
+**Option C - Test Isolation (Lines 381-388):**
+- Added `vi.restoreAllMocks()` to prevent mock leakage between tests
+- Added `vi.useRealTimers()` to restore real timers after each test
+- Added detailed comments referencing S-0110
+
+**Option B - Mock Timing Control (Lines 376-378):**
+- Added `vi.useFakeTimers()` in `beforeEach` to use deterministic fake timers
+- All 4 tests now use `await vi.runAllTimersAsync()` to deterministically execute all pending timers
+- Added detailed comments explaining the timing control
+
+**Option A - Timeout Fallback (Line 639):**
+- The last test includes a 10-second timeout as a safety measure
+
+### 🎯 Root Causes Addressed
+
+1. **Mock leakage**: `vi.restoreAllMocks()` ensures spawn mocks and their setTimeout callbacks from one test don't interfere with subsequent tests in the sequential suite
+2. **Timing variance**: `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays that caused flakiness under load
+
+### 📋 Verification Needed
+
+According to the implementation plan (Phase 4: T14-T17), I need to verify the fix works by running:
+
+1. **T14**: Run the specific flaky test in isolation multiple times (should pass consistently)
+2. **T15**: Run the full integration test suite multiple times (should pass 10/10)
+3. **T16**: Run `make verify` to ensure no regressions
+4. **T17**: Verify execution time is under 5 seconds
+
+**I need your approval to run these test commands:**
+- `npm run test:integration -- --run tests/integration/refinement-loop.test.ts -t "should proceed with reviews when tests pass"`
+- `npm run test:integration -- --run tests/integration/refinement-loop.test.ts`
+- `npm run test:integration`
+- `make verify`
+
+Once these tests pass, I'll:
+1. Update the story acceptance criteria checkboxes
+2. Document the verification results
+3. Complete the story with a commit
+
+**Should I proceed with running the verification tests?**

@@ -653,4 +653,307 @@ branch refs/heads/ai-sdlc/S-0030-second
       expect(() => service.remove('/test/worktree')).not.toThrow();
     });
   });
+
+  describe('findByStoryId', () => {
+    it('returns worktree when found', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: `worktree /test/project
+HEAD abc123
+branch refs/heads/main
+
+worktree /test/project/.ai-sdlc/worktrees/S-0029-test-story
+HEAD def456
+branch refs/heads/ai-sdlc/S-0029-test-story
+
+`,
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+      vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+      const result = service.findByStoryId('S-0029');
+      expect(result).toBeDefined();
+      expect(result?.storyId).toBe('S-0029');
+      expect(result?.path).toBe('/test/project/.ai-sdlc/worktrees/S-0029-test-story');
+    });
+
+    it('returns undefined when not found', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: `worktree /test/project
+HEAD abc123
+branch refs/heads/main
+
+`,
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.findByStoryId('S-0099');
+      expect(result).toBeUndefined();
+    });
+
+    it('returns correct worktree when multiple exist', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: `worktree /test/project
+HEAD abc123
+branch refs/heads/main
+
+worktree /test/project/.ai-sdlc/worktrees/S-0029-first
+HEAD def456
+branch refs/heads/ai-sdlc/S-0029-first
+
+worktree /test/project/.ai-sdlc/worktrees/S-0030-second
+HEAD ghi789
+branch refs/heads/ai-sdlc/S-0030-second
+
+`,
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+      vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+      const result = service.findByStoryId('S-0030');
+      expect(result).toBeDefined();
+      expect(result?.storyId).toBe('S-0030');
+      expect(result?.path).toContain('S-0030-second');
+    });
+  });
+
+  describe('getWorktreeStatus', () => {
+    it('returns basic status for non-existent worktree', () => {
+      const worktreeInfo = {
+        path: '/test/project/.ai-sdlc/worktrees/S-0029-test',
+        branch: 'ai-sdlc/S-0029-test',
+        storyId: 'S-0029',
+        exists: false,
+      };
+
+      const result = service.getWorktreeStatus(worktreeInfo);
+      expect(result.exists).toBe(false);
+      expect(result.workingDirectoryStatus).toBe('clean');
+      expect(result.modifiedFiles).toEqual([]);
+      expect(result.untrackedFiles).toEqual([]);
+    });
+
+    it('returns last commit information', () => {
+      vi.spyOn(cp, 'spawnSync').mockImplementation((cmd, args) => {
+        if (args?.[0] === 'log') {
+          return {
+            status: 0,
+            stdout: 'abc1234567890\nCommit message here\n2024-01-15 10:30:00 -0500',
+            stderr: '',
+            output: [],
+            pid: 0,
+            signal: null,
+          };
+        }
+        if (args?.[0] === 'status') {
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            output: [],
+            pid: 0,
+            signal: null,
+          };
+        }
+        return { status: 1, stdout: '', stderr: '', output: [], pid: 0, signal: null };
+      });
+
+      const worktreeInfo = {
+        path: '/test/project/.ai-sdlc/worktrees/S-0029-test',
+        branch: 'ai-sdlc/S-0029-test',
+        storyId: 'S-0029',
+        exists: true,
+      };
+
+      const result = service.getWorktreeStatus(worktreeInfo);
+      expect(result.lastCommit).toBeDefined();
+      expect(result.lastCommit?.hash).toBe('abc1234567890');
+      expect(result.lastCommit?.message).toBe('Commit message here');
+      expect(result.lastCommit?.timestamp).toBe('2024-01-15 10:30:00 -0500');
+    });
+
+    it('detects modified files', () => {
+      vi.spyOn(cp, 'spawnSync').mockImplementation((cmd, args) => {
+        if (args?.[0] === 'log') {
+          return {
+            status: 0,
+            stdout: 'abc123\nMessage\n2024-01-15',
+            stderr: '',
+            output: [],
+            pid: 0,
+            signal: null,
+          };
+        }
+        if (args?.[0] === 'status') {
+          return {
+            status: 0,
+            stdout: ' M src/index.ts\nAM src/other.ts',
+            stderr: '',
+            output: [],
+            pid: 0,
+            signal: null,
+          };
+        }
+        return { status: 1, stdout: '', stderr: '', output: [], pid: 0, signal: null };
+      });
+
+      const worktreeInfo = {
+        path: '/test/project/.ai-sdlc/worktrees/S-0029-test',
+        branch: 'ai-sdlc/S-0029-test',
+        storyId: 'S-0029',
+        exists: true,
+      };
+
+      const result = service.getWorktreeStatus(worktreeInfo);
+      expect(result.workingDirectoryStatus).toBe('modified');
+      expect(result.modifiedFiles).toContain('src/index.ts');
+      expect(result.modifiedFiles).toContain('src/other.ts');
+    });
+
+    it('detects untracked files', () => {
+      vi.spyOn(cp, 'spawnSync').mockImplementation((cmd, args) => {
+        if (args?.[0] === 'log') {
+          return {
+            status: 0,
+            stdout: 'abc123\nMessage\n2024-01-15',
+            stderr: '',
+            output: [],
+            pid: 0,
+            signal: null,
+          };
+        }
+        if (args?.[0] === 'status') {
+          return {
+            status: 0,
+            stdout: '?? newfile.ts\n?? another.ts',
+            stderr: '',
+            output: [],
+            pid: 0,
+            signal: null,
+          };
+        }
+        return { status: 1, stdout: '', stderr: '', output: [], pid: 0, signal: null };
+      });
+
+      const worktreeInfo = {
+        path: '/test/project/.ai-sdlc/worktrees/S-0029-test',
+        branch: 'ai-sdlc/S-0029-test',
+        storyId: 'S-0029',
+        exists: true,
+      };
+
+      const result = service.getWorktreeStatus(worktreeInfo);
+      expect(result.workingDirectoryStatus).toBe('untracked');
+      expect(result.untrackedFiles).toContain('newfile.ts');
+      expect(result.untrackedFiles).toContain('another.ts');
+    });
+
+    it('detects mixed status with both modified and untracked', () => {
+      vi.spyOn(cp, 'spawnSync').mockImplementation((cmd, args) => {
+        if (args?.[0] === 'log') {
+          return {
+            status: 0,
+            stdout: 'abc123\nMessage\n2024-01-15',
+            stderr: '',
+            output: [],
+            pid: 0,
+            signal: null,
+          };
+        }
+        if (args?.[0] === 'status') {
+          return {
+            status: 0,
+            stdout: ' M src/index.ts\n?? newfile.ts',
+            stderr: '',
+            output: [],
+            pid: 0,
+            signal: null,
+          };
+        }
+        return { status: 1, stdout: '', stderr: '', output: [], pid: 0, signal: null };
+      });
+
+      const worktreeInfo = {
+        path: '/test/project/.ai-sdlc/worktrees/S-0029-test',
+        branch: 'ai-sdlc/S-0029-test',
+        storyId: 'S-0029',
+        exists: true,
+      };
+
+      const result = service.getWorktreeStatus(worktreeInfo);
+      expect(result.workingDirectoryStatus).toBe('mixed');
+      expect(result.modifiedFiles).toContain('src/index.ts');
+      expect(result.untrackedFiles).toContain('newfile.ts');
+    });
+
+    it('returns clean status when no changes', () => {
+      vi.spyOn(cp, 'spawnSync').mockImplementation((cmd, args) => {
+        if (args?.[0] === 'log') {
+          return {
+            status: 0,
+            stdout: 'abc123\nMessage\n2024-01-15',
+            stderr: '',
+            output: [],
+            pid: 0,
+            signal: null,
+          };
+        }
+        if (args?.[0] === 'status') {
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+            output: [],
+            pid: 0,
+            signal: null,
+          };
+        }
+        return { status: 1, stdout: '', stderr: '', output: [], pid: 0, signal: null };
+      });
+
+      const worktreeInfo = {
+        path: '/test/project/.ai-sdlc/worktrees/S-0029-test',
+        branch: 'ai-sdlc/S-0029-test',
+        storyId: 'S-0029',
+        exists: true,
+      };
+
+      const result = service.getWorktreeStatus(worktreeInfo);
+      expect(result.workingDirectoryStatus).toBe('clean');
+      expect(result.modifiedFiles).toEqual([]);
+      expect(result.untrackedFiles).toEqual([]);
+    });
+
+    it('handles missing storyId gracefully', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const worktreeInfo = {
+        path: '/test/project/.ai-sdlc/worktrees/custom-branch',
+        branch: 'custom-branch',
+        storyId: undefined,
+        exists: true,
+      };
+
+      const result = service.getWorktreeStatus(worktreeInfo);
+      expect(result.storyId).toBe('unknown');
+    });
+  });
 });

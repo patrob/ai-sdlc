@@ -83,6 +83,7 @@ export const DEFAULT_CONFIG: Config = {
     autoCompleteOnApproval: true,
     autoRestartOnRejection: true,
     detectTestAntipatterns: true,
+    autoCreatePROnApproval: false, // Set to true in automated mode at runtime
   },
   implementation: { ...DEFAULT_IMPLEMENTATION_CONFIG },
   defaultLabels: [],

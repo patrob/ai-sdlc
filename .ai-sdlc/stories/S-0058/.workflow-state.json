@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768776475471-ab56ea47",
+  "timestamp": "2026-01-18T22:52:57.388Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0058",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0058-auto-complete-missing-pr-creation/.ai-sdlc/stories/S-0058/story.md",
+      "completedAt": "2026-01-18T22:48:50.714Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0058",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0058-auto-complete-missing-pr-creation/.ai-sdlc/stories/S-0058/story.md",
+      "completedAt": "2026-01-18T22:51:54.037Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0058",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0058-auto-complete-missing-pr-creation/.ai-sdlc/stories/S-0058/story.md",
+      "completedAt": "2026-01-18T22:52:57.388Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0058-auto-complete-missing-pr-creation/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0058",
+      "fullSDLC": true
+    },
+    "storyContentHash": "b72c00820f9711088ccd098d0443c8ad87c671f93cd831d594d28182b2d36e1e"
+  }
+}

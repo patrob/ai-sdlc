@@ -1031,6 +1031,42 @@ export function getStory(sdlcRoot: string, storyId: string): Story {
 }
 
 /**
+ * Reset workflow state for a story (clear worktree metadata and set status based on completion flags)
+ * Used when cleaning up an existing worktree and restarting from scratch
+ *
+ * @param story - Story to reset
+ * @returns Updated story with cleared worktree metadata and reset status
+ */
+export async function resetWorkflowState(story: Story): Promise<Story> {
+  // Clear worktree metadata
+  delete story.frontmatter.worktree_path;
+  delete story.frontmatter.branch;
+
+  // Determine appropriate status based on completion flags
+  if (story.frontmatter.implementation_complete) {
+    // Implementation complete - ready for review
+    story.frontmatter.status = 'ready';
+  } else if (story.frontmatter.plan_complete) {
+    // Plan complete - ready for implementation
+    story.frontmatter.status = 'ready';
+  } else if (story.frontmatter.research_complete) {
+    // Only research complete - back to backlog
+    story.frontmatter.status = 'backlog';
+  } else {
+    // No phases complete - back to backlog
+    story.frontmatter.status = 'backlog';
+  }
+
+  // Update timestamp
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+
+  // Write changes to disk
+  await writeStory(story);
+
+  return story;
+}
+
+/**
  * Unblock a story and set status back to in-progress
  * In the new architecture, this only updates frontmatter - file path remains unchanged
  *

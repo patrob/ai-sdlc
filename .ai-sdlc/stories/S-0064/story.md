@@ -2,7 +2,7 @@
 id: S-0064
 title: Clean and restart option for existing worktrees
 priority: 20
-status: in-progress
+status: done
 type: feature
 created: '2026-01-18'
 labels:
@@ -13,8 +13,8 @@ labels:
   - etc
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 slug: clean-restart-existing-worktree
 depends_on:
   - S-0062

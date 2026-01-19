@@ -133,16 +133,11 @@ labels:
     });
 
     it('should handle infinite retries correctly', async () => {
-      // Update config to have infinite retries
-      const configPath = path.join(testDir, '.ai-sdlc.json');
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      config.implementation.maxRetries = Infinity;
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-
       const story = parseStory(storyPath);
-      const updatedConfig = loadConfig(testDir);
+      const config = loadConfig(testDir);
 
-      // Increment many times
+      config.implementation.maxRetries = Infinity;
+
       for (let i = 0; i < 100; i++) {
         await incrementImplementationRetryCount(parseStory(storyPath));
       }
@@ -150,8 +145,7 @@ labels:
       const finalStory = parseStory(storyPath);
       expect(finalStory.frontmatter.implementation_retry_count).toBe(100);
 
-      // Should never reach max with infinite retries
-      expect(isAtMaxImplementationRetries(finalStory, updatedConfig)).toBe(false);
+      expect(isAtMaxImplementationRetries(finalStory, config)).toBe(false);
     });
 
     it('should display retry count correctly with finite max', () => {
@@ -166,16 +160,12 @@ labels:
     });
 
     it('should display retry count as infinity symbol for infinite max', () => {
-      // Update config to have infinite retries
-      const configPath = path.join(testDir, '.ai-sdlc.json');
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      config.implementation.maxRetries = Infinity;
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-
       const story = parseStory(storyPath);
-      const updatedConfig = loadConfig(testDir);
+      const config = loadConfig(testDir);
 
-      const maxRetries = getEffectiveMaxImplementationRetries(story, updatedConfig);
+      config.implementation.maxRetries = Infinity;
+
+      const maxRetries = getEffectiveMaxImplementationRetries(story, config);
       expect(maxRetries).toBe(Infinity);
 
       const maxRetriesDisplay = Number.isFinite(maxRetries) ? maxRetries : '∞';

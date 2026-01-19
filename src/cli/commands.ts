@@ -677,7 +677,7 @@ export async function preFlightConflictCheck(
 /**
  * Run the workflow (process one action or all)
  */
-export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean }): Promise<void> {
+export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean; clean?: boolean }): Promise<void> {
   const config = loadConfig();
   // Parse maxIterations from CLI (undefined means use config default which is Infinity)
   const maxIterationsOverride = options.maxIterations !== undefined
@@ -695,6 +695,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     step: options.step,
     watch: options.watch,
     worktree: options.worktree,
+    clean: options.clean,
     force: options.force,
   });
 
@@ -1076,10 +1077,113 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       // but before the story file was updated
       const existingWorktree = worktreeService.findByStoryId(targetStory.frontmatter.id);
       if (existingWorktree && existingWorktree.exists) {
-        const worktreeStatus = worktreeService.getWorktreeStatus(existingWorktree);
-        getLogger().info('worktree', `Detected existing worktree for ${targetStory.frontmatter.id} at ${existingWorktree.path}`);
-        displayExistingWorktreeInfo(worktreeStatus, c);
-        return;
+        // Handle --clean flag: cleanup and restart
+        if (options.clean) {
+          console.log(c.warning('Existing worktree found - cleaning up before restart...'));
+          console.log();
+
+          const worktreeStatus = worktreeService.getWorktreeStatus(existingWorktree);
+          const unpushedResult = worktreeService.hasUnpushedCommits(existingWorktree.path);
+          const commitCount = worktreeService.getCommitCount(existingWorktree.path);
+          const branchOnRemote = worktreeService.branchExistsOnRemote(existingWorktree.branch);
+
+          // Display summary of what will be deleted
+          console.log(c.bold('Cleanup Summary:'));
+          console.log(c.dim('─'.repeat(60)));
+          console.log(`${c.dim('Worktree Path:')}    ${worktreeStatus.path}`);
+          console.log(`${c.dim('Branch:')}          ${worktreeStatus.branch}`);
+          console.log(`${c.dim('Total Commits:')}   ${commitCount}`);
+          console.log(`${c.dim('Unpushed Commits:')} ${unpushedResult.hasUnpushed ? c.warning(unpushedResult.count.toString()) : c.success('0')}`);
+          console.log(`${c.dim('Modified Files:')}  ${worktreeStatus.modifiedFiles.length > 0 ? c.warning(worktreeStatus.modifiedFiles.length.toString()) : c.success('0')}`);
+          console.log(`${c.dim('Untracked Files:')} ${worktreeStatus.untrackedFiles.length > 0 ? c.warning(worktreeStatus.untrackedFiles.length.toString()) : c.success('0')}`);
+          console.log(`${c.dim('Remote Branch:')}   ${branchOnRemote ? c.warning('EXISTS') : c.dim('none')}`);
+          console.log();
+
+          // Warn about data loss
+          if (worktreeStatus.modifiedFiles.length > 0 || worktreeStatus.untrackedFiles.length > 0 || unpushedResult.hasUnpushed) {
+            console.log(c.error('⚠ WARNING: This will DELETE all uncommitted and unpushed work!'));
+            console.log();
+          }
+
+          // Check for --force flag to skip confirmation
+          const forceCleanup = options.force;
+          if (!forceCleanup) {
+            // Prompt for confirmation
+            const confirmed = await new Promise<boolean>((resolve) => {
+              const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+              rl.question(c.warning('Are you sure you want to proceed? (y/N): '), (answer) => {
+                rl.close();
+                resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
+              });
+            });
+
+            if (!confirmed) {
+              console.log(c.info('Cleanup cancelled.'));
+              return;
+            }
+          }
+
+          console.log();
+          const cleanupSpinner = ora('Cleaning up worktree...').start();
+
+          try {
+            // Remove worktree (force remove to handle uncommitted changes)
+            const forceRemove = worktreeStatus.modifiedFiles.length > 0 || worktreeStatus.untrackedFiles.length > 0;
+            worktreeService.remove(existingWorktree.path, forceRemove);
+            cleanupSpinner.text = 'Worktree removed, deleting branch...';
+
+            // Delete local branch
+            worktreeService.deleteBranch(existingWorktree.branch, true);
+
+            // Optionally delete remote branch if it exists
+            if (branchOnRemote) {
+              if (!forceCleanup) {
+                cleanupSpinner.stop();
+                const deleteRemote = await new Promise<boolean>((resolve) => {
+                  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+                  rl.question(c.warning('Branch exists on remote. Delete it too? (y/N): '), (answer) => {
+                    rl.close();
+                    resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
+                  });
+                });
+
+                if (deleteRemote) {
+                  cleanupSpinner.start('Deleting remote branch...');
+                  worktreeService.deleteRemoteBranch(existingWorktree.branch);
+                }
+                cleanupSpinner.start();
+              } else {
+                // --force provided, skip remote deletion by default (safer)
+                cleanupSpinner.text = 'Skipping remote branch deletion (use manual cleanup if needed)';
+              }
+            }
+
+            // Reset story workflow state
+            cleanupSpinner.text = 'Resetting story state...';
+            const { resetWorkflowState } = await import('../core/story.js');
+            targetStory = await resetWorkflowState(targetStory);
+
+            // Clear workflow checkpoint if exists
+            if (hasWorkflowState(sdlcRoot, targetStory.frontmatter.id)) {
+              await clearWorkflowState(sdlcRoot, targetStory.frontmatter.id);
+            }
+
+            cleanupSpinner.succeed(c.success('✓ Cleanup complete - ready to create fresh worktree'));
+            console.log();
+          } catch (error) {
+            cleanupSpinner.fail(c.error('Cleanup failed'));
+            console.log(c.error(`Error: ${error instanceof Error ? error.message : String(error)}`));
+            return;
+          }
+
+          // Continue with fresh worktree creation (fall through to creation logic below)
+        } else {
+          // Not cleaning - display info and exit
+          const worktreeStatus = worktreeService.getWorktreeStatus(existingWorktree);
+          getLogger().info('worktree', `Detected existing worktree for ${targetStory.frontmatter.id} at ${existingWorktree.path}`);
+          displayExistingWorktreeInfo(worktreeStatus, c);
+          return;
+        }
       }
 
       // Validate git state for worktree creation

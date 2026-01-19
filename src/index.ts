@@ -10,8 +10,11 @@ import { getThemedChalk } from './core/theme.js';
 import { ThemePreference, LogConfig } from './types/index.js';
 import { initLogger, getLogger } from './core/logger.js';
 import { getLatestLogPath, readLastLines, tailLog } from './core/story-logger.js';
+import { setupGlobalCleanupHandlers } from './core/process-manager.js';
 import fs from 'fs';
 import path from 'path';
+
+setupGlobalCleanupHandlers();
 
 const require = createRequire(import.meta.url);
 const packageJson = require('../package.json');

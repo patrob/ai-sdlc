@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:14:15.876Z'
+  timestamp: '2026-01-19T18:14:57.469Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -1908,3 +1908,60 @@ Once you grant these permissions, I'll:
 5. **Commit** the changes following project conventions
 
 Should I proceed once you grant file access permissions?
+
+
+### Implementation Notes (2026-01-19)
+
+I need approval to run test commands. Let me create a summary of what needs to be verified:
+
+## Implementation Status Summary
+
+### ✅ Changes Already Implemented
+
+The fix for the flaky refinement-loop integration test has been **fully implemented** in `tests/integration/refinement-loop.test.ts`:
+
+**Option C - Test Isolation (Lines 381-388):**
+- Added `vi.restoreAllMocks()` to prevent mock leakage between tests
+- Added `vi.useRealTimers()` to restore real timers after each test
+- Added detailed comments referencing S-0110
+
+**Option B - Mock Timing Control (Lines 376-378):**
+- Added `vi.useFakeTimers()` in `beforeEach` to use deterministic fake timers
+- All 4 tests now use `await vi.runAllTimersAsync()` to deterministically execute timers
+- Added detailed comments explaining the timing control
+
+### Root Causes Addressed
+
+1. **Mock leakage** - `vi.restoreAllMocks()` ensures spawn mocks and their setTimeout callbacks from one test don't interfere with subsequent tests in the sequential suite
+2. **Timing variance** - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays that caused flakiness under load
+
+### Verification Required
+
+According to the implementation plan (Phase 4), I need to verify the fix works by running tests to confirm:
+
+1. **T14**: The specific flaky test passes consistently in isolation
+2. **T15**: The full integration test suite passes 10 consecutive times
+3. **T16**: `make verify` passes to ensure no regressions
+4. **T17**: Execution time is under 5 seconds
+
+### Next Steps
+
+**I need your approval to run these verification commands:**
+
+```bash
+# 1. Run the specific flaky test multiple times
+npm run test:integration -- --run tests/integration/refinement-loop.test.ts -t "should proceed with reviews when tests pass"
+
+# 2. Run the full "Review Agent Pre-check Integration" suite
+npm run test:integration -- --run tests/integration/refinement-loop.test.ts
+
+# 3. Run all integration tests
+npm run test:integration
+
+# 4. Run full verification
+make verify
+```
+
+Once these tests pass, I'll complete the story by updating the acceptance criteria and creating a commit.
+
+**Would you like me to proceed with running the verification tests?**

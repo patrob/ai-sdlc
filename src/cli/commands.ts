@@ -337,6 +337,45 @@ function validateAutoStoryOptions(options: { auto?: boolean; story?: string; ste
 }
 
 /**
+ * Validates flag combinations for --batch conflicts
+ * @throws Error if conflicting flags are detected
+ */
+function validateBatchOptions(options: { batch?: string; story?: string; watch?: boolean; continue?: boolean }): void {
+  if (!options.batch) {
+    return; // No batch flag, nothing to validate
+  }
+
+  // --batch and --story are mutually exclusive
+  if (options.story) {
+    throw new Error(
+      'Cannot combine --batch with --story flag.\n' +
+      'Use either:\n' +
+      '  - ai-sdlc run --batch S-001,S-002,S-003 (batch processing)\n' +
+      '  - ai-sdlc run --auto --story <id> (single story)'
+    );
+  }
+
+  // --batch and --watch are mutually exclusive
+  if (options.watch) {
+    throw new Error(
+      'Cannot combine --batch with --watch flag.\n' +
+      'Use either:\n' +
+      '  - ai-sdlc run --batch S-001,S-002,S-003 (batch processing)\n' +
+      '  - ai-sdlc run --watch (daemon mode)'
+    );
+  }
+
+  // --batch and --continue are mutually exclusive
+  if (options.continue) {
+    throw new Error(
+      'Cannot combine --batch with --continue flag.\n' +
+      'Batch mode does not support resuming from checkpoints.\n' +
+      'Use: ai-sdlc run --batch S-001,S-002,S-003'
+    );
+  }
+}
+
+/**
  * Determines if a specific phase should be executed based on story state
  * @param story The story to check
  * @param phase The phase to evaluate
@@ -683,9 +722,166 @@ export async function preFlightConflictCheck(
 }
 
 /**
+ * Process multiple stories sequentially through full SDLC
+ * Internal function used by batch mode
+ */
+async function processBatchInternal(
+  storyIds: string[],
+  sdlcRoot: string,
+  options: { dryRun?: boolean; worktree?: boolean; force?: boolean }
+): Promise<{ total: number; succeeded: number; failed: number; skipped: number; errors: Array<{ storyId: string; error: string }>; duration: number }> {
+  const startTime = Date.now();
+  const config = loadConfig();
+  const c = getThemedChalk(config);
+  const { formatBatchProgress, formatBatchSummary, logStoryCompletion, promptContinueOnError } = await import('./batch-processor.js');
+
+  const result = {
+    total: storyIds.length,
+    succeeded: 0,
+    failed: 0,
+    skipped: 0,
+    errors: [] as Array<{ storyId: string; error: string }>,
+    duration: 0,
+  };
+
+  console.log();
+  console.log(c.bold('═══ Starting Batch Processing ═══'));
+  console.log(c.dim(`  Stories: ${storyIds.join(', ')}`));
+  console.log(c.dim(`  Dry run: ${options.dryRun ? 'yes' : 'no'}`));
+  console.log();
+
+  // Process each story sequentially
+  for (let i = 0; i < storyIds.length; i++) {
+    const storyId = storyIds[i];
+
+    // Get story and check status
+    let story: Story;
+    try {
+      story = getStory(sdlcRoot, storyId);
+    } catch (error) {
+      result.failed++;
+      result.errors.push({
+        storyId,
+        error: `Story not found: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      console.log(c.error(`[${i + 1}/${storyIds.length}] ✗ Story not found: ${storyId}`));
+      console.log();
+
+      // Ask if user wants to continue (or abort in non-interactive)
+      const shouldContinue = await promptContinueOnError(storyId, c);
+      if (!shouldContinue) {
+        console.log(c.warning('Batch processing aborted.'));
+        break;
+      }
+      continue;
+    }
+
+    // Skip if already done
+    if (story.frontmatter.status === 'done') {
+      result.skipped++;
+      console.log(c.dim(`[${i + 1}/${storyIds.length}] ⊘ Skipping ${storyId} (already completed)`));
+      console.log();
+      continue;
+    }
+
+    // Show progress header
+    const progress = {
+      currentIndex: i,
+      total: storyIds.length,
+      currentStory: story,
+    };
+    console.log(c.info(formatBatchProgress(progress)));
+    console.log();
+
+    // Dry-run mode: just show what would be done
+    if (options.dryRun) {
+      console.log(c.dim('  Would process story through full SDLC'));
+      console.log(c.dim(`  Status: ${story.frontmatter.status}`));
+      console.log();
+      result.succeeded++;
+      continue;
+    }
+
+    // Process story through full SDLC by recursively calling run()
+    // We set auto: true to ensure full SDLC execution
+    try {
+      await run({
+        auto: true,
+        story: storyId,
+        dryRun: false,
+        worktree: options.worktree,
+        force: options.force,
+      });
+
+      // Check if story completed successfully (moved to done)
+      const finalStory = getStory(sdlcRoot, storyId);
+      if (finalStory.frontmatter.status === 'done') {
+        result.succeeded++;
+        logStoryCompletion(storyId, true, c);
+      } else {
+        // Story didn't reach done state - treat as failure
+        result.failed++;
+        result.errors.push({
+          storyId,
+          error: `Story did not complete (status: ${finalStory.frontmatter.status})`,
+        });
+        logStoryCompletion(storyId, false, c);
+
+        // Ask if user wants to continue (or abort in non-interactive)
+        const shouldContinue = await promptContinueOnError(storyId, c);
+        if (!shouldContinue) {
+          console.log(c.warning('Batch processing aborted.'));
+          break;
+        }
+      }
+    } catch (error) {
+      result.failed++;
+      result.errors.push({
+        storyId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      logStoryCompletion(storyId, false, c);
+
+      // Ask if user wants to continue (or abort in non-interactive)
+      const shouldContinue = await promptContinueOnError(storyId, c);
+      if (!shouldContinue) {
+        console.log(c.warning('Batch processing aborted.'));
+        break;
+      }
+    }
+
+    console.log();
+  }
+
+  // Display final summary
+  result.duration = Date.now() - startTime;
+  const summaryLines = formatBatchSummary(result);
+  summaryLines.forEach((line: string) => {
+    if (line.includes('✓')) {
+      console.log(c.success(line));
+    } else if (line.includes('✗')) {
+      console.log(c.error(line));
+    } else if (line.includes('⊘')) {
+      console.log(c.warning(line));
+    } else if (line.startsWith('  -')) {
+      console.log(c.dim(line));
+    } else {
+      console.log(line);
+    }
+  });
+
+  // Return non-zero exit code if any failures occurred
+  if (result.failed > 0) {
+    process.exitCode = 1;
+  }
+
+  return result;
+}
+
+/**
  * Run the workflow (process one action or all)
  */
-export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean; clean?: boolean }): Promise<void> {
+export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; batch?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean; clean?: boolean }): Promise<void> {
   const config = loadConfig();
   // Parse maxIterations from CLI (undefined means use config default which is Infinity)
   const maxIterationsOverride = options.maxIterations !== undefined
@@ -723,6 +919,58 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     const { startDaemon } = await import('./daemon.js');
     await startDaemon({ maxIterations: maxIterationsOverride });
     return; // Daemon runs indefinitely
+  }
+
+  // Handle batch mode
+  if (options.batch) {
+    // Validate batch options first
+    try {
+      validateBatchOptions(options);
+    } catch (error) {
+      console.log(c.error(`Error: ${error instanceof Error ? error.message : String(error)}`));
+      return;
+    }
+
+    // Import batch validation modules
+    const { parseStoryIdList, deduplicateStoryIds, validateStoryIds } = await import('./batch-validator.js');
+
+    // Parse and validate story IDs
+    const rawStoryIds = parseStoryIdList(options.batch);
+
+    if (rawStoryIds.length === 0) {
+      console.log(c.error('Error: Empty batch - no story IDs provided'));
+      console.log(c.dim('Usage: ai-sdlc run --batch S-001,S-002,S-003'));
+      return;
+    }
+
+    // Deduplicate story IDs
+    const storyIds = deduplicateStoryIds(rawStoryIds);
+    if (storyIds.length < rawStoryIds.length) {
+      const duplicateCount = rawStoryIds.length - storyIds.length;
+      console.log(c.dim(`Note: Removed ${duplicateCount} duplicate story ID(s)`));
+    }
+
+    // Validate all stories exist before processing
+    const validation = validateStoryIds(storyIds, sdlcRoot);
+    if (!validation.valid) {
+      console.log(c.error('Error: Batch validation failed'));
+      console.log();
+      for (const error of validation.errors) {
+        console.log(c.error(`  - ${error.message}`));
+      }
+      console.log();
+      console.log(c.dim('Fix the errors above and try again.'));
+      return;
+    }
+
+    // Process the batch using internal function
+    await processBatchInternal(storyIds, sdlcRoot, {
+      dryRun: options.dryRun,
+      worktree: options.worktree,
+      force: options.force,
+    });
+
+    return; // Batch processing complete
   }
 
   // Valid step names for --step option

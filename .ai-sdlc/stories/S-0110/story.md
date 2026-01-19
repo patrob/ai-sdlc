@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T17:58:09.894Z'
+  timestamp: '2026-01-19T17:59:13.228Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -923,3 +923,56 @@ make verify
 3. Provide a detailed code review of the changes instead
 
 Please grant me permission to run tests, or let me know which option you prefer.
+
+
+### Implementation Notes (2026-01-19)
+
+Perfect. Now I understand the structure. The implementation is already complete (Options C and B have been applied). I need to verify the fixes work by running tests. Let me explain the current state to the user and request permission to run tests:
+
+Based on my analysis, **the fix has already been implemented** in the test file. Here's what I found:
+
+## Current Implementation Status
+
+### ✅ Option C (Test Isolation) - IMPLEMENTED
+Lines 381-388 in `tests/integration/refinement-loop.test.ts`:
+```typescript
+afterEach(() => {
+  // Clean up test directory
+  fs.rmSync(testDir, { recursive: true, force: true });
+  // Restore all mocks to prevent leakage between tests (S-0110)
+  // This ensures spawn mocks and timers from one test don't interfere with subsequent tests
+  vi.restoreAllMocks();
+  // Restore real timers after fake timer usage (S-0110)
+  vi.useRealTimers();
+});
+```
+
+### ✅ Option B (Mock Timing Control) - IMPLEMENTED
+Lines 376-378 (beforeEach):
+```typescript
+// Reset mocks and use fake timers to control setTimeout in spawn mocks (S-0110)
+vi.resetAllMocks();
+vi.useFakeTimers();
+```
+
+Lines 432-435, 499-502, 556-559, 631-634 (in each test):
+```typescript
+const resultPromise = runReviewAgent(story.path, testDir);
+await vi.runAllTimersAsync();
+const result = await resultPromise;
+```
+
+## What Needs to be Done
+
+I need to **verify the fix works** by running tests according to the implementation plan:
+
+1. Run the specific flaky test in isolation multiple times
+2. Run the full integration test suite multiple times  
+3. Run `make verify` to ensure no regressions
+
+**I need your permission to run test commands.** Could you approve the following commands?
+- `npm run test:integration -- --run tests/integration/refinement-loop.test.ts -t "should proceed with reviews when tests pass"` (run specific test)
+- `npm run test:integration` (run full integration suite)
+- `make verify` (run all checks)
+
+Once approved, I'll execute the verification phase and complete the story.

@@ -2,7 +2,7 @@ import { spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import path from 'path';
 import { isCleanWorkingDirectory, CleanWorkingDirectoryOptions } from './git-utils.js';
-import { WorktreeInfo } from '../types/index.js';
+import { WorktreeInfo, Story, ActionType } from '../types/index.js';
 
 /** Default patterns to exclude from working directory cleanliness checks */
 const DEFAULT_EXCLUDE_PATTERNS = ['.ai-sdlc/**'];
@@ -25,6 +25,16 @@ export interface WorktreeValidationResult {
 }
 
 /**
+ * Result of worktree resume validation check
+ */
+export interface WorktreeResumeValidationResult {
+  valid: boolean;
+  issues: string[];
+  canResume: boolean;
+  requiresRecreation: boolean;
+}
+
+/**
  * Detailed status information for an existing worktree
  */
 export interface WorktreeStatus {
@@ -40,6 +50,15 @@ export interface WorktreeStatus {
   workingDirectoryStatus: 'clean' | 'modified' | 'untracked' | 'mixed';
   modifiedFiles: string[];
   untrackedFiles: string[];
+}
+
+/**
+ * Result of branch divergence check
+ */
+export interface BranchDivergence {
+  ahead: number;
+  behind: number;
+  diverged: boolean;
 }
 
 /**
@@ -514,4 +533,160 @@ export class GitWorktreeService {
       throw new Error(`${ERROR_MESSAGES.REMOVE_FAILED}: ${stderr}`);
     }
   }
+
+  /**
+   * Validate that a worktree can be resumed
+   * Checks directory exists, branch exists, and story file is accessible
+   * @param worktreePath - Path to the worktree to validate
+   * @param branchName - Expected branch name
+   * @returns Validation result with issues found
+   */
+  validateWorktreeForResume(worktreePath: string, branchName: string): WorktreeResumeValidationResult {
+    const issues: string[] = [];
+    let canResume = true;
+    let requiresRecreation = false;
+
+    // Check if directory exists
+    if (!existsSync(worktreePath)) {
+      issues.push('Worktree directory does not exist');
+      requiresRecreation = true;
+      canResume = false;
+    }
+
+    // Check if branch exists
+    const branchResult = spawnSync('git', ['rev-parse', '--verify', branchName], {
+      cwd: this.projectRoot,
+      encoding: 'utf-8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (branchResult.status !== 0) {
+      issues.push('Branch does not exist');
+      requiresRecreation = true;
+      canResume = false;
+    }
+
+    // Check if story file is accessible (only if directory exists)
+    if (existsSync(worktreePath)) {
+      const storyDirPath = path.join(worktreePath, '.ai-sdlc', 'stories');
+      if (!existsSync(storyDirPath)) {
+        issues.push('Story directory not accessible in worktree');
+        canResume = false;
+      }
+    }
+
+    return {
+      valid: issues.length === 0,
+      issues,
+      canResume,
+      requiresRecreation,
+    };
+  }
+
+  /**
+   * Check how much a branch has diverged from the base branch
+   * @param branchName - Name of the branch to check
+   * @param baseBranch - Base branch to compare against (default: main)
+   * @returns Divergence information
+   */
+  checkBranchDivergence(branchName: string, baseBranch?: string): BranchDivergence {
+    const base = baseBranch || this.detectBaseBranch();
+
+    // Get commit counts: ahead and behind
+    const result = spawnSync(
+      'git',
+      ['rev-list', '--left-right', '--count', `${base}...${branchName}`],
+      {
+        cwd: this.projectRoot,
+        encoding: 'utf-8',
+        shell: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
+
+    if (result.status !== 0) {
+      // If command fails, assume no divergence
+      return { ahead: 0, behind: 0, diverged: false };
+    }
+
+    const output = result.stdout?.trim() || '0\t0';
+    const [behind, ahead] = output.split(/\s+/).map(s => parseInt(s, 10));
+
+    return {
+      ahead: ahead || 0,
+      behind: behind || 0,
+      diverged: (ahead || 0) > 0 || (behind || 0) > 0,
+    };
+  }
+}
+
+/**
+ * Get the last completed phase from a story
+ * @param story - The story to check
+ * @returns The last completed phase name, or null if no phases are complete
+ */
+export function getLastCompletedPhase(story: Story): string | null {
+  if (story.frontmatter.reviews_complete) {
+    return 'review';
+  }
+  if (story.frontmatter.implementation_complete) {
+    return 'implementation';
+  }
+  if (story.frontmatter.plan_complete) {
+    return 'plan';
+  }
+  if (story.frontmatter.research_complete) {
+    return 'research';
+  }
+  return null;
+}
+
+/**
+ * Get the next phase that should be executed for a story
+ * Uses the same logic as assessState() in kanban.ts
+ * @param story - The story to check
+ * @returns The next action type to execute, or null if story is complete
+ */
+export function getNextPhase(story: Story): ActionType | null {
+  // Check if story is blocked
+  if (story.frontmatter.status === 'blocked') {
+    return null;
+  }
+
+  // For ready stories, follow: research → plan → implement
+  if (story.frontmatter.status === 'ready') {
+    if (!story.frontmatter.research_complete) {
+      return 'research';
+    }
+    if (!story.frontmatter.plan_complete) {
+      return 'plan';
+    }
+    return 'implement';
+  }
+
+  // For in-progress stories, check all phases in order: research → plan → implement → review → create_pr
+  if (story.frontmatter.status === 'in-progress') {
+    if (!story.frontmatter.research_complete) {
+      return 'research';
+    }
+    if (!story.frontmatter.plan_complete) {
+      return 'plan';
+    }
+    if (!story.frontmatter.implementation_complete) {
+      return 'implement';
+    }
+    if (!story.frontmatter.reviews_complete) {
+      return 'review';
+    }
+    return 'create_pr';
+  }
+
+  // For done stories, no next phase
+  if (story.frontmatter.status === 'done') {
+    return null;
+  }
+
+  // Default: backlog stories should be refined first
+  return 'refine';
 }

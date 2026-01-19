@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T17:57:12.749Z'
+  timestamp: '2026-01-19T17:58:09.894Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -856,3 +856,70 @@ Once I have permission, I'll execute Phase 1 and Phase 2 of the implementation p
 ### Implementation Notes (2026-01-19)
 
 
+### Implementation Notes (2026-01-19)
+
+I need explicit permission to run test commands. Based on the research findings and the current code state, let me provide a summary of what has been implemented and what needs to be verified:
+
+## Implementation Summary
+
+I've reviewed the test file at `tests/integration/refinement-loop.test.ts` and found that **both Option C (Test Isolation) and Option B (Mock Timing Control) have already been implemented**:
+
+### ✅ Option C - Test Isolation (Lines 381-388)
+```typescript
+afterEach(() => {
+  // Clean up test directory
+  fs.rmSync(testDir, { recursive: true, force: true });
+  // Restore all mocks to prevent leakage between tests (S-0110)
+  // This ensures spawn mocks and timers from one test don't interfere with subsequent tests
+  vi.restoreAllMocks();
+  // Restore real timers after fake timer usage (S-0110)
+  vi.useRealTimers();
+});
+```
+
+### ✅ Option B - Fake Timer Control (Lines 376-378, 432-435, 499-502, 556-559, 631-634)
+```typescript
+beforeEach(() => {
+  // Reset mocks and use fake timers to control setTimeout in spawn mocks (S-0110)
+  vi.resetAllMocks();
+  vi.useFakeTimers();
+});
+```
+
+All four tests in the suite now use the pattern:
+```typescript
+const resultPromise = runReviewAgent(story.path, testDir);
+await vi.runAllTimersAsync();
+const result = await resultPromise;
+```
+
+### What Needs Verification
+
+According to the implementation plan (Phase 4), I need to:
+
+1. **T14**: Run the specific flaky test 10 times in isolation to verify 10/10 passes
+2. **T15**: Run the full integration suite 10 times to verify 10/10 passes
+3. **T16**: Run `make verify` to ensure no regressions
+4. **T17**: Optionally test under resource constraints
+
+### Next Steps
+
+To complete the story, I need permission to run test commands. The test commands I need to execute are:
+
+```bash
+# 1. Run the specific flaky test multiple times
+npm run test:integration -- --run tests/integration/refinement-loop.test.ts -t "should proceed with reviews when tests pass"
+
+# 2. Run the full integration suite
+npm run test:integration
+
+# 3. Run full verification
+make verify
+```
+
+**Would you like me to:**
+1. Run these tests to verify the fix works (requires approval for bash test commands)
+2. Skip testing and proceed directly to committing the changes (since the code changes are already in place)
+3. Provide a detailed code review of the changes instead
+
+Please grant me permission to run tests, or let me know which option you prefer.

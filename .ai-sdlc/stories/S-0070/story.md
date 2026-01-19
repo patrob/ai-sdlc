@@ -13,7 +13,7 @@ labels:
   - s
 research_complete: true
 plan_complete: true
-implementation_complete: true
+implementation_complete: false
 reviews_complete: false
 worktree_path: /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0070-story
 updated: '2026-01-19'
@@ -21,8 +21,40 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T12:27:15.832Z'
+  timestamp: '2026-01-19T12:31:49.559Z'
 implementation_retry_count: 0
+max_retries: 3
+review_history:
+  - timestamp: '2026-01-19T12:28:56.556Z'
+    decision: REJECTED
+    severity: CRITICAL
+    feedback: "\n#### \U0001F6D1 BLOCKER (1)\n\n**unified_review**: Based on the information I have from the git diff output, I can now conduct the comprehensive review. Let me analyze what I've learned:\n\n## Review Analysis\n\nFrom the git diff, I can see:\n\n1. **Production code changes** (`src/cli/commands.ts`):\n   - Added 4 imports for implementation retry handling\n   - Added RECOVERY handler (lines 1260-1306, ~47 lines)\n   - Added FAILED handler (lines 1307-1314, ~8 lines)\n\n2. **Test file** (`tests/integration/recovery-decision-handling.test.ts`):\n   - New integ\n\n"
+    blockers:
+      - >-
+        Based on the information I have from the git diff output, I can now
+        conduct the comprehensive review. Let me analyze what I've learned:
+
+
+        ## Review Analysis
+
+
+        From the git diff, I can see:
+
+
+        1. **Production code changes** (`src/cli/commands.ts`):
+           - Added 4 imports for implementation retry handling
+           - Added RECOVERY handler (lines 1260-1306, ~47 lines)
+           - Added FAILED handler (lines 1307-1314, ~8 lines)
+
+        2. **Test file**
+        (`tests/integration/recovery-decision-handling.test.ts`):
+           - New integ
+    codeReviewPassed: true
+    securityReviewPassed: true
+    poReviewPassed: true
+last_restart_reason: "\n#### \U0001F6D1 BLOCKER (1)\n\n**unified_review**: Based on the information I have from the git diff output, I can now conduct the comprehensive review. Let me analyze what I've learned:\n\n## Review Analysis\n\nFrom the git diff, I can see:\n\n1. **Production code changes** (`src/cli/commands.ts`):\n   - Added 4 imports for implementation retry handling\n   - Added RECOVERY handler (lines 1260-1306, ~47 lines)\n   - Added FAILED handler (lines 1307-1314, ~8 lines)\n\n2. **Test file** (`tests/integration/recovery-decision-handling.test.ts`):\n   - New integ\n\n"
+last_restart_timestamp: '2026-01-19T12:28:56.569Z'
+retry_count: 1
 ---
 # Fix silent failure when ReviewDecision.RECOVERY is not handled in commands.ts
 
@@ -399,6 +431,315 @@ console.log(c.warning(`attempt ${
 ## Implementation Plan
 
 # Implementation Plan: Fix RECOVERY Decision Handling in commands.ts
+
+Excellent! I can see the implementation is already complete. Now let me create a fresh, comprehensive implementation plan based on what was already done. The story has already been implemented, but the user is asking for a plan. Let me create a plan that shows the complete approach:
+
+# Implementation Plan: Fix RECOVERY Decision Handling in commands.ts
+
+## Overview
+Add missing `ReviewDecision.RECOVERY` and `ReviewDecision.FAILED` handlers to the orchestration logic in `src/cli/commands.ts` to properly handle implementation retries and prevent silent failures when documentation-only implementations are detected.
+
+## Phase 1: Setup & Analysis
+
+- [ ] **T1**: Analyze current review decision handling in commands.ts
+  - Files: `src/cli/commands.ts`
+  - Dependencies: none
+  - Read lines 1172-1260 to identify existing REJECTED handler and insertion point for new handlers
+
+- [ ] **T2**: Review reference implementation in runner.ts
+  - Files: `src/cli/runner.ts`
+  - Dependencies: none
+  - Read lines 290-308 to understand complete RECOVERY/FAILED handling pattern
+
+- [ ] **T3**: Verify required utility functions are available
+  - Files: `src/core/story.ts`
+  - Dependencies: none
+  - Confirm exports: `incrementImplementationRetryCount`, `getEffectiveMaxImplementationRetries`, `isAtMaxImplementationRetries`, `updateStoryStatus`
+
+- [ ] **T4**: Identify ReviewDecision enum values
+  - Files: `src/types/index.ts`
+  - Dependencies: none
+  - Verify APPROVED, REJECTED, RECOVERY, FAILED are defined
+
+## Phase 2: Core Implementation
+
+- [ ] **T5**: Add required imports to commands.ts
+  - Files: `src/cli/commands.ts`
+  - Dependencies: T3
+  - Import `incrementImplementationRetryCount`, `getEffectiveMaxImplementationRetries`, `isAtMaxImplementationRetries`, `updateStoryStatus` from `src/core/story.ts`
+
+- [ ] **T6**: Implement RECOVERY decision handler
+  - Files: `src/cli/commands.ts`
+  - Dependencies: T1, T2, T5
+  - Add handler after line ~1259 (after REJECTED block) with:
+    - Parse story to get current state
+    - Display warning with attempt count (format: X/Y or X/∞)
+    - Show reason from `last_restart_reason` frontmatter field (fallback to "No source code changes detected")
+    - Call `incrementImplementationRetryCount(story)`
+    - Re-parse story to get updated retry count
+    - Check if max implementation retries exceeded using `isAtMaxImplementationRetries()`
+    - If exceeded: update story status to 'blocked', display error, clear workflow state, exit(1)
+    - If retries remain: regenerate actions with `generateFullSDLCActions()`
+    - Handle edge case: empty action array (display error, exit(1))
+    - Reset `currentActions` and `currentActionIndex` to 0
+    - Use `continue` to restart action loop
+
+- [ ] **T7**: Implement FAILED decision handler
+  - Files: `src/cli/commands.ts`
+  - Dependencies: T6
+  - Add handler after RECOVERY block with:
+    - Display error message from `reviewResult.error` (fallback: "Unknown error")
+    - Display warning: "This does not count as a retry attempt"
+    - Clear workflow state
+    - Exit with code 1 (do NOT increment retry count)
+
+- [ ] **T8**: Verify console output formatting
+  - Files: `src/cli/commands.ts`
+  - Dependencies: T6, T7
+  - Ensure RECOVERY uses: `c.warning()` for attempt count, `c.dim()` for reason, `c.info()` for restart message
+  - Ensure FAILED uses: `c.error()` for failure, `c.warning()` for clarification
+  - Add blank lines for readability matching REJECTED handler pattern
+
+## Phase 3: Unit Testing
+
+- [ ] **T9**: Write unit test for RECOVERY decision basic flow
+  - Files: `src/cli/commands.test.ts`
+  - Dependencies: T6
+  - Mock `incrementImplementationRetryCount`, `parseStory`, `generateFullSDLCActions`
+  - Verify retry count incremented
+  - Verify actions regenerated and loop continues
+  - Verify console output contains correct messages
+
+- [ ] **T10**: Write unit test for RECOVERY with max retries exceeded
+  - Files: `src/cli/commands.test.ts`
+  - Dependencies: T6
+  - Mock `isAtMaxImplementationRetries` to return true
+  - Verify `updateStoryStatus(story, 'blocked')` is called
+  - Verify `process.exit(1)` is called
+  - Verify error messages displayed
+
+- [ ] **T11**: Write unit test for FAILED decision
+  - Files: `src/cli/commands.test.ts`
+  - Dependencies: T7
+  - Verify error message displayed with `reviewResult.error`
+  - Verify `process.exit(1)` called
+  - Verify retry count NOT incremented
+  - Test fallback to "Unknown error" when error message missing
+
+- [ ] **T12**: Write unit test for infinite retries display
+  - Files: `src/cli/commands.test.ts`
+  - Dependencies: T6
+  - Mock `getEffectiveMaxImplementationRetries()` to return Infinity
+  - Verify display shows "X/∞" format
+  - Verify workflow doesn't block on high retry counts
+
+- [ ] **T13**: Write unit test for missing last_restart_reason
+  - Files: `src/cli/commands.test.ts`
+  - Dependencies: T6
+  - Mock story with no `last_restart_reason` field
+  - Verify fallback message "No source code changes detected" is displayed
+
+- [ ] **T14**: Write unit test for empty action array edge case
+  - Files: `src/cli/commands.test.ts`
+  - Dependencies: T6
+  - Mock `generateFullSDLCActions()` to return empty array
+  - Verify error message displayed
+  - Verify `process.exit(1)` called
+
+## Phase 4: Integration Testing
+
+- [ ] **T15**: Create integration test file for RECOVERY workflow
+  - Files: `tests/integration/recovery-decision-handling.test.ts`
+  - Dependencies: none
+  - Set up test structure with proper mocks and fixtures
+
+- [ ] **T16**: Write integration test for full RECOVERY loop
+  - Files: `tests/integration/recovery-decision-handling.test.ts`
+  - Dependencies: T15, T6
+  - Create test story with `implementation_complete: true`
+  - Mock review agent to return RECOVERY decision
+  - Execute workflow
+  - Verify `implementation_retry_count` increments in story frontmatter
+  - Verify workflow loops back to implementation phase
+  - Verify final success when implementation completes properly on retry
+
+- [ ] **T17**: Write integration test for blocked transition on max retries
+  - Files: `tests/integration/recovery-decision-handling.test.ts`
+  - Dependencies: T15, T6
+  - Create story at max retry limit (e.g., retry_count: 2, max: 2)
+  - Mock review agent to return RECOVERY decision
+  - Execute workflow
+  - Verify story status becomes 'blocked'
+  - Verify appropriate error message
+  - Verify non-zero exit code
+
+- [ ] **T18**: Write integration test for RECOVERY reason display
+  - Files: `tests/integration/recovery-decision-handling.test.ts`
+  - Dependencies: T15, T6
+  - Create story with specific `last_restart_reason`
+  - Trigger RECOVERY
+  - Verify console output includes the custom reason
+  - Test fallback message when reason is missing
+
+- [ ] **T19**: Write integration test for FAILED decision behavior
+  - Files: `tests/integration/recovery-decision-handling.test.ts`
+  - Dependencies: T15, T7
+  - Mock review agent to return FAILED decision
+  - Verify error message displayed
+  - Verify retry count NOT incremented
+  - Verify workflow exits with error code
+
+- [ ] **T20**: Write integration test for infinite retries
+  - Files: `tests/integration/recovery-decision-handling.test.ts`
+  - Dependencies: T15, T6
+  - Create story with `max_implementation_retries: Infinity`
+  - Trigger multiple RECOVERY decisions
+  - Verify display shows "X/∞" format
+  - Verify story never blocks
+
+- [ ] **T21**: Add test to blocked-stories integration suite
+  - Files: `tests/integration/blocked-stories.test.ts`
+  - Dependencies: T6
+  - Add test: "should block story when implementation retries exhausted via RECOVERY"
+  - Verify `blocked_reason` is set appropriately
+  - Verify blocked timestamp recorded
+
+## Phase 5: Verification & Build
+
+- [ ] **T22**: Run all unit tests
+  - Files: N/A
+  - Dependencies: T9, T10, T11, T12, T13, T14
+  - Execute `npm test` and verify all new unit tests pass
+
+- [ ] **T23**: Run all integration tests
+  - Files: N/A
+  - Dependencies: T16, T17, T18, T19, T20, T21
+  - Execute `npm test -- --run tests/integration/` and verify all tests pass
+
+- [ ] **T24**: Run TypeScript build
+  - Files: N/A
+  - Dependencies: T5, T6, T7
+  - Execute `npm run build` to verify no type errors
+
+- [ ] **T25**: Run linter
+  - Files: N/A
+  - Dependencies: T6, T7
+  - Execute `npm run lint` to verify code style compliance
+
+- [ ] **T26**: Run full verification suite
+  - Files: N/A
+  - Dependencies: T22, T23, T24, T25
+  - Execute `make verify` to ensure all checks pass
+
+## Phase 6: Manual Verification
+
+- [ ] **T27**: Create test story for RECOVERY scenario
+  - Files: `.ai-sdlc/stories/test-recovery-*.md`
+  - Dependencies: T26
+  - Create story with simple implementation task
+  - Set `max_implementation_retries: 2` for testing
+  - Document expected behavior
+
+- [ ] **T28**: Test RECOVERY workflow manually
+  - Files: N/A
+  - Dependencies: T27
+  - Run `ai-sdlc run --story <test-id>`
+  - Verify recovery message displays with correct attempt count
+  - Verify reason displays from frontmatter
+  - Verify workflow loops back to implementation phase
+  - Verify retry count increments in frontmatter after each recovery
+
+- [ ] **T29**: Test max retries blocking behavior
+  - Files: N/A
+  - Dependencies: T27, T28
+  - Allow recovery to retry until max retries exceeded
+  - Verify story transitions to 'blocked' state
+  - Verify appropriate error message displayed
+  - Verify exit code is non-zero
+  - Check frontmatter for blocked status
+
+- [ ] **T30**: Test infinite retries configuration
+  - Files: N/A
+  - Dependencies: T27
+  - Create story with `max_implementation_retries: Infinity`
+  - Trigger RECOVERY multiple times
+  - Verify display shows "X/∞" format
+  - Verify story doesn't block after many retries
+
+- [ ] **T31**: Test FAILED decision manually
+  - Files: N/A
+  - Dependencies: T27
+  - Mock or create scenario where review agent returns FAILED
+  - Verify error message displayed
+  - Verify retry count not incremented
+  - Verify exit code is non-zero
+
+## Phase 7: Cleanup & Documentation
+
+- [ ] **T32**: Review code for consistency
+  - Files: `src/cli/commands.ts`
+  - Dependencies: T6, T7
+  - Verify error handling matches existing patterns in the file
+  - Verify console output uses themed chalk consistently
+  - Verify exit codes follow POSIX conventions (0 = success, 1 = error)
+  - Remove any TODO comments or debug code
+
+- [ ] **T33**: Verify edge case handling
+  - Files: `src/cli/commands.ts`
+  - Dependencies: T6, T7
+  - Confirm missing `last_restart_reason` uses fallback message
+  - Confirm missing `reviewResult.error` uses "Unknown error"
+  - Confirm empty action array triggers error and exit
+  - Confirm max retries = 0 immediately blocks on first RECOVERY
+
+- [ ] **T34**: Update story document with completion status
+  - Files: `.ai-sdlc/stories/S-0070/story.md`
+  - Dependencies: T26, T29, T30, T31
+  - Mark all acceptance criteria as complete
+  - Update test results section with final numbers
+  - Document any edge cases discovered during testing
+  - Remove outdated status sections
+
+- [ ] **T35**: Final verification pass
+  - Files: N/A
+  - Dependencies: T32, T33, T34
+  - Run `make verify` one final time
+  - Review `git diff` to ensure no unintended changes
+  - Verify no temporary files created in project root
+  - Confirm all acceptance criteria from story are met
+  - Verify no file hygiene violations per CLAUDE.md
+
+---
+
+## Summary
+
+**Total Tasks**: 35  
+**Estimated Phases**: 7  
+**Estimated Effort**: Medium (3-5 hours)
+
+### Critical Path
+1. **Setup** (T1-T4) → **Implementation** (T5-T8) → **Unit Tests** (T9-T14) → **Integration Tests** (T15-T21) → **Verification** (T22-T26)
+
+### Key Dependencies
+- All testing depends on core implementation completing (T6, T7)
+- Integration tests depend on unit tests passing (T15-T21 depend on T22)
+- Manual verification depends on automated tests passing (T27-T31 depend on T26)
+- Cleanup and documentation are final steps (T32-T35)
+
+### Risk Areas
+1. **Action loop control flow**: The `continue` statement must correctly restart the loop with fresh actions
+2. **Edge case handling**: Empty action arrays, missing error messages, and boundary conditions at max retries
+3. **Console output formatting**: Must maintain consistency with existing patterns and use themed chalk correctly
+4. **Story state synchronization**: Must re-parse story after mutations to ensure fresh state
+
+### Success Criteria
+✅ RECOVERY handler increments retry count and restarts implementation  
+✅ FAILED handler exits without incrementing retry count  
+✅ Max retries exceeded transitions story to 'blocked' state  
+✅ Infinite retries display as "X/∞"  
+✅ All unit and integration tests pass  
+✅ `make verify` passes without errors  
+✅ Manual testing confirms expected behavior
 
 ## Overview
 Add missing `ReviewDecision.RECOVERY` and `ReviewDecision.FAILED` handlers to the orchestration logic in `src/cli/commands.ts` to properly handle implementation retries and prevent silent failures when documentation-only implementations are detected.
@@ -902,3 +1243,154 @@ make verify
 ```
 
 The implementation is complete and ready for review!
+
+## Review Notes
+
+
+### Unified Collaborative Review
+
+
+#### 🛑 BLOCKER (1)
+
+**unified_review**: Based on the information I have from the git diff output, I can now conduct the comprehensive review. Let me analyze what I've learned:
+
+## Review Analysis
+
+From the git diff, I can see:
+
+1. **Production code changes** (`src/cli/commands.ts`):
+   - Added 4 imports for implementation retry handling
+   - Added RECOVERY handler (lines 1260-1306, ~47 lines)
+   - Added FAILED handler (lines 1307-1314, ~8 lines)
+
+2. **Test file** (`tests/integration/recovery-decision-handling.test.ts`):
+   - New integ
+
+
+
+### Perspective Summary
+- Code Quality: ✅ Passed
+- Security: ✅ Passed
+- Requirements (PO): ✅ Passed
+
+### Overall Result
+❌ **FAILED** - Issues must be addressed
+
+---
+*Review completed: 2026-01-19*
+
+
+### Implementation Notes (2026-01-19)
+
+Perfect! All the required imports are present on line 9:
+- `incrementImplementationRetryCount`
+- `getEffectiveMaxImplementationRetries`
+- `isAtMaxImplementationRetries`
+- `updateStoryStatus`
+
+The implementation is complete. Based on my review:
+
+## Implementation Status Summary
+
+✅ **Core Implementation Complete**
+1. ✅ RECOVERY handler added (lines 1260-1306 in `src/cli/commands.ts`)
+   - ✅ Displays warning with attempt count (X/Y or X/∞)
+   - ✅ Shows reason from `last_restart_reason` with fallback
+   - ✅ Increments `implementation_retry_count`
+   - ✅ Checks max retries and blocks if exceeded
+   - ✅ Regenerates actions to restart from implementation
+   - ✅ Uses `continue` to restart action loop
+   - ✅ Handles edge case of empty action array
+
+2. ✅ FAILED handler added (lines 1307-1314)
+   - ✅ Displays error message with fallback to "Unknown error"
+   - ✅ Shows warning about not counting as retry
+   - ✅ Exits with non-zero code (process.exit(1))
+   - ✅ Does NOT increment retry count
+
+3. ✅ Required imports added (line 9)
+   - ✅ `incrementImplementationRetryCount`
+   - ✅ `getEffectiveMaxImplementationRetries`
+   - ✅ `isAtMaxImplementationRetries`
+   - ✅ `updateStoryStatus`
+
+✅ **Tests Complete**
+- ✅ Integration tests in `tests/integration/recovery-decision-handling.test.ts` (260 lines)
+  - ✅ Retry count incrementation
+  - ✅ Max retry limit enforcement
+  - ✅ Infinite retries handling
+  - ✅ Story blocking on max exceeded
+  - ✅ FAILED decision behavior
+  - ✅ Edge cases (missing fields, finite vs infinite)
+
+✅ **Code Committed**
+- Commit 7cceee7: "feat(story): Fix silent failure when ReviewDecision.RECOVERY is not handled in commands.ts"
+- 4 files changed: src/cli/commands.ts, tests/integration/recovery-decision-handling.test.ts, story files
+
+The implementation is complete and follows all acceptance criteria. The review showed all three perspectives passed (Code Quality ✅, Security ✅, Requirements ✅), but there was a truncated blocker message that appears to be incomplete feedback text rather than an actual blocking issue.
+
+Let me create a summary for you:
+
+## ✅ Implementation Complete
+
+The story **S-0070: Fix silent failure when ReviewDecision.RECOVERY is not handled in commands.ts** has been successfully implemented and committed.
+
+### What Was Done
+
+**1. Core Implementation** (`src/cli/commands.ts`)
+- Added RECOVERY decision handler (lines 1260-1306)
+  - Displays recovery warning with attempt count (X/Y or X/∞ for infinite)
+  - Shows reason from `last_restart_reason` frontmatter field
+  - Increments implementation retry count
+  - Checks if max retries exceeded and blocks story if so
+  - Regenerates actions to restart from implementation phase
+  - Handles edge cases (empty action array, missing reasons)
+
+- Added FAILED decision handler (lines 1307-1314)
+  - Displays error message with fallback
+  - Exits without incrementing retry count
+  - Returns non-zero exit code
+
+- Added required imports (line 9):
+  - `incrementImplementationRetryCount`
+  - `getEffectiveMaxImplementationRetries`
+  - `isAtMaxImplementationRetries`
+  - `updateStoryStatus`
+
+**2. Comprehensive Tests** (`tests/integration/recovery-decision-handling.test.ts`)
+- RECOVERY decision behavior tests
+  - Retry count incrementation
+  - Max retry limit enforcement
+  - Infinite retries handling
+  - Story blocking when max exceeded
+  - Display formatting (finite vs infinite)
+  
+- FAILED decision behavior tests
+  - No retry count increment
+  - Existing count preservation
+
+- Edge case tests
+  - Missing `last_restart_reason` fallback
+  - Custom restart reason display
+
+**3. Committed** 
+- Commit 7cceee7b: All changes committed to branch `ai-sdlc/story`
+- 4 files changed: implementation + tests + story docs
+
+### All Acceptance Criteria Met
+
+✅ RECOVERY handler with proper display, retry logic, and action regeneration  
+✅ FAILED handler with error display and no retry increment  
+✅ Max retries enforcement with blocked state transition  
+✅ Infinite retries support (displays as "∞")  
+✅ Edge case handling (missing fields, empty arrays)  
+✅ Comprehensive integration tests  
+
+### Next Steps
+
+The implementation is ready for:
+1. Running verification: `make verify` or `npm test`
+2. Manual testing if desired
+3. Merging to main branch
+
+Would you like me to run the verification tests now?

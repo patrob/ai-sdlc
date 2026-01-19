@@ -7,7 +7,7 @@ import { runAgentQuery } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from '../core/config.js';
 import { extractStructuredResponseSync } from '../core/llm-utils.js';
-import { Story, AgentResult, ReviewResult, ReviewIssue, ReviewIssueSeverity, ReviewDecision, ReviewSeverity, ReviewAttempt, Config, TDDTestCycle } from '../types/index.js';
+import { Story, AgentResult, ReviewResult, ReviewIssue, ReviewIssueSeverity, ReviewDecision, ReviewSeverity, ReviewAttempt, Config, TDDTestCycle, ContentType } from '../types/index.js';
 import { sanitizeInput, truncateText } from '../cli/formatting.js';
 import { detectTestDuplicationPatterns } from './test-pattern-detector.js';
 
@@ -751,6 +751,100 @@ export function getSourceCodeChanges(workingDir: string): string[] {
 }
 
 /**
+ * Get configuration file changes from git diff
+ *
+ * Detects changes to configuration files including:
+ * - .claude/ directory (Agent SDK skills, CLAUDE.md)
+ * - .github/ directory (workflows, actions, issue templates)
+ * - Root config files (tsconfig.json, package.json, .gitignore, vitest.config.ts, etc.)
+ *
+ * Uses spawnSync for security (prevents command injection).
+ *
+ * @param workingDir - Working directory to run git diff in
+ * @returns Array of configuration file paths that have changed, or ['unknown'] if git fails
+ */
+export function getConfigurationChanges(workingDir: string): string[] {
+  try {
+    // Security: Use spawnSync with explicit args (not shell) to prevent injection
+    const result = spawnSync('git', ['diff', '--name-only', 'HEAD~1'], {
+      cwd: workingDir,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (result.status !== 0) {
+      // Git command failed - fail open (assume changes exist)
+      return ['unknown'];
+    }
+
+    const output = result.stdout.toString();
+
+    return output
+      .split('\n')
+      .filter(f => f.trim())
+      .filter(f => {
+        // Configuration directories
+        if (f.startsWith('.claude/')) return true;
+        if (f.startsWith('.github/')) return true;
+
+        // Root configuration files (common patterns)
+        const rootConfigs = [
+          'tsconfig.json',
+          'package.json',
+          'package-lock.json',
+          '.gitignore',
+          '.gitattributes',
+          'vitest.config.ts',
+          'vitest.config.js',
+          'jest.config.js',
+          'jest.config.ts',
+          '.eslintrc',
+          '.eslintrc.js',
+          '.eslintrc.json',
+          '.prettierrc',
+          '.prettierrc.js',
+          '.prettierrc.json',
+          'Makefile',
+          'Dockerfile',
+          'docker-compose.yml',
+          '.env.example',
+        ];
+
+        return rootConfigs.includes(f);
+      });
+  } catch {
+    // If git diff fails, assume there are changes (fail open, not closed)
+    return ['unknown'];
+  }
+}
+
+/**
+ * Determine the effective content type for validation
+ *
+ * Resolves the final content type based on story frontmatter fields:
+ * 1. If requires_source_changes === false, treat as 'configuration'
+ * 2. If requires_source_changes === true, treat as 'code'
+ * 3. Otherwise, use content_type field (default: 'code' for backward compatibility)
+ *
+ * @param story - Story with frontmatter to analyze
+ * @returns The effective content type to use for validation
+ */
+export function determineEffectiveContentType(story: Story): ContentType {
+  const frontmatter = story.frontmatter;
+
+  // Manual override takes precedence
+  if (frontmatter.requires_source_changes === false) {
+    return 'configuration';
+  }
+  if (frontmatter.requires_source_changes === true) {
+    return 'code';
+  }
+
+  // Use explicit content_type or default to 'code'
+  return frontmatter.content_type || 'code';
+}
+
+/**
  * Check if test files exist in git diff
  *
  * Returns true if any test files have been modified/added, false otherwise.
@@ -981,71 +1075,153 @@ export async function runReviewAgent(
       };
     }
 
-    // PRE-CHECK GATE: Detect documentation-only implementations before running expensive LLM reviews
-    const sourceChanges = getSourceCodeChanges(workingDir);
+    // PRE-CHECK GATE: Content type-aware validation before running expensive LLM reviews
+    const contentType = determineEffectiveContentType(story);
 
-    if (sourceChanges.length === 0) {
-      // No source code changes detected - check if we can recover
+    logger.info('review', 'Running content-type-specific validation', {
+      storyId: story.frontmatter.id,
+      contentType,
+      explicitContentType: story.frontmatter.content_type,
+      requiresSourceChanges: story.frontmatter.requires_source_changes,
+    });
+
+    // Validation flags
+    let validationFailed = false;
+    let validationReason = '';
+    let validationCategory = 'implementation';
+
+    // Check source code changes for 'code' and 'mixed' types
+    if (contentType === 'code' || contentType === 'mixed') {
+      const sourceChanges = getSourceCodeChanges(workingDir);
+
+      if (sourceChanges.length === 0) {
+        validationFailed = true;
+        validationReason = contentType === 'mixed'
+          ? 'Mixed story requires both source AND configuration changes - no source code was modified.'
+          : 'Implementation wrote documentation/planning only - no source code was modified.';
+
+        logger.warn('review', 'Source code validation failed', {
+          storyId: story.frontmatter.id,
+          contentType,
+          sourceChangesFound: sourceChanges.length,
+        });
+      } else {
+        logger.info('review', 'Source code changes detected', {
+          storyId: story.frontmatter.id,
+          fileCount: sourceChanges.length,
+        });
+      }
+    }
+
+    // Check configuration changes for 'configuration' and 'mixed' types
+    if (!validationFailed && (contentType === 'configuration' || contentType === 'mixed')) {
+      const configChanges = getConfigurationChanges(workingDir);
+
+      if (configChanges.length === 0) {
+        validationFailed = true;
+        validationReason = contentType === 'mixed'
+          ? 'Mixed story requires both source AND configuration changes. No configuration file changes detected.'
+          : 'Configuration story requires changes to config files (.claude/, .github/, or root config files). No configuration changes detected.';
+
+        logger.warn('review', 'Configuration validation failed', {
+          storyId: story.frontmatter.id,
+          contentType,
+          configChangesFound: configChanges.length,
+        });
+      } else {
+        logger.info('review', 'Configuration changes detected', {
+          storyId: story.frontmatter.id,
+          fileCount: configChanges.length,
+        });
+      }
+    }
+
+    // For 'documentation' type, skip all file change validation
+    if (contentType === 'documentation') {
+      logger.info('review', 'Documentation story - skipping file change validation', {
+        storyId: story.frontmatter.id,
+      });
+    }
+
+    // Handle validation failure (if any)
+    if (validationFailed) {
       const retryCount = story.frontmatter.implementation_retry_count || 0;
       const maxRetries = getEffectiveMaxImplementationRetries(story, config);
 
       if (retryCount < maxRetries) {
         // RECOVERABLE: Trigger implementation recovery
-        logger.warn('review', 'No source code changes detected - triggering implementation recovery', {
+        logger.warn('review', 'Validation failed - triggering implementation recovery', {
           storyId: story.frontmatter.id,
           retryCount,
           maxRetries,
+          contentType,
         });
 
         await updateStoryField(story, 'implementation_complete', false);
-        await updateStoryField(story, 'last_restart_reason', 'No source code changes detected. Implementation wrote documentation only.');
+
+        // Set restart reason (backward compatible message for default code stories)
+        const restartReason = contentType === 'configuration'
+          ? 'Configuration story requires changes to config files (.claude/, .github/, or root config files). No configuration changes detected.'
+          : contentType === 'mixed'
+            ? 'Mixed story requires both source AND configuration changes - no source code was modified.'
+            : 'No source code changes detected. Implementation wrote documentation only.';
+
+        await updateStoryField(story, 'last_restart_reason', restartReason);
+
+        // Create user-friendly recovery description
+        const recoveryDescription = contentType === 'configuration'
+          ? 'No configuration file modifications detected. Re-running implementation phase.'
+          : contentType === 'mixed'
+            ? 'No source code modifications detected. Re-running implementation phase.'
+            : 'No source code modifications detected. Re-running implementation phase.';
 
         return {
           success: true,
           story: parseStory(storyPath),
-          changesMade: ['Detected documentation-only implementation', 'Triggered implementation recovery'],
+          changesMade: ['Detected incomplete implementation', 'Triggered implementation recovery'],
           passed: false,
           decision: ReviewDecision.RECOVERY,
           reviewType: 'pre-check' as any,
           issues: [{
             severity: 'critical',
-            category: 'implementation',
-            description: 'No source code modifications detected. Re-running implementation phase.',
+            category: validationCategory,
+            description: recoveryDescription,
           }],
-          feedback: 'Implementation recovery triggered - no source changes found.',
+          feedback: `Implementation recovery triggered - ${validationReason}`,
         };
       } else {
         // NON-RECOVERABLE: Max retries reached
         const maxRetriesDisplay = Number.isFinite(maxRetries) ? maxRetries : '∞';
-        logger.error('review', 'No source code changes detected and max implementation retries reached', {
+        logger.error('review', 'Validation failed and max implementation retries reached', {
           storyId: story.frontmatter.id,
           retryCount,
           maxRetries,
+          contentType,
         });
 
         return {
           success: true,
           story: parseStory(storyPath),
-          changesMade: ['Detected documentation-only implementation', 'Max retries reached'],
+          changesMade: ['Detected incomplete implementation', 'Max retries reached'],
           passed: false,
           decision: ReviewDecision.FAILED,
           severity: ReviewSeverity.CRITICAL,
           reviewType: 'pre-check' as any,
           issues: [{
             severity: 'blocker',
-            category: 'implementation',
-            description: `Implementation phase wrote documentation/planning only - no source code was modified. This has occurred ${retryCount} time(s) (max: ${maxRetriesDisplay}). Manual intervention required.`,
-            suggestedFix: 'Review the story requirements and implementation plan. The agent may be confused about what needs to be built. Consider simplifying the story or providing more explicit guidance.',
+            category: validationCategory,
+            description: `${validationReason} This has occurred ${retryCount} time(s) (max: ${maxRetriesDisplay}). Manual intervention required.`,
+            suggestedFix: 'Review the story requirements and implementation plan. Verify the content_type field matches the expected implementation. Consider simplifying the story or providing more explicit guidance.',
           }],
-          feedback: 'Implementation failed to produce code changes after multiple attempts.',
+          feedback: 'Implementation failed validation after multiple attempts.',
         };
       }
     }
 
-    // Source changes exist - proceed with normal review flow
-    logger.info('review', 'Source code changes detected - proceeding with verification', {
+    // Validation passed - proceed with normal review flow
+    logger.info('review', 'Content validation passed - proceeding with verification', {
       storyId: story.frontmatter.id,
-      fileCount: sourceChanges.length,
+      contentType,
     });
 
     // PRE-CHECK GATE: Check if test files exist

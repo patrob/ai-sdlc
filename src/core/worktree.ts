@@ -25,6 +25,24 @@ export interface WorktreeValidationResult {
 }
 
 /**
+ * Detailed status information for an existing worktree
+ */
+export interface WorktreeStatus {
+  path: string;
+  branch: string;
+  storyId: string;
+  exists: boolean;
+  lastCommit?: {
+    hash: string;
+    message: string;
+    timestamp: string;
+  };
+  workingDirectoryStatus: 'clean' | 'modified' | 'untracked' | 'mixed';
+  modifiedFiles: string[];
+  untrackedFiles: string[];
+}
+
+/**
  * Error messages used by the worktree service
  */
 const ERROR_MESSAGES = {
@@ -272,6 +290,86 @@ export class GitWorktreeService {
     }
 
     return worktrees;
+  }
+
+  /**
+   * Find a worktree by story ID
+   * @param storyId - The story ID to search for (e.g., 'S-0029')
+   * @returns The WorktreeInfo if found, undefined otherwise
+   */
+  findByStoryId(storyId: string): WorktreeInfo | undefined {
+    const worktrees = this.list();
+    return worktrees.find(w => w.storyId === storyId);
+  }
+
+  /**
+   * Get detailed status information for a worktree
+   * @param worktreeInfo - The worktree to get status for
+   * @returns Detailed status including last commit and working directory state
+   */
+  getWorktreeStatus(worktreeInfo: WorktreeInfo): WorktreeStatus {
+    const status: WorktreeStatus = {
+      path: worktreeInfo.path,
+      branch: worktreeInfo.branch,
+      storyId: worktreeInfo.storyId || 'unknown',
+      exists: worktreeInfo.exists,
+      workingDirectoryStatus: 'clean',
+      modifiedFiles: [],
+      untrackedFiles: [],
+    };
+
+    if (!worktreeInfo.exists) {
+      return status;
+    }
+
+    const lastCommitResult = spawnSync(
+      'git',
+      ['log', '-1', '--format=%H%n%s%n%ci'],
+      {
+        cwd: worktreeInfo.path,
+        encoding: 'utf-8',
+        shell: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
+
+    if (lastCommitResult.status === 0 && lastCommitResult.stdout) {
+      const [hash, message, timestamp] = lastCommitResult.stdout.trim().split('\n');
+      if (hash && message && timestamp) {
+        status.lastCommit = { hash, message, timestamp };
+      }
+    }
+
+    const gitStatusResult = spawnSync('git', ['status', '--porcelain'], {
+      cwd: worktreeInfo.path,
+      encoding: 'utf-8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (gitStatusResult.status === 0 && gitStatusResult.stdout) {
+      const lines = gitStatusResult.stdout.split('\n').filter(l => l.length >= 3);
+      for (const line of lines) {
+        const statusCode = line.substring(0, 2);
+        const filePath = line.substring(3).trim();
+
+        if (statusCode === '??' || statusCode === '!!') {
+          status.untrackedFiles.push(filePath);
+        } else {
+          status.modifiedFiles.push(filePath);
+        }
+      }
+
+      if (status.modifiedFiles.length > 0 && status.untrackedFiles.length > 0) {
+        status.workingDirectoryStatus = 'mixed';
+      } else if (status.modifiedFiles.length > 0) {
+        status.workingDirectoryStatus = 'modified';
+      } else if (status.untrackedFiles.length > 0) {
+        status.workingDirectoryStatus = 'untracked';
+      }
+    }
+
+    return status;
   }
 
   /**

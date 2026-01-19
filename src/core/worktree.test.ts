@@ -728,6 +728,302 @@ branch refs/heads/ai-sdlc/S-0030-second
     });
   });
 
+  describe('hasUnpushedCommits', () => {
+    it('returns false when no remote tracking branch exists', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 128,
+        stdout: '',
+        stderr: "fatal: no upstream configured for branch 'ai-sdlc/S-0029-test'",
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.hasUnpushedCommits('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result.hasUnpushed).toBe(false);
+      expect(result.count).toBe(0);
+    });
+
+    it('returns false and count 0 when no unpushed commits', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '0',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.hasUnpushedCommits('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result.hasUnpushed).toBe(false);
+      expect(result.count).toBe(0);
+    });
+
+    it('returns true and correct count when unpushed commits exist', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '3',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.hasUnpushedCommits('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result.hasUnpushed).toBe(true);
+      expect(result.count).toBe(3);
+    });
+
+    it('handles git command errors gracefully', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: 'fatal: some error',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.hasUnpushedCommits('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result.hasUnpushed).toBe(false);
+      expect(result.count).toBe(0);
+    });
+  });
+
+  describe('branchExistsOnRemote', () => {
+    it('returns true when branch exists on remote', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: 'abc123  refs/heads/ai-sdlc/S-0029-test',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.branchExistsOnRemote('ai-sdlc/S-0029-test');
+      expect(result).toBe(true);
+    });
+
+    it('returns false when branch does not exist on remote', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.branchExistsOnRemote('ai-sdlc/S-0029-test');
+      expect(result).toBe(false);
+    });
+
+    it('returns false when no remote configured', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 128,
+        stdout: '',
+        stderr: 'fatal: could not read from remote repository',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.branchExistsOnRemote('ai-sdlc/S-0029-test');
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getCommitCount', () => {
+    it('returns correct commit count for worktree', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '15',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.getCommitCount('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result).toBe(15);
+    });
+
+    it('returns 0 for new worktree with no commits', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '0',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.getCommitCount('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result).toBe(0);
+    });
+
+    it('returns 0 on error', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 128,
+        stdout: '',
+        stderr: 'fatal: not a git repository',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.getCommitCount('/test/project/.ai-sdlc/worktrees/S-0029-test');
+      expect(result).toBe(0);
+    });
+  });
+
+  describe('deleteBranch', () => {
+    it('deletes local branch successfully', () => {
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      service.deleteBranch('ai-sdlc/S-0029-test', true);
+
+      expect(spawnSyncSpy).toHaveBeenCalledWith(
+        'git',
+        ['branch', '-D', 'ai-sdlc/S-0029-test'],
+        expect.objectContaining({
+          cwd: projectRoot,
+          shell: false,
+        })
+      );
+    });
+
+    it('does not throw when branch does not exist', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: "error: branch 'ai-sdlc/S-0029-test' not found",
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      expect(() => service.deleteBranch('ai-sdlc/S-0029-test', true)).not.toThrow();
+    });
+
+    it('throws on other git errors', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: 'fatal: some other error',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      expect(() => service.deleteBranch('ai-sdlc/S-0029-test', true)).toThrow('Failed to delete branch');
+    });
+  });
+
+  describe('deleteRemoteBranch', () => {
+    it('deletes remote branch successfully', () => {
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      service.deleteRemoteBranch('ai-sdlc/S-0029-test');
+
+      expect(spawnSyncSpy).toHaveBeenCalledWith(
+        'git',
+        ['push', 'origin', '--delete', 'ai-sdlc/S-0029-test'],
+        expect.objectContaining({
+          cwd: projectRoot,
+          shell: false,
+        })
+      );
+    });
+
+    it('does not throw when remote branch does not exist', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: "error: unable to delete 'ai-sdlc/S-0029-test': remote ref does not exist",
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      expect(() => service.deleteRemoteBranch('ai-sdlc/S-0029-test')).not.toThrow();
+    });
+
+    it('throws on other git errors', () => {
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: 'fatal: could not read from remote repository',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      expect(() => service.deleteRemoteBranch('ai-sdlc/S-0029-test')).toThrow('Failed to delete remote branch');
+    });
+  });
+
+  describe('remove with force parameter', () => {
+    it('adds --force flag when force is true', () => {
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      service.remove('/test/project/.ai-sdlc/worktrees/S-0029-test', true);
+
+      expect(spawnSyncSpy).toHaveBeenCalledWith(
+        'git',
+        ['worktree', 'remove', '--force', '/test/project/.ai-sdlc/worktrees/S-0029-test'],
+        expect.objectContaining({
+          cwd: projectRoot,
+          shell: false,
+        })
+      );
+    });
+
+    it('does not add --force flag when force is false', () => {
+      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      service.remove('/test/project/.ai-sdlc/worktrees/S-0029-test', false);
+
+      expect(spawnSyncSpy).toHaveBeenCalledWith(
+        'git',
+        ['worktree', 'remove', '/test/project/.ai-sdlc/worktrees/S-0029-test'],
+        expect.objectContaining({
+          cwd: projectRoot,
+          shell: false,
+        })
+      );
+    });
+  });
+
   describe('getWorktreeStatus', () => {
     it('returns basic status for non-existent worktree', () => {
       const worktreeInfo = {

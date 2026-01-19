@@ -95,6 +95,7 @@ program
   .option('--force', 'Skip git validation and conflict checks (use with caution)')
   .option('--worktree', 'Create isolated git worktree for story execution (requires --story)')
   .option('--no-worktree', 'Disable worktree even when enabled in config')
+  .option('--clean', 'Clean existing worktree and restart from scratch (requires --story)')
   .option('--log-level <level>', 'Set log verbosity (debug, info, warn, error)', 'info')
   .action((options) => {
     if (!options.dryRun && !options.watch) {
@@ -133,6 +134,7 @@ program
         story: options.story,
         step: options.step,
         worktree: options.worktree,
+        clean: options.clean,
         watch: options.watch,
         logLevel: logConfig.level,
       },
@@ -144,6 +146,14 @@ program
       console.log(c.error('Error: --worktree requires --story flag'));
       process.exit(1);
     }
+
+    // Validate --clean requires --story
+    if (options.clean && !options.story) {
+      const c = getThemedChalk(config);
+      console.log(c.error('Error: --clean requires --story flag'));
+      process.exit(1);
+    }
+
     return run(options);
   });
 

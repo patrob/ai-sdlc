@@ -373,12 +373,130 @@ export class GitWorktreeService {
   }
 
   /**
+   * Check if worktree has unpushed commits
+   * @param worktreePath - Path to the worktree
+   * @returns Object with hasUnpushed flag and count of unpushed commits
+   */
+  hasUnpushedCommits(worktreePath: string): { hasUnpushed: boolean; count: number } {
+    const result = spawnSync('git', ['rev-list', '@{u}..HEAD', '--count'], {
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    // If no upstream branch exists (128) or command fails, assume no unpushed commits
+    if (result.status !== 0) {
+      return { hasUnpushed: false, count: 0 };
+    }
+
+    const count = parseInt(result.stdout.trim(), 10);
+    return { hasUnpushed: count > 0, count: isNaN(count) ? 0 : count };
+  }
+
+  /**
+   * Check if a branch exists on the remote
+   * @param branch - Branch name to check
+   * @returns true if branch exists on remote, false otherwise
+   */
+  branchExistsOnRemote(branch: string): boolean {
+    const result = spawnSync('git', ['ls-remote', '--heads', 'origin', branch], {
+      cwd: this.projectRoot,
+      encoding: 'utf-8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    // If command fails or no output, branch doesn't exist
+    if (result.status !== 0 || !result.stdout) {
+      return false;
+    }
+
+    // If output is not empty, branch exists
+    return result.stdout.trim().length > 0;
+  }
+
+  /**
+   * Get the total number of commits in a worktree
+   * @param worktreePath - Path to the worktree
+   * @returns Number of commits, or 0 on error
+   */
+  getCommitCount(worktreePath: string): number {
+    const result = spawnSync('git', ['rev-list', '--count', 'HEAD'], {
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (result.status !== 0) {
+      return 0;
+    }
+
+    const count = parseInt(result.stdout.trim(), 10);
+    return isNaN(count) ? 0 : count;
+  }
+
+  /**
+   * Delete a local branch
+   * @param branch - Branch name to delete
+   * @param force - Whether to force delete (use -D instead of -d)
+   * @throws Error if deletion fails (unless branch doesn't exist)
+   */
+  deleteBranch(branch: string, force: boolean = true): void {
+    const args = force ? ['branch', '-D', branch] : ['branch', '-d', branch];
+    const result = spawnSync('git', args, {
+      cwd: this.projectRoot,
+      encoding: 'utf-8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (result.status !== 0) {
+      const stderr = result.stderr?.toString() || '';
+      // Don't throw if branch doesn't exist (idempotent operation)
+      if (stderr.includes('not found')) {
+        return;
+      }
+      throw new Error(`Failed to delete branch ${branch}: ${stderr}`);
+    }
+  }
+
+  /**
+   * Delete a remote branch
+   * @param branch - Branch name to delete from remote
+   * @throws Error if deletion fails (unless branch doesn't exist)
+   */
+  deleteRemoteBranch(branch: string): void {
+    const result = spawnSync('git', ['push', 'origin', '--delete', branch], {
+      cwd: this.projectRoot,
+      encoding: 'utf-8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (result.status !== 0) {
+      const stderr = result.stderr?.toString() || '';
+      // Don't throw if remote branch doesn't exist (idempotent operation)
+      if (stderr.includes('remote ref does not exist')) {
+        return;
+      }
+      throw new Error(`Failed to delete remote branch ${branch}: ${stderr}`);
+    }
+  }
+
+  /**
    * Remove a git worktree
    * @param worktreePath - Absolute path to the worktree to remove
+   * @param force - Whether to force remove (ignores uncommitted changes)
    * @throws Error if removal fails
    */
-  remove(worktreePath: string): void {
-    const result = spawnSync('git', ['worktree', 'remove', worktreePath], {
+  remove(worktreePath: string, force: boolean = false): void {
+    const args = force
+      ? ['worktree', 'remove', '--force', worktreePath]
+      : ['worktree', 'remove', worktreePath];
+
+    const result = spawnSync('git', args, {
       cwd: this.projectRoot,
       encoding: 'utf-8',
       shell: false,

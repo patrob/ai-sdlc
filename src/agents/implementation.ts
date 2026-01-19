@@ -1,5 +1,6 @@
 import { execSync, spawn, spawnSync } from 'child_process';
 import path from 'path';
+import { ProcessManager } from '../core/process-manager.js';
 import {
   parseStory,
   writeStory,
@@ -114,6 +115,8 @@ export async function runSingleTest(
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
+    ProcessManager.getInstance().registerChild(child);
+
     const timeoutId = setTimeout(() => {
       killed = true;
       child.kill('SIGTERM');
@@ -169,6 +172,8 @@ export async function runAllTests(
       cwd: workingDir,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+
+    ProcessManager.getInstance().registerChild(child);
 
     const timeoutId = setTimeout(() => {
       killed = true;

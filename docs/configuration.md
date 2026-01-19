@@ -1,26 +1,52 @@
 # Configuration Reference
 
-## Introduction
+This document provides a complete reference for the `.ai-sdlc.json` configuration file.
 
-The ai-sdlc CLI is configured via a `.ai-sdlc.json` file located in your project root directory. This file controls all aspects of the SDLC workflow, from story refinement to implementation and review processes.
+## Table of Contents
 
-**Quick Links:**
-- [Core Options](#core-options)
-- [Stage Gates](#stage-gates-stagegates)
-- [Refinement](#refinement-refinement)
-- [Review Configuration](#review-configuration-reviewconfig)
-- [Implementation](#implementation-implementation)
-- [Timeouts](#timeouts-timeouts)
-- [Retry Configuration](#retry-configuration-retry)
-- [Daemon](#daemon-daemon)
-- [TDD Mode](#tdd-mode-tdd)
-- [Worktree](#worktree-worktree)
-- [Logging](#logging-logging)
-- [GitHub Integration](#github-integration-github)
-- [Environment Variables](#environment-variable-overrides)
+- [Quick Start](#quick-start)
+- [Configuration Reference](#configuration-reference)
+  - [Core Options](#core-options)
+  - [Stage Gates](#stage-gates-stagegates)
+  - [Refinement](#refinement-refinement)
+  - [Review Configuration](#review-configuration-reviewconfig)
+  - [Implementation](#implementation-implementation)
+  - [Timeouts](#timeouts-timeouts)
+  - [Retry Configuration](#retry-configuration-retry)
+  - [Daemon](#daemon-daemon)
+  - [TDD Mode](#tdd-mode-tdd)
+  - [Worktree](#worktree-worktree)
+  - [Logging](#logging-logging)
+  - [GitHub Integration](#github-integration-github)
+- [Environment Variable Overrides](#environment-variable-overrides)
 - [Validation Rules](#validation-rules)
-- [Examples](#example-configurations)
+- [Example Configurations](#example-configurations)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## Quick Start
+
+The `.ai-sdlc.json` configuration file should be placed in the root of your project directory. If no configuration file exists, ai-sdlc will use default values for all options.
+
+**Minimal configuration** (uses all defaults):
+```json
+{}
+```
+
+**Basic customization**:
+```json
+{
+  "sdlcFolder": ".ai-sdlc",
+  "testCommand": "npm test",
+  "buildCommand": "npm run build",
+  "theme": "auto"
+}
+```
+
+For complete examples, see the [Example Configurations](#example-configurations) section.
+
+---
 
 ## Configuration Reference
 
@@ -28,252 +54,438 @@ The ai-sdlc CLI is configured via a `.ai-sdlc.json` file located in your project
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `sdlcFolder` | `string` | `".ai-sdlc"` | Root directory for ai-sdlc metadata, story files, and worktrees |
+| `sdlcFolder` | `string` | `".ai-sdlc"` | Root directory for ai-sdlc metadata and story files |
 | `defaultLabels` | `string[]` | `[]` | Labels automatically applied to all new stories |
-| `theme` | `"auto" \| "light" \| "dark" \| "none"` | `"auto"` | Terminal theme preference for output formatting |
-| `testCommand` | `string` | `"npm test"` | Command executed to run project tests |
-| `buildCommand` | `string` | `"npm run build"` | Command executed to build the project |
-| `settingSources` | `("user" \| "project" \| "local")[]` | `["project"]` | Configuration source precedence order |
-| `useOrchestrator` | `boolean` | `false` | Enable orchestrator mode for multi-agent coordination |
+| `theme` | `"auto" \| "light" \| "dark" \| "none"` | `"auto"` | Terminal theme preference for output formatting. `"auto"` detects based on terminal, `"none"` disables all colors |
+| `testCommand` | `string \| undefined` | `"npm test"` | Command executed to run project tests. If undefined, tests are skipped |
+| `buildCommand` | `string \| undefined` | `"npm run build"` | Command executed to build the project. If undefined, build is skipped |
+| `settingSources` | `SettingSource[]` | `["project"]` | Configuration precedence for Agent SDK filesystem settings. Valid values: `"user"` (global `~/.claude/settings.json`), `"project"` (`.claude/settings.json` and CLAUDE.md), `"local"` (`.claude/settings.local.json`). Empty array means SDK isolation mode with no filesystem settings |
+| `useOrchestrator` | `boolean \| undefined` | `false` | Enable sequential task orchestrator for implementation. When true, implementation runs as separate agents orchestrated sequentially |
+
+**Notes:**
+- `testCommand` and `buildCommand` are validated against a whitelist of safe executables. See [Validation Rules](#validation-rules).
+- `settingSources` controls which `.claude/` configuration files are loaded by the Agent SDK. Must include `"project"` to load CLAUDE.md files.
+
+---
 
 ### Stage Gates (`stageGates`)
 
-Stage gates control approval requirements at key workflow transitions.
+Stage gates control approval points in the workflow where user confirmation is required before proceeding.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `stageGates.requireApprovalBeforeImplementation` | `boolean` | `true` | Require user approval before starting implementation phase |
-| `stageGates.requireApprovalBeforePR` | `boolean` | `true` | Require user approval before creating pull request |
-| `stageGates.autoMergeOnApproval` | `boolean` | `false` | Automatically merge PR when approved (requires GitHub integration) |
+| `stageGates.requireApprovalBeforeImplementation` | `boolean` | `false` | Require user approval before starting implementation phase (after plan is complete) |
+| `stageGates.requireApprovalBeforePR` | `boolean` | `false` | Require user approval before creating pull request |
+| `stageGates.autoMergeOnApproval` | `boolean` | `false` | Automatically merge PR when approved (requires GitHub integration and permissions) |
+
+**Example:**
+```json
+{
+  "stageGates": {
+    "requireApprovalBeforeImplementation": true,
+    "requireApprovalBeforePR": true,
+    "autoMergeOnApproval": false
+  }
+}
+```
+
+---
 
 ### Refinement (`refinement`)
 
-Controls the story refinement loop behavior.
+Controls the refinement loop behavior when clarifying story requirements.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `refinement.maxIterations` | `number` | `3` | Maximum refinement loops before escalation |
-| `refinement.escalateOnMaxAttempts` | `"manual" \| "auto"` | `"manual"` | How to handle max iterations: require user input (`manual`) or auto-proceed (`auto`) |
-| `refinement.enableCircuitBreaker` | `boolean` | `true` | Stop refinement if repeated failures detected |
+| `refinement.escalateOnMaxAttempts` | `"error" \| "manual" \| "skip"` | `"manual"` | How to handle max iterations: `"error"` throws error, `"manual"` requires user input, `"skip"` proceeds anyway |
+| `refinement.enableCircuitBreaker` | `boolean` | `true` | Stop refinement if repeated failures detected (prevents infinite loops) |
+
+**Example:**
+```json
+{
+  "refinement": {
+    "maxIterations": 5,
+    "escalateOnMaxAttempts": "manual",
+    "enableCircuitBreaker": true
+  }
+}
+```
+
+---
 
 ### Review Configuration (`reviewConfig`)
 
-Controls the review phase behavior and retry logic.
+Controls the review process and automatic retry behavior.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `reviewConfig.maxRetries` | `number` | `3` | Maximum review retry attempts before escalation |
-| `reviewConfig.maxRetriesUpperBound` | `number` | `10` | Hard limit for maxRetries (cannot be exceeded) |
-| `reviewConfig.autoCompleteOnApproval` | `boolean` | `true` | Automatically complete story when review is approved |
-| `reviewConfig.autoRestartOnRejection` | `boolean` | `true` | Automatically restart implementation when review is rejected |
-| `reviewConfig.requirePassingTests` | `boolean` | `true` | Require tests to pass before completing review |
+| `reviewConfig.maxRetries` | `number` | `3` | Maximum retry attempts when review fails before blocking. Set to `0` to disable auto-retry. Can be overridden by `AI_SDLC_MAX_RETRIES` environment variable |
+| `reviewConfig.maxRetriesUpperBound` | `number` | `10` | Hard upper bound for maxRetries (safety limit to prevent resource exhaustion) |
+| `reviewConfig.autoCompleteOnApproval` | `boolean` | `true` | Automatically complete story when review is approved. Can be overridden by `AI_SDLC_AUTO_COMPLETE` environment variable |
+| `reviewConfig.autoRestartOnRejection` | `boolean` | `true` | Automatically restart implementation when review is rejected (within retry limits). Can be overridden by `AI_SDLC_AUTO_RESTART` environment variable |
+| `reviewConfig.detectTestAntipatterns` | `boolean \| undefined` | `true` | Enable test anti-pattern detection (e.g., test duplication, missing assertions) |
+| `reviewConfig.autoCreatePROnApproval` | `boolean \| undefined` | `false` | Automatically create PR after review approval in automated mode. Set to `true` when `--auto` flag is used |
+
+**Example:**
+```json
+{
+  "reviewConfig": {
+    "maxRetries": 5,
+    "maxRetriesUpperBound": 10,
+    "autoCompleteOnApproval": true,
+    "autoRestartOnRejection": true,
+    "detectTestAntipatterns": true
+  }
+}
+```
+
+---
 
 ### Implementation (`implementation`)
 
-Controls implementation phase behavior.
+Controls implementation retry behavior when tests or build fail.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `implementation.maxRetries` | `number` | `3` | Maximum implementation retry attempts |
-| `implementation.requirePassingTests` | `boolean` | `true` | Require tests to pass before marking implementation complete |
-| `implementation.maxFilesToModify` | `number` | `50` | Maximum number of files that can be modified in a single implementation |
+| `implementation.maxRetries` | `number` | `3` | Maximum retry attempts when implementation fails (e.g., tests fail, build fails). Set to `0` to disable retry. Can be overridden by `AI_SDLC_IMPLEMENTATION_MAX_RETRIES` environment variable |
+| `implementation.maxRetriesUpperBound` | `number` | `10` | Hard upper bound for maxRetries (safety limit to prevent resource exhaustion) |
+
+**Example:**
+```json
+{
+  "implementation": {
+    "maxRetries": 5,
+    "maxRetriesUpperBound": 10
+  }
+}
+```
+
+---
 
 ### Timeouts (`timeouts`)
 
-All timeout values are in milliseconds. Valid range: 5000ms (5 seconds) to 3600000ms (1 hour).
+Timeout configuration for various operations. All values are in milliseconds.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `timeouts.agentTimeout` | `number` | `600000` | Maximum time for agent operations (10 minutes) |
-| `timeouts.networkTimeout` | `number` | `30000` | Maximum time for network requests (30 seconds) |
-| `timeouts.commandTimeout` | `number` | `300000` | Maximum time for command execution (5 minutes) |
-| `timeouts.testTimeout` | `number` | `300000` | Maximum time for test execution (5 minutes) |
+| `timeouts.agentTimeout` | `number` | `600000` (10 minutes) | Timeout for agent queries in milliseconds. Valid range: 5000-3600000 (5 seconds to 1 hour) |
+| `timeouts.buildTimeout` | `number` | `120000` (2 minutes) | Timeout for build commands in milliseconds. Valid range: 5000-3600000 |
+| `timeouts.testTimeout` | `number` | `300000` (5 minutes) | Timeout for test commands in milliseconds. Valid range: 5000-3600000 |
+
+**Example:**
+```json
+{
+  "timeouts": {
+    "agentTimeout": 1800000,
+    "buildTimeout": 180000,
+    "testTimeout": 600000
+  }
+}
+```
+
+**Note:** Timeout values are validated and clamped to the 5000-3600000ms range. Invalid values trigger a warning and use the default.
+
+---
 
 ### Retry Configuration (`retry`)
 
-Controls exponential backoff retry behavior for failed operations.
+Controls automatic retry behavior for API calls (e.g., transient network failures, rate limits).
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `retry.initialDelay` | `number` | `1000` | Initial delay before first retry (milliseconds) |
-| `retry.maxDelay` | `number` | `30000` | Maximum delay between retries (milliseconds) |
-| `retry.backoffMultiplier` | `number` | `2` | Multiplier for exponential backoff |
-| `retry.maxRetries` | `number` | `3` | Maximum number of retry attempts |
+| `retry.maxRetries` | `number` | `3` | Maximum number of retry attempts for API calls |
+| `retry.initialDelay` | `number` | `2000` (2 seconds) | Initial delay in milliseconds before first retry |
+| `retry.maxDelay` | `number` | `32000` (32 seconds) | Maximum delay in milliseconds between retries (exponential backoff cap) |
+| `retry.maxTotalDuration` | `number` | `60000` (60 seconds) | Maximum total duration in milliseconds for all retries combined |
+
+**Example:**
+```json
+{
+  "retry": {
+    "maxRetries": 5,
+    "initialDelay": 1000,
+    "maxDelay": 60000,
+    "maxTotalDuration": 120000
+  }
+}
+```
+
+---
 
 ### Daemon (`daemon`)
 
-Controls the background daemon process for parallel story execution.
+Controls daemon/watch mode for continuous backlog monitoring and automatic story processing.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `daemon.enabled` | `boolean` | `false` | Enable daemon mode for background processing |
-| `daemon.port` | `number` | `3000` | Port for daemon HTTP server |
-| `daemon.host` | `string` | `"localhost"` | Host address for daemon server |
-| `daemon.autoStart` | `boolean` | `true` | Automatically start daemon if not running |
-| `daemon.maxWorkers` | `number` | `3` | Maximum concurrent story workers |
+| `daemon.enabled` | `boolean` | `false` | Enable daemon mode for continuous monitoring |
+| `daemon.pollingInterval` | `number` | `5000` (5 seconds) | Polling interval fallback if file system watcher fails (milliseconds) |
+| `daemon.watchPatterns` | `string[]` | `["stories/*/story.md"]` | Glob patterns to watch for new stories |
+| `daemon.processDelay` | `number` | `500` (500ms) | Debounce delay for file changes (milliseconds) to avoid processing duplicate events |
+| `daemon.shutdownTimeout` | `number` | `30000` (30 seconds) | Max time to wait for graceful shutdown (milliseconds) |
+| `daemon.enableEscShutdown` | `boolean` | `false` | Enable Esc+Esc shutdown (Phase 2 feature, currently only Ctrl+C supported) |
+| `daemon.escTimeout` | `number` | `500` (500ms) | Max time between Esc presses for shutdown (milliseconds) |
+
+**Example:**
+```json
+{
+  "daemon": {
+    "enabled": true,
+    "pollingInterval": 10000,
+    "watchPatterns": ["stories/*/story.md", "backlog/*.md"],
+    "processDelay": 1000,
+    "shutdownTimeout": 60000
+  }
+}
+```
+
+---
 
 ### TDD Mode (`tdd`)
 
-Controls test-driven development workflow features.
+Controls test-driven development workflow with red-green-refactor cycles.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `tdd.enabled` | `boolean` | `false` | Enable TDD mode with automatic test execution |
-| `tdd.testCommand` | `string` | `"npm test"` | Command to run tests in TDD mode |
-| `tdd.autoRun` | `boolean` | `true` | Automatically run tests after code changes |
-| `tdd.watchMode` | `boolean` | `false` | Run tests in watch mode (if supported by test framework) |
+| `tdd.enabled` | `boolean` | `false` | Enable test-driven development workflow |
+| `tdd.strictMode` | `boolean` | `true` | Enforce strict TDD rules (fail if test doesn't fail first in red phase) |
+| `tdd.maxCycles` | `number` | `50` | Maximum number of red-green-refactor cycles before stopping |
+| `tdd.requireApprovalPerCycle` | `boolean` | `false` | Require user approval after each red-green-refactor cycle |
+| `tdd.requirePassingTestsForComplete` | `boolean` | `true` | Require all tests passing before marking story complete |
+
+**Example:**
+```json
+{
+  "tdd": {
+    "enabled": true,
+    "strictMode": true,
+    "maxCycles": 30,
+    "requireApprovalPerCycle": false,
+    "requirePassingTestsForComplete": true
+  }
+}
+```
+
+---
 
 ### Worktree (`worktree`)
 
-Controls git worktree usage for isolated story development.
+Controls git worktree usage for isolated story execution. Worktrees allow parallel development of multiple stories without branch switching.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `worktree.enabled` | `boolean` | `false` | Enable worktree mode for parallel story branches |
-| `worktree.basePath` | `string` | `".ai-sdlc/worktrees"` | Base directory for worktree checkouts |
+| `worktree.enabled` | `boolean` | `false` | Enable worktrees by default for story execution |
+| `worktree.basePath` | `string` | `".ai-sdlc/worktrees"` | Base path for worktree directories (relative to project root or absolute). Parent directory must exist |
+
+**Example:**
+```json
+{
+  "worktree": {
+    "enabled": true,
+    "basePath": ".ai-sdlc/worktrees"
+  }
+}
+```
+
+**Note:** When worktrees are enabled, each story is executed in an isolated git worktree, allowing multiple stories to be developed in parallel without conflicts.
+
+---
 
 ### Logging (`logging`)
 
-Controls log output and persistence.
+Controls logging behavior for diagnostics and debugging.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `logging.level` | `"debug" \| "info" \| "warn" \| "error"` | `"info"` | Minimum log level to output |
-| `logging.file` | `string \| null` | `null` | Optional log file path (if null, logs to stdout only) |
-| `logging.format` | `"json" \| "text"` | `"text"` | Log output format |
-| `logging.timestamp` | `boolean` | `true` | Include timestamps in log output |
+| `logging.enabled` | `boolean` | `true` | Enable logging to file |
+| `logging.level` | `"debug" \| "info" \| "warn" \| "error"` | `"info"` | Minimum log level to record. Can be overridden by `AI_SDLC_LOG_LEVEL` environment variable |
+| `logging.maxFileSizeMb` | `number` | `10` | Maximum log file size in MB before rotation |
+| `logging.maxFiles` | `number` | `5` | Maximum number of log files to retain after rotation |
+
+**Example:**
+```json
+{
+  "logging": {
+    "enabled": true,
+    "level": "debug",
+    "maxFileSizeMb": 20,
+    "maxFiles": 10
+  }
+}
+```
+
+---
 
 ### GitHub Integration (`github`)
 
-Controls GitHub API integration for PR and issue management.
+Controls GitHub PR creation behavior and integration settings.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `github.token` | `string \| null` | `null` | GitHub personal access token (can also use GITHUB_TOKEN env var) |
-| `github.org` | `string \| null` | `null` | GitHub organization name |
-| `github.repo` | `string \| null` | `null` | GitHub repository name |
+| `github.createDraftPRs` | `boolean \| undefined` | `undefined` (uses GitHub CLI default) | Create PRs as drafts by default. When undefined, uses `gh` CLI default behavior |
+
+**Example:**
+```json
+{
+  "github": {
+    "createDraftPRs": true
+  }
+}
+```
+
+---
 
 ## Environment Variable Overrides
 
 The ai-sdlc CLI supports overriding specific configuration options via environment variables. This is useful for:
 - CI/CD pipelines where file-based config is inconvenient
 - Temporary behavior changes without modifying `.ai-sdlc.json`
-- User-specific settings that shouldn't be committed
+- User-specific settings that shouldn't be committed to the repository
 
 ### Naming Convention
 
-Environment variables follow the pattern: `AI_SDLC_<OPTION_NAME>`
+Environment variables follow the pattern: `AI_SDLC_<CONFIG_PATH>`
+
+For nested configuration fields, the path is flattened using underscores in SCREAMING_SNAKE_CASE.
+
+**Examples:**
+- `reviewConfig.maxRetries` → `AI_SDLC_MAX_RETRIES`
+- `logging.level` → `AI_SDLC_LOG_LEVEL`
+- `implementation.maxRetries` → `AI_SDLC_IMPLEMENTATION_MAX_RETRIES`
 
 ### Precedence Rules
 
 Configuration is resolved in this order (highest to lowest precedence):
+
 1. **Environment variables** (`AI_SDLC_*`)
-2. **Local configuration** (`.ai-sdlc.local.json` - if `settingSources` includes `"local"`)
-3. **Project configuration** (`.ai-sdlc.json` in project root - if `settingSources` includes `"project"`)
-4. **User configuration** (`~/.ai-sdlc/config.json` - if `settingSources` includes `"user"`)
-5. **Built-in defaults** (hardcoded in source)
+2. **Project configuration** (`.ai-sdlc.json` in project root)
+3. **Built-in defaults** (hardcoded in source)
 
 ⚠️ **Important**: Environment variables override ALL file-based configuration sources.
 
-### Supported Environment Variables
+### Supported Variables
 
 | Environment Variable | Config Property | Type | Valid Values | Description |
 |---------------------|-----------------|------|--------------|-------------|
-| `AI_SDLC_ROOT` | `sdlcFolder` | `string` | Valid path | **Testing only** - Override SDLC root folder |
-| `AI_SDLC_MAX_RETRIES` | `reviewConfig.maxRetries` | `number` | `0-10` | Maximum review retry attempts |
-| `AI_SDLC_IMPLEMENTATION_MAX_RETRIES` | `implementation.maxRetries` | `number` | `0-10` | Maximum implementation retry attempts |
-| `AI_SDLC_AUTO_COMPLETE` | `reviewConfig.autoCompleteOnApproval` | `boolean` | `"true"` or `"false"` | Auto-complete story on review approval |
-| `AI_SDLC_AUTO_RESTART` | `reviewConfig.autoRestartOnRejection` | `boolean` | `"true"` or `"false"` | Auto-restart implementation on review rejection |
-| `AI_SDLC_LOG_LEVEL` | `logging.level` | `string` | `"debug"`, `"info"`, `"warn"`, `"error"` | Logging verbosity |
+| `AI_SDLC_ROOT` | `sdlcFolder` | `string` | Valid path | **Testing only** - Override SDLC root folder. Not recommended for production use |
+| `AI_SDLC_MAX_RETRIES` | `reviewConfig.maxRetries` | `number` | `0-10` | Maximum review retry attempts. Values outside range are rejected |
+| `AI_SDLC_IMPLEMENTATION_MAX_RETRIES` | `implementation.maxRetries` | `number` | `0-10` | Maximum implementation retry attempts. Values outside range are rejected |
+| `AI_SDLC_AUTO_COMPLETE` | `reviewConfig.autoCompleteOnApproval` | `boolean` | `"true"` or `"false"` | Auto-complete story on review approval. Must be string "true" or "false" |
+| `AI_SDLC_AUTO_RESTART` | `reviewConfig.autoRestartOnRejection` | `boolean` | `"true"` or `"false"` | Auto-restart implementation on review rejection. Must be string "true" or "false" |
+| `AI_SDLC_LOG_LEVEL` | `logging.level` | `string` | `"debug"`, `"info"`, `"warn"`, `"error"` | Logging verbosity (case-insensitive) |
 
 ### Usage Examples
 
-**Bash/Zsh**:
+**Bash/Zsh:**
 ```bash
 export AI_SDLC_LOG_LEVEL=debug
 export AI_SDLC_MAX_RETRIES=5
 ai-sdlc start
 ```
 
-**One-time override**:
+**One-time override:**
 ```bash
-AI_SDLC_AUTO_COMPLETE=true ai-sdlc review
+AI_SDLC_AUTO_COMPLETE=true ai-sdlc review S-0001
 ```
 
-**CI/CD (GitHub Actions)**:
+**CI/CD (GitHub Actions):**
 ```yaml
 - name: Run ai-sdlc
   env:
     AI_SDLC_LOG_LEVEL: info
     AI_SDLC_MAX_RETRIES: 3
-  run: ai-sdlc implement
+    AI_SDLC_AUTO_COMPLETE: true
+  run: ai-sdlc implement --auto
 ```
+
+**Fish shell:**
+```fish
+set -x AI_SDLC_LOG_LEVEL debug
+ai-sdlc status
+```
+
+---
 
 ## Validation Rules
 
-The configuration system enforces strict validation to prevent security issues and invalid states.
+The configuration system includes multiple layers of validation to prevent security issues and invalid configurations.
 
 ### Command Validation
 
-For security, only whitelisted executables are allowed in `testCommand` and `buildCommand`:
+`testCommand` and `buildCommand` are validated to prevent command injection attacks:
 
-**Allowed executables**: `npm`, `yarn`, `pnpm`, `node`, `npx`, `bun`, `make`, `mvn`, `gradle`
+**Whitelist of allowed executables:**
+- `npm`, `yarn`, `pnpm`, `node`, `npx`, `bun` (JavaScript package managers)
+- `make`, `mvn`, `gradle` (Build tools)
 
-**Blocked shell metacharacters**: `;`, `&`, `|`, `` ` ``, `$()`, `${}`, `>`, `<`, `\n`
+**Blocked shell metacharacters:**
+- `;`, `&`, `|` (command chaining)
+- `` ` ``, `$()`, `${}` (command/variable substitution)
 
-**Example valid commands**:
-```json
-{
-  "testCommand": "npm test",
-  "buildCommand": "npm run build -- --prod"
-}
-```
+**Examples:**
+- ✅ Valid: `"npm test"`, `"yarn run build"`, `"make test"`
+- ❌ Invalid: `"npm test && echo 'done'"` (contains `&&`)
+- ❌ Invalid: `"python test.py"` (not in whitelist)
 
-**Example invalid commands**:
-```json
-{
-  "testCommand": "npm test && echo done",  // Error: contains &&
-  "buildCommand": "python build.py"        // Error: python not whitelisted
-}
-```
+If validation fails, a warning is logged and the command is ignored (uses default or skips execution).
 
 ### Timeout Validation
 
-All timeout values must be within this range:
-- **Minimum**: 5000ms (5 seconds)
-- **Maximum**: 3600000ms (1 hour)
-- Must be finite numbers (not `Infinity` or `NaN`)
+All timeout values must be within the range **5000-3600000 milliseconds** (5 seconds to 1 hour).
 
-### Type Validation
+**Validation behavior:**
+- Values below 5000ms → Clamped to 5000ms with warning
+- Values above 3600000ms → Clamped to 3600000ms with warning
+- Non-numeric or infinite values → Ignored, uses default value
 
-Boolean fields must be actual booleans, not strings:
+**Example:**
 ```json
 {
-  "tdd": {
-    "enabled": true        // ✓ Correct
+  "timeouts": {
+    "agentTimeout": 2000  // ❌ Too low, clamped to 5000ms
   }
 }
 ```
 
+### Type Validation
+
+All configuration fields are validated for correct types:
+
+**Common type errors:**
+- Boolean fields must be `true` or `false` (not string `"true"`)
+- Numeric fields must be finite numbers (not strings or NaN)
+- Array fields must be arrays (not strings or objects)
+
+**Example:**
 ```json
 {
   "tdd": {
-    "enabled": "true"      // ✗ Error: must be boolean, not string
+    "enabled": "true"  // ❌ Wrong type (string instead of boolean)
   }
 }
 ```
 
 ### Setting Sources Validation
 
-The `settingSources` array must only contain valid values:
-- Valid: `"user"`, `"project"`, `"local"`
-- Order matters: earlier sources have lower precedence
+`settingSources` must be an array of valid values: `"user"`, `"project"`, or `"local"`.
+
+**Examples:**
+- ✅ Valid: `["project"]`, `["user", "project", "local"]`, `[]`
+- ❌ Invalid: `["global"]` (not a valid source)
+- ❌ Invalid: `"project"` (not an array)
+
+Invalid values are filtered out with a warning, and the array is updated to contain only valid sources.
 
 ### Security Features
 
-1. **Prototype Pollution Prevention**: Configuration loading prevents prototype pollution attacks
-2. **Command Injection Prevention**: Strict command whitelist and metacharacter blocking
-3. **Path Traversal Prevention**: Paths are normalized and validated
+**Prototype Pollution Prevention:**
+The configuration loader rejects objects containing `__proto__`, `constructor`, or `prototype` properties to prevent prototype pollution attacks.
+
+**Retry Limits:**
+`maxRetries` fields are capped at 10 (via `maxRetriesUpperBound`) to prevent resource exhaustion from misconfiguration.
+
+---
 
 ## Example Configurations
 
@@ -285,35 +497,44 @@ For most projects, you can start with an empty configuration file to use all def
 {}
 ```
 
-This uses all built-in defaults: manual approval gates, 3 retry attempts, 10-minute agent timeout, etc.
+**Behavior:**
+- Uses `.ai-sdlc` folder for metadata
+- No manual approval required before implementation or PR creation
+- Runs `npm test` and `npm run build` before review
+- 3 retry attempts for review and implementation failures
+- 10-minute agent timeout, 2-minute build timeout, 5-minute test timeout
+
+---
 
 ### Example 2: TDD Workflow
 
-Enable test-driven development with automatic test execution and manual approval gates:
+Enable test-driven development with automatic test execution:
 
 ```json
 {
   "tdd": {
     "enabled": true,
-    "testCommand": "npm test",
-    "autoRun": true
+    "strictMode": true,
+    "maxCycles": 30,
+    "requireApprovalPerCycle": false,
+    "requirePassingTestsForComplete": true
   },
   "stageGates": {
     "requireApprovalBeforeImplementation": true,
     "requireApprovalBeforePR": true
   },
-  "reviewConfig": {
-    "requirePassingTests": true,
-    "autoCompleteOnApproval": false
-  }
+  "testCommand": "npm test",
+  "buildCommand": "npm run build"
 }
 ```
 
-**Use case**: Projects where you want to see test results before each phase transition.
+**Use case:** Projects following strict TDD methodology with red-green-refactor cycles.
 
-### Example 3: Worktree Mode (Parallel Development)
+---
 
-Use worktrees for isolated story branches with daemon mode for parallel execution:
+### Example 3: Worktree Mode (Isolated Development)
+
+Use worktrees for parallel story development with automatic processing:
 
 ```json
 {
@@ -323,35 +544,41 @@ Use worktrees for isolated story branches with daemon mode for parallel executio
   },
   "daemon": {
     "enabled": true,
-    "port": 3000,
-    "autoStart": true,
-    "maxWorkers": 3
+    "pollingInterval": 5000,
+    "watchPatterns": ["stories/*/story.md"],
+    "processDelay": 500
   },
   "stageGates": {
     "requireApprovalBeforeImplementation": false,
-    "requireApprovalBeforePR": true
+    "requireApprovalBeforePR": false
   }
 }
 ```
 
-**Use case**: Teams working on multiple stories simultaneously without branch conflicts.
+**Use case:** Teams working on multiple stories concurrently without branch switching overhead.
+
+---
 
 ### Example 4: Custom Timeouts and Retry Limits
 
-Extended timeouts and increased retry limits for large codebases or slow tests:
+Extended timeouts for large projects with complex builds:
 
 ```json
 {
   "timeouts": {
     "agentTimeout": 1800000,
-    "testTimeout": 600000,
-    "commandTimeout": 600000
+    "buildTimeout": 600000,
+    "testTimeout": 900000
   },
   "reviewConfig": {
-    "maxRetries": 5
+    "maxRetries": 5,
+    "maxRetriesUpperBound": 10,
+    "autoCompleteOnApproval": true,
+    "autoRestartOnRejection": true
   },
   "implementation": {
-    "maxRetries": 5
+    "maxRetries": 5,
+    "maxRetriesUpperBound": 10
   },
   "refinement": {
     "maxIterations": 5,
@@ -360,11 +587,13 @@ Extended timeouts and increased retry limits for large codebases or slow tests:
 }
 ```
 
-**Use case**: Complex projects where operations need more time and retries.
+**Use case:** Large monorepos or projects with slow builds/tests requiring extended timeouts and more retry attempts.
+
+---
 
 ### Example 5: Production-Ready (Strict)
 
-Full control with manual approvals, no auto-actions, and extended timeouts:
+Full control with manual approvals and extended timeouts for production deployments:
 
 ```json
 {
@@ -375,19 +604,15 @@ Full control with manual approvals, no auto-actions, and extended timeouts:
   },
   "reviewConfig": {
     "maxRetries": 5,
+    "maxRetriesUpperBound": 10,
     "autoCompleteOnApproval": false,
     "autoRestartOnRejection": false,
-    "requirePassingTests": true
-  },
-  "implementation": {
-    "requirePassingTests": true,
-    "maxRetries": 5
+    "detectTestAntipatterns": true
   },
   "timeouts": {
     "agentTimeout": 1800000,
-    "networkTimeout": 60000,
-    "testTimeout": 600000,
-    "commandTimeout": 600000
+    "buildTimeout": 600000,
+    "testTimeout": 900000
   },
   "refinement": {
     "maxIterations": 5,
@@ -395,118 +620,138 @@ Full control with manual approvals, no auto-actions, and extended timeouts:
     "enableCircuitBreaker": true
   },
   "logging": {
+    "enabled": true,
     "level": "info",
-    "file": ".ai-sdlc/logs/ai-sdlc.log",
-    "format": "json",
-    "timestamp": true
+    "maxFileSizeMb": 20,
+    "maxFiles": 10
+  },
+  "github": {
+    "createDraftPRs": true
   }
 }
 ```
 
-**Use case**: Production environments where you want maximum control and audit trail.
+**Use case:** Production environments requiring strict human oversight, extended timeouts, and comprehensive logging.
+
+---
 
 ## Troubleshooting
 
-### Error: "Invalid command: contains disallowed characters"
+### Problem: "Invalid or unsafe testCommand in config, removing"
 
-**Cause**: Your `testCommand` or `buildCommand` contains shell metacharacters that are blocked for security.
+**Cause:** The `testCommand` contains a disallowed executable or dangerous shell metacharacters.
 
-**Solution**: Remove shell operators like `&&`, `||`, `;`, `&`, or pipes. Chain commands using npm scripts instead:
+**Solution:**
+1. Ensure the executable is in the whitelist: `npm`, `yarn`, `pnpm`, `node`, `npx`, `bun`, `make`, `mvn`, `gradle`
+2. Remove shell operators like `;`, `&&`, `|`, or `$()`
 
+**Example fix:**
 ```json
-// ✗ Wrong
+// ❌ Bad
 {
-  "testCommand": "npm run lint && npm test"
+  "testCommand": "npm test && npm run lint"
 }
 
-// ✓ Correct - use npm script
+// ✅ Good (use npm scripts instead)
 {
-  "testCommand": "npm run test:all"
+  "testCommand": "npm run test-and-lint"
 }
 ```
 
-Then in `package.json`:
+And in `package.json`:
 ```json
 {
   "scripts": {
-    "test:all": "npm run lint && npm test"
+    "test-and-lint": "npm test && npm run lint"
   }
 }
 ```
 
-### Error: "Invalid command: executable not whitelisted"
+---
 
-**Cause**: Your command uses an executable that's not in the security whitelist.
+### Problem: "Invalid testCommand in config (must be object), ignoring"
 
-**Solution**: Use a whitelisted executable (`npm`, `yarn`, `pnpm`, `node`, `npx`, `bun`, `make`, `mvn`, `gradle`):
+**Cause:** The `testCommand` field is not a string.
 
+**Solution:** Ensure `testCommand` is a string, not an object or array.
+
+**Example fix:**
 ```json
-// ✗ Wrong
+// ❌ Bad
 {
-  "testCommand": "python -m pytest"
+  "testCommand": ["npm", "test"]
 }
 
-// ✓ Correct - use npm/npx wrapper
+// ✅ Good
 {
-  "testCommand": "npx pytest"
+  "testCommand": "npm test"
 }
 ```
 
-### Error: "Timeout must be between 5000 and 3600000"
+---
 
-**Cause**: A timeout value is outside the valid range (5 seconds to 1 hour).
+### Problem: "agentTimeout is below minimum (5000ms), setting to minimum"
 
-**Solution**: Adjust timeout to be within bounds:
+**Cause:** A timeout value is below the minimum allowed threshold (5 seconds).
 
+**Solution:** Increase the timeout to at least 5000ms (5 seconds).
+
+**Example fix:**
 ```json
-// ✗ Wrong
+// ❌ Bad
 {
   "timeouts": {
-    "agentTimeout": 999999999
+    "agentTimeout": 2000
   }
 }
 
-// ✓ Correct
+// ✅ Good
 {
   "timeouts": {
-    "agentTimeout": 1800000  // 30 minutes
+    "agentTimeout": 30000
   }
 }
 ```
 
-### Error: "Invalid setting source"
+---
 
-**Cause**: `settingSources` contains an invalid value.
+### Problem: "Invalid settingSources values in config"
 
-**Solution**: Use only valid sources: `"user"`, `"project"`, `"local"`:
+**Cause:** The `settingSources` array contains invalid values (not `"user"`, `"project"`, or `"local"`).
 
+**Solution:** Use only valid setting sources.
+
+**Example fix:**
 ```json
-// ✗ Wrong
+// ❌ Bad
 {
-  "settingSources": ["global", "project"]
+  "settingSources": ["global", "workspace"]
 }
 
-// ✓ Correct
+// ✅ Good
 {
   "settingSources": ["user", "project", "local"]
 }
 ```
 
-### Error: "Expected boolean, received string"
+---
 
-**Cause**: A boolean field contains a string value like `"true"` instead of actual boolean `true`.
+### Problem: "Invalid tdd.enabled in config (must be boolean), using default"
 
-**Solution**: Remove quotes from boolean values:
+**Cause:** A boolean field contains a string value like `"true"` instead of the boolean `true`.
 
+**Solution:** Remove the quotes around boolean values in your JSON.
+
+**Example fix:**
 ```json
-// ✗ Wrong
+// ❌ Bad
 {
   "tdd": {
     "enabled": "true"
   }
 }
 
-// ✓ Correct
+// ✅ Good
 {
   "tdd": {
     "enabled": true
@@ -514,27 +759,81 @@ Then in `package.json`:
 }
 ```
 
-### Configuration not loading / Using defaults
+---
 
-**Cause**: Configuration file not found or has syntax errors.
+### Problem: Configuration file not loading
 
-**Solution**:
-1. Verify `.ai-sdlc.json` exists in project root
-2. Validate JSON syntax using `cat .ai-sdlc.json | jq .`
-3. Check file permissions (must be readable)
-4. Review logs for parsing errors: `ai-sdlc status --verbose`
+**Cause:** JSON syntax error, wrong file name, or wrong location.
 
-### Environment variable override not working
+**Solution:**
+1. Ensure the file is named exactly `.ai-sdlc.json` (with leading dot)
+2. Place it in the project root directory (same level as `package.json`)
+3. Validate JSON syntax using a validator (e.g., `jsonlint .ai-sdlc.json`)
 
-**Cause**: Variable name incorrect or precedence misunderstanding.
-
-**Solution**:
-1. Verify variable name matches exactly: `AI_SDLC_LOG_LEVEL` not `AI_SDLC_LOGLEVEL`
-2. Check variable is exported: `echo $AI_SDLC_LOG_LEVEL`
-3. Remember env vars override ALL file-based config
-4. Boolean values must be strings: `AI_SDLC_AUTO_COMPLETE="true"` not `AI_SDLC_AUTO_COMPLETE=true`
+**Check for common JSON errors:**
+- Missing commas between properties
+- Trailing commas after last property
+- Unquoted property names
+- Single quotes instead of double quotes
 
 ---
 
-**Last updated**: 2025-01-19
-**Verified against**: `src/core/config.ts` and `src/types/index.ts`
+### Problem: Environment variable override not working
+
+**Cause:** Invalid value format or unsupported environment variable.
+
+**Solution:**
+1. Check that the environment variable is in the [supported list](#supported-variables)
+2. Ensure boolean values are strings `"true"` or `"false"` (not bare booleans)
+3. Ensure numeric values are in the valid range (0-10 for retries)
+
+**Example:**
+```bash
+# ❌ Bad (boolean without quotes)
+export AI_SDLC_AUTO_COMPLETE=true  # Shell interprets as string "true", which works
+
+# ✅ Good (explicitly quoted)
+export AI_SDLC_AUTO_COMPLETE="true"
+
+# ❌ Bad (out of range)
+export AI_SDLC_MAX_RETRIES=50  # Rejected, must be 0-10
+
+# ✅ Good
+export AI_SDLC_MAX_RETRIES=5
+```
+
+---
+
+### Problem: Worktree basePath validation fails
+
+**Cause:** The parent directory of `worktree.basePath` does not exist.
+
+**Solution:** Ensure the parent directory exists before enabling worktrees.
+
+**Example:**
+```json
+{
+  "worktree": {
+    "enabled": true,
+    "basePath": ".ai-sdlc/worktrees"
+  }
+}
+```
+
+**Ensure `.ai-sdlc/` directory exists:**
+```bash
+mkdir -p .ai-sdlc
+```
+
+---
+
+## Additional Resources
+
+- **Story Documents**: See `docs/story-documents.md` for guidance on writing story files
+- **Testing Patterns**: See `docs/testing.md` for testing best practices
+- **Implementation Workflow**: See `docs/implementation-workflow.md` for the development process
+- **Code Conventions**: See `docs/code-conventions.md` for coding standards
+
+---
+
+**Last verified**: 2025-01-19 against `src/core/config.ts` and `src/types/index.ts`

@@ -6,7 +6,7 @@ import * as readline from 'readline';
 import { execSync } from 'child_process';
 import { getSdlcRoot, loadConfig, initConfig, validateWorktreeBasePath, DEFAULT_WORKTREE_CONFIG } from '../core/config.js';
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoriesByStatus } from '../core/kanban.js';
-import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId, autoCompleteStoryAfterReview } from '../core/story.js';
+import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId, autoCompleteStoryAfterReview, incrementImplementationRetryCount, getEffectiveMaxImplementationRetries, isAtMaxImplementationRetries, updateStoryStatus } from '../core/story.js';
 import { GitWorktreeService, WorktreeStatus } from '../core/worktree.js';
 import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext, WorktreeInfo, PreFlightResult } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
@@ -1257,6 +1257,60 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
           console.log(c.error('Error: No actions generated for retry. Manual intervention required.'));
           return;
         }
+      } else if (reviewResult.decision === ReviewDecision.RECOVERY) {
+        // Implementation recovery: reset implementation_complete and increment implementation retry count
+        // This is distinct from REJECTED which resets the entire RPIV cycle
+        const story = parseStory(action.storyPath);
+        const config = loadConfig();
+        const retryCount = story.frontmatter.implementation_retry_count || 0;
+        const maxRetries = getEffectiveMaxImplementationRetries(story, config);
+        const maxRetriesDisplay = Number.isFinite(maxRetries) ? maxRetries : '∞';
+
+        console.log();
+        console.log(c.warning(`🔄 Implementation recovery triggered (attempt ${retryCount + 1}/${maxRetriesDisplay})`));
+        console.log(c.dim(`  Reason: ${story.frontmatter.last_restart_reason || 'No source code changes detected'}`));
+
+        // Increment implementation retry count
+        await incrementImplementationRetryCount(story);
+
+        // Check if we've exceeded max implementation retries after incrementing
+        const freshStory = parseStory(action.storyPath);
+        if (isAtMaxImplementationRetries(freshStory, config)) {
+          console.log();
+          console.log(c.error('═'.repeat(50)));
+          console.log(c.error(`✗ Implementation recovery failed - maximum retries reached`));
+          console.log(c.error('═'.repeat(50)));
+          console.log(c.dim(`Story has reached the maximum implementation retry limit (${maxRetries}).`));
+          console.log(c.warning('Marking story as blocked. Manual intervention required.'));
+
+          // Mark story as blocked
+          await updateStoryStatus(freshStory, 'blocked');
+
+          console.log(c.info('Story status updated to: blocked'));
+          await clearWorkflowState(sdlcRoot, action.storyId);
+          process.exit(1);
+        }
+
+        // Regenerate actions to restart from implementation phase
+        const newActions = generateFullSDLCActions(freshStory, c);
+
+        if (newActions.length > 0) {
+          currentActions = newActions;
+          currentActionIndex = 0;
+          console.log(c.info(`  → Restarting from ${newActions[0].type} phase`));
+          console.log();
+          continue; // Restart the loop with new actions
+        } else {
+          console.log(c.error('Error: No actions generated for recovery. Manual intervention required.'));
+          process.exit(1);
+        }
+      } else if (reviewResult.decision === ReviewDecision.FAILED) {
+        // Review agent failed - don't increment retry count
+        console.log();
+        console.log(c.error(`✗ Review process failed: ${reviewResult.error || 'Unknown error'}`));
+        console.log(c.warning('This does not count as a retry attempt. You can retry manually.'));
+        await clearWorkflowState(sdlcRoot, action.storyId);
+        process.exit(1);
       }
     }
 

@@ -342,6 +342,8 @@ export interface ReviewConfig {
   autoRestartOnRejection: boolean;
   /** Enable test anti-pattern detection. @default true */
   detectTestAntipatterns?: boolean;
+  /** Automatically create PR after review approval in automated mode. @default false (true when --auto flag used) */
+  autoCreatePROnApproval?: boolean;
 }
 
 /**

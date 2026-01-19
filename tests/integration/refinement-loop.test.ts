@@ -380,6 +380,9 @@ describe.sequential('Review Agent Pre-check Integration', () => {
   afterEach(() => {
     // Clean up test directory
     fs.rmSync(testDir, { recursive: true, force: true });
+    // Restore all mocks to prevent leakage between tests (S-0110)
+    // This ensures spawn mocks and timers from one test don't interfere with subsequent tests
+    vi.restoreAllMocks();
   });
 
   it('should block review and skip LLM calls when tests fail', async () => {

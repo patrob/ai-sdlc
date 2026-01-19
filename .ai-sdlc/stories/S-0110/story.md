@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:10:56.211Z'
+  timestamp: '2026-01-19T18:11:35.473Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -1682,3 +1682,26 @@ I need permission to read files in the codebase to implement this fix. Once you 
 5. **Commit** the changes following project conventions
 
 Should I proceed once you grant file access permissions?
+
+
+### Implementation Notes (2026-01-19)
+
+I need your approval to run test commands. The implementation is complete (both Option C and Option B have been applied), but I need to verify the fix works by running tests.
+
+**Summary of what's been implemented:**
+- ✅ **Option C (Test Isolation)**: Added `vi.restoreAllMocks()` and `vi.useRealTimers()` to `afterEach` block
+- ✅ **Option B (Mock Timing Control)**: Added `vi.useFakeTimers()` to `beforeEach` and `await vi.runAllTimersAsync()` to all 4 tests
+- ✅ **Option A (Timeout Fallback)**: Applied 10-second timeout to the last test as a safety measure
+
+**Now I need to verify the fix works by running:**
+1. The specific flaky test in isolation (should pass consistently)
+2. The full integration test suite (should pass all tests)
+3. `make verify` to ensure no regressions
+
+Could you approve the following test commands?
+- `npm run test:integration -- --run tests/integration/refinement-loop.test.ts -t "should proceed with reviews when tests pass"`
+- `npm run test:integration -- --run tests/integration/refinement-loop.test.ts`
+- `npm run test:integration`
+- `make verify`
+
+Once approved, I'll run these tests and update the story with the results.

@@ -700,14 +700,21 @@ export interface RetryAttemptOptions {
 }
 
 /**
+ * Outcome type for retry attempts
+ */
+export type AttemptOutcome = 'failed_tests' | 'failed_build' | 'no_change';
+
+/**
  * Result from a single retry attempt
  */
-interface AttemptHistoryEntry {
+export interface AttemptHistoryEntry {
   attempt: number;
   testFailures: number;
   buildFailures: number;
   testSnippet: string;
   buildSnippet: string;
+  changesSummary: string;
+  outcome: AttemptOutcome;
 }
 
 /**
@@ -759,7 +766,8 @@ severity issues - these must be resolved. Review the specific feedback and make 
         lastVerification.testsOutput,
         lastVerification.buildOutput,
         attemptNumber,
-        maxRetries
+        maxRetries,
+        attemptHistory
       );
     } else {
       prompt += `
@@ -803,6 +811,36 @@ ${implementationResult}
     await writeStory(updatedStory);
     changesMade.push(attemptNumber > 1 ? `Added retry ${attemptNumber - 1} notes` : 'Added implementation notes');
 
+    // PRE-FLIGHT CHECK: Capture diff hash BEFORE verification to detect no-change scenarios early
+    const currentDiffHash = captureCurrentDiffHash(workingDir);
+    const changesSummary = extractChangedFiles(workingDir);
+
+    // Check for no-change scenario BEFORE running verification (saves ~30 seconds)
+    if (attemptNumber > 1 && lastDiffHash && lastDiffHash === currentDiffHash) {
+      changesMade.push('No changes detected since last attempt - skipping verification');
+
+      // Record this no-change attempt in history
+      attemptHistory.push({
+        attempt: attemptNumber,
+        testFailures: 0,
+        buildFailures: 0,
+        testSnippet: '',
+        buildSnippet: '',
+        changesSummary: 'No changes detected',
+        outcome: 'no_change',
+      });
+
+      return {
+        success: false,
+        story: parseStory(storyPath),
+        changesMade,
+        error: 'No progress detected - agent made no file changes',
+      };
+    }
+
+    // Update lastDiffHash for next iteration
+    lastDiffHash = currentDiffHash;
+
     changesMade.push('Running verification before marking complete...');
     const verification = await verifyImplementation(updatedStory, workingDir);
 
@@ -832,9 +870,6 @@ ${implementationResult}
     // Verification failed - check for retry conditions
     lastVerification = verification;
 
-    // Capture current diff hash for no-change detection
-    const currentDiffHash = captureCurrentDiffHash(workingDir);
-
     // Track retry attempt
     await incrementImplementationRetryCount(updatedStory);
 
@@ -849,6 +884,9 @@ ${implementationResult}
        verification.buildOutput.includes('failed'));
     const buildFailures = hasBuildErrors ? 1 : 0;
 
+    // Determine outcome based on what failed
+    const outcome: AttemptOutcome = hasBuildErrors ? 'failed_build' : 'failed_tests';
+
     // Record this attempt in history with both test and build failures
     attemptHistory.push({
       attempt: attemptNumber,
@@ -856,6 +894,8 @@ ${implementationResult}
       buildFailures,
       testSnippet,
       buildSnippet,
+      changesSummary,
+      outcome,
     });
 
     // Add structured retry entry to changes array
@@ -863,18 +903,6 @@ ${implementationResult}
       changesMade.push(`Implementation retry ${attemptNumber - 1}/${maxRetries}: ${verification.failures} test(s) failing`);
     } else {
       changesMade.push(`Attempt ${attemptNumber}: ${verification.failures} test(s) failing`);
-    }
-
-    // Check for no-change scenario (agent made no progress)
-    // Only check after first failure (attemptNumber > 1)
-    // Check this BEFORE max retries to fail fast on identical changes
-    if (attemptNumber > 1 && lastDiffHash && lastDiffHash === currentDiffHash) {
-      return {
-        success: false,
-        story: parseStory(storyPath),
-        changesMade,
-        error: `Implementation blocked: No progress detected on retry attempt ${attemptNumber - 1}. Agent made identical changes. Stopping retries early.\n\nLast test output:\n${truncateTestOutput(verification.testsOutput, 1000)}`,
-      };
     }
 
     // Check if we've reached max retries
@@ -910,8 +938,6 @@ ${implementationResult}
         error: `Implementation blocked after ${attemptNumber} attempts:\n${attemptSummary}\n\nLast test output:\n${truncateTestOutput(verification.testsOutput, 5000)}`,
       };
     }
-
-    lastDiffHash = currentDiffHash;
 
     // Continue to next retry attempt - send progress update
     if (onProgress) {
@@ -1259,6 +1285,85 @@ export function hasChangesOccurred(previousHash: string, currentHash: string): b
 }
 
 /**
+ * Extract list of changed files from git diff
+ * @param workingDir The working directory
+ * @returns Comma-separated list of changed files, or descriptive message
+ */
+export function extractChangedFiles(workingDir: string): string {
+  try {
+    validateWorkingDir(workingDir);
+
+    const result = spawnSync('git', ['diff', 'HEAD', '--name-only'], {
+      cwd: workingDir,
+      shell: false,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (result.status === 0 && result.stdout) {
+      const files = (result.stdout as string).trim().split('\n').filter(Boolean);
+      if (files.length === 0) {
+        return 'No changes detected';
+      }
+      return files.join(', ');
+    }
+
+    return 'No changes detected';
+  } catch {
+    return 'Unable to determine changes';
+  }
+}
+
+/**
+ * Build formatted retry history section for agent prompts
+ * @param history Array of attempt history entries
+ * @returns Formatted string for inclusion in retry prompts
+ */
+export function buildRetryHistorySection(history: AttemptHistoryEntry[]): string {
+  if (!history || history.length === 0) {
+    return '';
+  }
+
+  const recentHistory = history.slice(-3);
+
+  let section = `PREVIOUS ATTEMPT HISTORY (Last ${recentHistory.length} attempts):
+
+`;
+
+  for (const entry of recentHistory) {
+    const outcomeLabel =
+      entry.outcome === 'failed_tests'
+        ? 'Tests failed'
+        : entry.outcome === 'failed_build'
+          ? 'Build failed'
+          : 'No changes made';
+
+    section += `Attempt ${entry.attempt}: ${entry.changesSummary} -> ${outcomeLabel}\n`;
+
+    const errors: string[] = [];
+    if (entry.testSnippet && entry.testSnippet.trim()) {
+      errors.push(entry.testSnippet.trim());
+    }
+    if (entry.buildSnippet && entry.buildSnippet.trim()) {
+      errors.push(entry.buildSnippet.trim());
+    }
+
+    const errorsToShow = errors.slice(0, 2);
+    if (errorsToShow.length > 0) {
+      for (const err of errorsToShow) {
+        section += `  - ${err.substring(0, 100)}\n`;
+      }
+    }
+  }
+
+  section += `
+**IMPORTANT: Do NOT repeat the same fixes. Try a different approach.**
+`;
+
+  return section;
+}
+
+/**
  * Sanitize test output to remove ANSI escape sequences and potential injection patterns
  * @param output Test output string
  * @returns Sanitized output
@@ -1352,13 +1457,15 @@ export function detectMissingDependencies(output: string): string[] {
  * @param buildOutput Build output
  * @param attemptNumber Current attempt number (1-indexed)
  * @param maxRetries Maximum number of retries
+ * @param attemptHistory Optional history of previous attempts
  * @returns Prompt string for retry attempt
  */
 export function buildRetryPrompt(
   testOutput: string,
   buildOutput: string,
   attemptNumber: number,
-  maxRetries: number
+  maxRetries: number,
+  attemptHistory?: AttemptHistoryEntry[]
 ): string {
   const truncatedTestOutput = truncateTestOutput(testOutput);
   const truncatedBuildOutput = truncateTestOutput(buildOutput);
@@ -1422,6 +1529,11 @@ This is NOT a code bug - the packages need to be installed. Before making any co
     prompt += `**Strategy:** Fix source errors first, as they may automatically resolve multiple cascading errors.
 
 `;
+  }
+
+  if (attemptHistory && attemptHistory.length > 0) {
+    prompt += buildRetryHistorySection(attemptHistory);
+    prompt += '\n';
   }
 
   if (buildOutput && buildOutput.trim().length > 0) {

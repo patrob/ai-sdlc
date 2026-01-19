@@ -373,8 +373,9 @@ describe.sequential('Review Agent Pre-check Integration', () => {
       JSON.stringify(config, null, 2)
     );
 
-    // Reset mocks
+    // Reset mocks and use fake timers to control setTimeout in spawn mocks (S-0110)
     vi.resetAllMocks();
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
@@ -383,6 +384,8 @@ describe.sequential('Review Agent Pre-check Integration', () => {
     // Restore all mocks to prevent leakage between tests (S-0110)
     // This ensures spawn mocks and timers from one test don't interfere with subsequent tests
     vi.restoreAllMocks();
+    // Restore real timers after fake timer usage (S-0110)
+    vi.useRealTimers();
   });
 
   it('should block review and skip LLM calls when tests fail', async () => {
@@ -426,8 +429,10 @@ describe.sequential('Review Agent Pre-check Integration', () => {
       return mockProcess;
     }) as any);
 
-    // Execute review
-    const result = await runReviewAgent(story.path, testDir);
+    // Execute review and advance all timers to completion (S-0110)
+    const resultPromise = runReviewAgent(story.path, testDir);
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
 
     // Verify: Review blocked with BLOCKER
     expect(result.success).toBe(true); // Agent executed successfully
@@ -491,8 +496,10 @@ describe.sequential('Review Agent Pre-check Integration', () => {
     const { runAgentQuery } = await import('../../src/core/client.js');
     vi.mocked(runAgentQuery).mockResolvedValue('{"passed": true, "issues": []}');
 
-    // Execute review
-    const result = await runReviewAgent(story.path, testDir);
+    // Execute review and advance all timers to completion (S-0110)
+    const resultPromise = runReviewAgent(story.path, testDir);
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
 
     // Verify: Reviews proceeded normally
     expect(result.changesMade).toContain('Verification passed - proceeding with unified collaborative review');
@@ -546,8 +553,10 @@ describe.sequential('Review Agent Pre-check Integration', () => {
       return mockProcess;
     }) as any);
 
-    // Execute review
-    const result = await runReviewAgent(story.path, testDir);
+    // Execute review and advance all timers to completion (S-0110)
+    const resultPromise = runReviewAgent(story.path, testDir);
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
 
     // Verify: Output was truncated
     expect(result.issues[0].description.length).toBeLessThan(largeOutput.length + 500); // Allow overhead for message text
@@ -619,7 +628,10 @@ describe.sequential('Review Agent Pre-check Integration', () => {
     }) as any);
 
     // Execute review - will timeout due to test hanging
-    const result = await runReviewAgent(story.path, testDir);
+    // Note: Using fake timers, so advance them to trigger timeout behavior (S-0110)
+    const resultPromise = runReviewAgent(story.path, testDir);
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
 
     // Verify timeout was handled
     expect(result).toBeDefined();

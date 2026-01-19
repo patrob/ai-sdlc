@@ -397,6 +397,20 @@ export interface TimeoutConfig {
 }
 
 /**
+ * Retry configuration for API calls
+ */
+export interface RetryConfig {
+  /** Maximum number of retry attempts. @default 3 */
+  maxRetries: number;
+  /** Initial delay in milliseconds before first retry. @default 2000 */
+  initialDelay: number;
+  /** Maximum delay in milliseconds between retries. @default 32000 */
+  maxDelay: number;
+  /** Maximum total duration in milliseconds for all retries. @default 60000 */
+  maxTotalDuration: number;
+}
+
+/**
  * Daemon/watch mode configuration
  */
 export interface DaemonConfig {
@@ -559,6 +573,11 @@ export interface Config {
    * All values are in milliseconds.
    */
   timeouts: TimeoutConfig;
+  /**
+   * Retry configuration for API calls.
+   * Controls automatic retry behavior for transient failures.
+   */
+  retry?: RetryConfig;
   /**
    * Daemon/watch mode configuration.
    * Controls continuous backlog monitoring.

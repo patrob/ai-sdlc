@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768783845259-eaa0ebcc",
+  "timestamp": "2026-01-19T00:54:47.807Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0053",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0053-auto-retry-transient-api-failures/.ai-sdlc/stories/S-0053/story.md",
+      "completedAt": "2026-01-19T00:51:09.836Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0053",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0053-auto-retry-transient-api-failures/.ai-sdlc/stories/S-0053/story.md",
+      "completedAt": "2026-01-19T00:54:14.215Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0053",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0053-auto-retry-transient-api-failures/.ai-sdlc/stories/S-0053/story.md",
+      "completedAt": "2026-01-19T00:54:47.807Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0053-auto-retry-transient-api-failures/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0053",
+      "fullSDLC": true
+    },
+    "storyContentHash": "b4d71112b98e6f7f5035ba521236d4999f108e3b2140f09d16901f9dcb6215c6"
+  }
+}

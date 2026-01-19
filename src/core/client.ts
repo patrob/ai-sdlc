@@ -35,7 +35,8 @@ export type AgentProgressEvent =
   | { type: 'tool_end'; toolName: string; result?: unknown }
   | { type: 'assistant_message'; content: string }
   | { type: 'completion' }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'retry'; attempt: number; delay: number; error: string; errorType: string };
 
 /**
  * Callback for receiving real-time progress from agent execution
@@ -79,13 +80,106 @@ function isValidWorkingDirectory(workingDir: string): boolean {
 }
 
 /**
- * Run an agent query using the Claude Agent SDK.
- * Automatically configures authentication from environment or keychain.
- * CLAUDE.md discovery is handled automatically by the SDK when settingSources includes 'project'.
+ * Classify an error as transient (should retry) or permanent (fail immediately)
  */
-export async function runAgentQuery(options: AgentQueryOptions): Promise<string> {
+export function classifyApiError(error: Error): 'transient' | 'permanent' {
+  // Check for HTTP status codes
+  if ('status' in error && typeof (error as any).status === 'number') {
+    const status = (error as any).status;
+
+    // Transient errors (should retry)
+    if (status === 429) return 'transient'; // Rate limit
+    if (status === 503) return 'transient'; // Service unavailable
+    if (status >= 500 && status < 600) return 'transient'; // Server errors
+
+    // Permanent errors (don't retry)
+    if (status === 400) return 'permanent'; // Bad request
+    if (status === 401) return 'permanent'; // Unauthorized
+    if (status === 403) return 'permanent'; // Forbidden
+    if (status === 404) return 'permanent'; // Not found
+  }
+
+  // Check for AuthenticationError
+  if (error instanceof AuthenticationError) {
+    return 'permanent';
+  }
+
+  // Check for network errors (should retry)
+  if ('code' in error) {
+    const code = (error as any).code;
+    if (code === 'ETIMEDOUT') return 'transient';
+    if (code === 'ECONNRESET') return 'transient';
+    if (code === 'ENOTFOUND') return 'transient';
+  }
+
+  // Default to permanent (fail-safe)
+  return 'permanent';
+}
+
+/**
+ * Determine if an error should be retried based on classification and attempt count
+ */
+export function shouldRetry(error: Error, attemptNumber: number, maxRetries: number): boolean {
+  // Check if we've exceeded max retries
+  if (attemptNumber >= maxRetries) {
+    return false;
+  }
+
+  // Check error classification
+  const classification = classifyApiError(error);
+  return classification === 'transient';
+}
+
+/**
+ * Calculate exponential backoff delay with jitter
+ */
+export function calculateBackoff(attemptNumber: number, initialDelay: number, maxDelay: number): number {
+  // Exponential backoff: initialDelay * 2^attemptNumber
+  const exponentialDelay = initialDelay * Math.pow(2, attemptNumber);
+
+  // Cap at maxDelay
+  const cappedDelay = Math.min(exponentialDelay, maxDelay);
+
+  // Apply jitter (±20% variance)
+  const jitterFactor = 0.8 + Math.random() * 0.4; // Range: 0.8 to 1.2
+  const delayWithJitter = cappedDelay * jitterFactor;
+
+  return Math.round(delayWithJitter);
+}
+
+/**
+ * Sleep for a specified number of milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Get human-readable error type label for display
+ */
+function getErrorTypeLabel(error: Error): string {
+  if ('status' in error && typeof (error as any).status === 'number') {
+    const status = (error as any).status;
+    if (status === 429) return 'rate limit';
+    if (status === 503) return 'service unavailable';
+    if (status >= 500) return 'server error';
+  }
+
+  if ('code' in error) {
+    const code = (error as any).code;
+    if (code === 'ETIMEDOUT') return 'network timeout';
+    if (code === 'ECONNRESET') return 'connection reset';
+    if (code === 'ENOTFOUND') return 'network error';
+  }
+
+  return 'error';
+}
+
+/**
+ * Execute the agent query (internal implementation, no retry logic)
+ */
+async function executeAgentQuery(options: AgentQueryOptions, queryStartTime: number): Promise<string> {
   const logger = getLogger();
-  const queryStartTime = Date.now();
 
   // Configure authentication
   const authResult = configureAgentSdkAuth();
@@ -251,6 +345,85 @@ export async function runAgentQuery(options: AgentQueryOptions): Promise<string>
     }
     throw error;
   }
+}
+
+/**
+ * Run an agent query using the Claude Agent SDK with automatic retry logic.
+ * Automatically configures authentication from environment or keychain.
+ * CLAUDE.md discovery is handled automatically by the SDK when settingSources includes 'project'.
+ */
+export async function runAgentQuery(options: AgentQueryOptions): Promise<string> {
+  const logger = getLogger();
+  const config = loadConfig(options.workingDirectory || process.cwd());
+  const retryConfig = config.retry || { maxRetries: 3, initialDelay: 2000, maxDelay: 32000, maxTotalDuration: 60000 };
+
+  const overallStartTime = Date.now();
+  let lastError: Error | undefined;
+
+  // Retry loop: attempt 0 is the initial try, attempts 1+ are retries
+  for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
+    const queryStartTime = Date.now();
+
+    try {
+      // Execute the query
+      const result = await executeAgentQuery(options, queryStartTime);
+      return result;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      // Check if we should retry
+      if (!shouldRetry(lastError, attempt, retryConfig.maxRetries)) {
+        // Permanent error or max retries exceeded - fail immediately
+        throw lastError;
+      }
+
+      // Check total duration cap
+      const elapsedTime = Date.now() - overallStartTime;
+      if (elapsedTime >= retryConfig.maxTotalDuration) {
+        logger.warn('agent-sdk', 'Total retry duration exceeded', {
+          elapsedMs: elapsedTime,
+          maxDurationMs: retryConfig.maxTotalDuration,
+          attempt,
+        });
+        throw lastError;
+      }
+
+      // Calculate backoff delay
+      const delay = calculateBackoff(attempt, retryConfig.initialDelay, retryConfig.maxDelay);
+
+      // Get error type label for logging/display
+      const errorTypeLabel = getErrorTypeLabel(lastError);
+
+      // Log retry attempt
+      logger.info('agent-sdk', 'Retrying after transient error', {
+        attempt: attempt + 1,
+        maxRetries: retryConfig.maxRetries,
+        delayMs: delay,
+        errorType: errorTypeLabel,
+        error: lastError.message,
+      });
+
+      // Notify progress callback
+      options.onProgress?.({
+        type: 'retry',
+        attempt: attempt + 1,
+        delay,
+        error: lastError.message,
+        errorType: errorTypeLabel,
+      });
+
+      // Show warning after 2nd retry
+      if (attempt >= 1) {
+        console.warn('⚠️  Experiencing temporary issues with API...');
+      }
+
+      // Wait before retry
+      await sleep(delay);
+    }
+  }
+
+  // If we get here, we've exhausted retries
+  throw lastError || new Error('Max retries exceeded');
 }
 
 /**

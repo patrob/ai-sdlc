@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig } from '../types/index.js';
 
 const CONFIG_FILENAME = '.ai-sdlc.json';
 
@@ -63,6 +63,16 @@ export const DEFAULT_LOGGING_CONFIG: LogConfig = {
   maxFiles: 5,
 };
 
+/**
+ * Default retry configuration
+ */
+export const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  initialDelay: 2000,
+  maxDelay: 32000,
+  maxTotalDuration: 60000,
+};
+
 export const DEFAULT_CONFIG: Config = {
   sdlcFolder: '.ai-sdlc',
   stageGates: {
@@ -95,6 +105,8 @@ export const DEFAULT_CONFIG: Config = {
   settingSources: ['project'],
   // Timeout configuration
   timeouts: { ...DEFAULT_TIMEOUTS },
+  // Retry configuration
+  retry: { ...DEFAULT_RETRY_CONFIG },
   // Daemon configuration
   daemon: { ...DEFAULT_DAEMON_CONFIG },
   // TDD configuration
@@ -350,6 +362,10 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
           ...DEFAULT_TIMEOUTS,
           ...userConfig.timeouts,
         },
+        retry: {
+          ...DEFAULT_RETRY_CONFIG,
+          ...userConfig.retry,
+        },
         daemon: {
           ...DEFAULT_DAEMON_CONFIG,
           ...userConfig.daemon,
@@ -446,6 +462,11 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
 
   // Validate implementation config
   config.implementation = validateImplementationConfig(config.implementation);
+
+  // Validate retry config
+  if (config.retry) {
+    config.retry = validateRetryConfig(config.retry);
+  }
 
   return config;
 }
@@ -572,6 +593,39 @@ export function updateReviewConfig(
   config.reviewConfig = validateReviewConfig(config.reviewConfig);
   saveConfig(config, workingDir);
   return config;
+}
+
+/**
+ * Validate retry configuration
+ */
+export function validateRetryConfig(retryConfig: RetryConfig): RetryConfig {
+  const validated = { ...retryConfig };
+
+  // Validate maxRetries
+  if (typeof validated.maxRetries !== 'number' || validated.maxRetries < 0) {
+    console.warn('Warning: retry.maxRetries must be non-negative number, using 3');
+    validated.maxRetries = 3;
+  }
+
+  // Validate initialDelay
+  if (typeof validated.initialDelay !== 'number' || validated.initialDelay < 0) {
+    console.warn('Warning: retry.initialDelay must be non-negative number, using 2000');
+    validated.initialDelay = 2000;
+  }
+
+  // Validate maxDelay
+  if (typeof validated.maxDelay !== 'number' || validated.maxDelay < validated.initialDelay) {
+    console.warn('Warning: retry.maxDelay must be >= initialDelay, using 32000');
+    validated.maxDelay = 32000;
+  }
+
+  // Validate maxTotalDuration
+  if (typeof validated.maxTotalDuration !== 'number' || validated.maxTotalDuration < 0) {
+    console.warn('Warning: retry.maxTotalDuration must be non-negative number, using 60000');
+    validated.maxTotalDuration = 60000;
+  }
+
+  return validated;
 }
 
 /**

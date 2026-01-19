@@ -2,7 +2,7 @@
 id: S-0062
 title: Detect and report existing worktree state
 priority: 10
-status: in-progress
+status: done
 type: feature
 created: '2026-01-18'
 labels:
@@ -13,13 +13,10 @@ labels:
   - s
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 slug: detect-existing-worktree-state
-worktree_path: >-
-  /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0062-detect-existing-worktree-state
 updated: '2026-01-19'
-branch: ai-sdlc/detect-existing-worktree-state
 last_test_run:
   passed: true
   failures: 0

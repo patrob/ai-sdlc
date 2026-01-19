@@ -321,3 +321,24 @@ export function padColumnToHeight(items: string[], maxHeight: number): string[] 
 
   return padded;
 }
+
+/**
+ * Check if a story is from a worktree based on its file path.
+ * Stories in worktrees have paths containing '/worktrees/'.
+ *
+ * @param storyPath - Absolute path to the story file
+ * @returns true if story is in a worktree, false otherwise
+ */
+export function isWorktreeStory(storyPath: string): boolean {
+  return storyPath.includes('/worktrees/');
+}
+
+/**
+ * Get worktree indicator emoji for display.
+ * Returns 🌿 (seedling) emoji to indicate story is from active worktree.
+ *
+ * @returns Worktree indicator emoji
+ */
+export function getWorktreeIndicator(): string {
+  return '🌿';
+}

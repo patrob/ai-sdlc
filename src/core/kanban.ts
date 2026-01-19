@@ -5,6 +5,96 @@ import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder, ReviewDec
 import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt, moveToBlocked, getEffectiveMaxRetries, sanitizeReasonText, findStoryById } from './story.js';
 import { loadConfig } from './config.js';
 import { determineTargetPhase } from '../agents/rework.js';
+import { GitWorktreeService } from './worktree.js';
+
+/**
+ * Load stories from active worktrees.
+ * Returns a map of story ID to story object for all stories found in worktrees.
+ * Handles missing files, parse errors, and deleted worktrees gracefully with logging.
+ *
+ * @param sdlcRoot - Path to .ai-sdlc folder
+ * @returns Map of story ID to story object from worktrees
+ */
+function loadStoriesFromWorktrees(sdlcRoot: string): Map<string, Story> {
+  const worktreeMap = new Map<string, Story>();
+
+  try {
+    // Determine worktree base path and project root
+    const projectRoot = path.dirname(sdlcRoot);
+    const worktreeBasePath = path.join(sdlcRoot, 'worktrees');
+
+    // Get list of active worktrees
+    const worktreeService = new GitWorktreeService(projectRoot, worktreeBasePath);
+    const worktrees = worktreeService.list();
+
+    for (const worktree of worktrees) {
+      // Skip worktrees that don't exist on filesystem
+      if (!worktree.exists) {
+        continue;
+      }
+
+      // Skip worktrees without a story ID
+      if (!worktree.storyId) {
+        continue;
+      }
+
+      // Construct expected story path in worktree
+      // Pattern: {worktreePath}/stories/{storyId}/story.md
+      const storyPath = path.join(worktree.path, STORIES_FOLDER, worktree.storyId, STORY_FILENAME);
+
+      // Check if story file exists
+      if (!fs.existsSync(storyPath)) {
+        console.warn(`Worktree story file missing for ${worktree.storyId}: ${storyPath}`);
+        continue;
+      }
+
+      try {
+        // Parse the story from worktree
+        const canonicalPath = fs.realpathSync(storyPath);
+        const story = parseStory(canonicalPath);
+        worktreeMap.set(worktree.storyId, { ...story, path: canonicalPath });
+      } catch (err) {
+        // Log parse error and continue
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        console.error(`Failed to parse worktree story ${worktree.storyId} at ${storyPath}: ${errorMsg}`);
+        continue;
+      }
+    }
+  } catch (err) {
+    // If worktree listing fails, log error but return empty map (graceful fallback)
+    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    console.error(`Failed to load worktree stories: ${errorMsg}`);
+  }
+
+  return worktreeMap;
+}
+
+/**
+ * Merge main repository stories with worktree stories.
+ * Worktree versions take precedence over main repo versions for the same story ID.
+ *
+ * @param mainStories - Stories from main repository
+ * @param worktreeStories - Map of story ID to story from worktrees
+ * @returns Merged array of stories with worktree versions prioritized
+ */
+function mergeStories(mainStories: Story[], worktreeStories: Map<string, Story>): Story[] {
+  const merged: Story[] = [];
+
+  for (const mainStory of mainStories) {
+    const storyId = mainStory.frontmatter.id;
+
+    // Check if worktree version exists
+    if (worktreeStories.has(storyId)) {
+      // Use worktree version (more up-to-date)
+      merged.push(worktreeStories.get(storyId)!);
+    } else {
+      // Use main repo version
+      merged.push(mainStory);
+    }
+  }
+
+  return merged;
+}
 
 /**
  * Find all stories in the stories/ folder structure
@@ -18,7 +108,7 @@ export function findAllStories(sdlcRoot: string): Story[] {
     return [];
   }
 
-  const stories: Story[] = [];
+  const mainStories: Story[] = [];
   const pattern = path.join(storiesFolder, '*', STORY_FILENAME);
 
   try {
@@ -28,7 +118,7 @@ export function findAllStories(sdlcRoot: string): Story[] {
       try {
         const canonicalPath = fs.realpathSync(storyPath);
         const story = parseStory(canonicalPath);
-        stories.push({ ...story, path: canonicalPath });
+        mainStories.push({ ...story, path: canonicalPath });
       } catch (err) {
         // Skip malformed stories or symlinks that can't be resolved
         continue;
@@ -39,7 +129,11 @@ export function findAllStories(sdlcRoot: string): Story[] {
     return [];
   }
 
-  return stories;
+  // Load stories from active worktrees
+  const worktreeStories = loadStoriesFromWorktrees(sdlcRoot);
+
+  // Merge: worktree version takes precedence
+  return mergeStories(mainStories, worktreeStories);
 }
 
 /**

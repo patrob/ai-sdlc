@@ -122,7 +122,7 @@ This is a test story for PR creation integration testing.
       },
     };
 
-    await saveWorkflowState(sdlcRoot, storyId, state);
+    await saveWorkflowState(state, sdlcRoot, storyId);
   }
 
   describe('Configuration - autoCreatePROnApproval flag', () => {
@@ -343,7 +343,7 @@ This is a test story for PR creation integration testing.
         },
       };
 
-      await saveWorkflowState(sdlcRoot, storyId, minimalState);
+      await saveWorkflowState(minimalState, sdlcRoot, storyId);
 
       const { loadWorkflowState } = await import('../../src/core/workflow-state.js');
       const workflowState = await loadWorkflowState(sdlcRoot, storyId);

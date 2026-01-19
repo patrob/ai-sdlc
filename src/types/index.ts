@@ -541,6 +541,95 @@ export interface GithubConfig {
   createDraftPRs?: boolean;
 }
 
+/**
+ * Grouping dimension type for story organization.
+ * - 'thematic': Epic-based grouping (e.g., epic-ticketing-integration)
+ * - 'temporal': Time-based grouping (e.g., sprint-2024-q1)
+ * - 'structural': Team/component-based grouping (e.g., team-backend)
+ */
+export type GroupingDimension = 'thematic' | 'temporal' | 'structural';
+
+/**
+ * Cardinality constraint for grouping labels.
+ * - 'single': Story can only have one label from this dimension (e.g., one epic)
+ * - 'many': Story can have multiple labels from this dimension (e.g., multiple teams)
+ */
+export type GroupingCardinality = 'single' | 'many';
+
+/**
+ * Configuration for a single grouping dimension.
+ * Defines label conventions and optional external system mappings.
+ *
+ * @example
+ * {
+ *   dimension: 'thematic',
+ *   prefix: 'epic-',
+ *   cardinality: 'single',
+ *   externalMapping: {
+ *     system: 'jira',
+ *     field: 'epic'
+ *   }
+ * }
+ */
+export interface GroupingConfig {
+  /** Dimension type for this grouping */
+  dimension: GroupingDimension;
+  /** Label prefix for this dimension (e.g., 'epic-', 'sprint-') */
+  prefix: string;
+  /** Cardinality constraint: 'single' or 'many' */
+  cardinality: GroupingCardinality;
+  /**
+   * Optional external system mapping for future ticketing integration.
+   * @future Used for S-0073+ ticketing integration stories.
+   * Configuration is stored but not yet implemented.
+   */
+  externalMapping?: {
+    system: string;
+    field: string;
+  };
+}
+
+/**
+ * Summary of stories grouped by a specific dimension.
+ * Includes story counts and status breakdowns.
+ */
+export interface GroupingSummary {
+  /** Grouping identifier (e.g., 'ticketing-integration' from 'epic-ticketing-integration') */
+  id: string;
+  /** Full label including prefix (e.g., 'epic-ticketing-integration') */
+  label: string;
+  /** Dimension type */
+  dimension: GroupingDimension;
+  /** Total number of stories with this label */
+  storyCount: number;
+  /** Breakdown of stories by status */
+  statusBreakdown: Record<StoryStatus, number>;
+}
+
+/**
+ * Default grouping configurations for out-of-box conventions.
+ * - epic-*: Thematic grouping (single epic per story)
+ * - sprint-*: Temporal grouping (single sprint per story)
+ * - team-*: Structural grouping (multiple teams allowed)
+ */
+export const DEFAULT_GROUPINGS: GroupingConfig[] = [
+  {
+    dimension: 'thematic',
+    prefix: 'epic-',
+    cardinality: 'single',
+  },
+  {
+    dimension: 'temporal',
+    prefix: 'sprint-',
+    cardinality: 'single',
+  },
+  {
+    dimension: 'structural',
+    prefix: 'team-',
+    cardinality: 'many',
+  },
+];
+
 export interface Config {
   sdlcFolder: string;
   stageGates: StageGateConfig;
@@ -553,6 +642,12 @@ export interface Config {
    * Controls PR creation and integration behavior.
    */
   github?: GithubConfig;
+  /**
+   * Optional grouping configurations for story organization.
+   * If not specified, defaults to DEFAULT_GROUPINGS (epic, sprint, team).
+   * @see DEFAULT_GROUPINGS
+   */
+  groupings?: GroupingConfig[];
   theme: ThemePreference;
   /** Command to run tests (e.g., 'npm test'). If set, runs before review. */
   testCommand?: string;

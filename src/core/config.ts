@@ -97,6 +97,7 @@ export const DEFAULT_CONFIG: Config = {
   },
   implementation: { ...DEFAULT_IMPLEMENTATION_CONFIG },
   defaultLabels: [],
+  groupings: undefined, // Use DEFAULT_GROUPINGS at runtime if not specified
   theme: 'auto',
   // Test and build commands - auto-detected from package.json if present
   testCommand: 'npm test',
@@ -165,6 +166,68 @@ function validateCommand(command: string, fieldName: string): boolean {
     if (pattern.test(command)) {
       console.warn(`Warning: ${fieldName} contains potentially dangerous shell metacharacters: ${command}`);
       return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Validate groupings configuration
+ */
+function validateGroupingsConfig(groupings: any): boolean {
+  if (!Array.isArray(groupings)) {
+    console.warn('Invalid groupings in config (must be array), ignoring');
+    return false;
+  }
+
+  const validDimensions = ['thematic', 'temporal', 'structural'];
+  const validCardinalities = ['single', 'many'];
+
+  for (const grouping of groupings) {
+    if (typeof grouping !== 'object' || grouping === null) {
+      console.warn('Invalid grouping entry in config (must be object), ignoring groupings');
+      return false;
+    }
+
+    // Validate dimension
+    if (!validDimensions.includes(grouping.dimension)) {
+      console.warn(
+        `Invalid grouping dimension "${grouping.dimension}". Valid values: ${validDimensions.join(', ')}`
+      );
+      return false;
+    }
+
+    // Validate prefix
+    if (typeof grouping.prefix !== 'string' || grouping.prefix === '') {
+      console.warn('Invalid grouping prefix (must be non-empty string)');
+      return false;
+    }
+
+    // Validate cardinality
+    if (!validCardinalities.includes(grouping.cardinality)) {
+      console.warn(
+        `Invalid grouping cardinality "${grouping.cardinality}". Valid values: ${validCardinalities.join(', ')}`
+      );
+      return false;
+    }
+
+    // externalMapping is optional, but if present, validate structure
+    if (grouping.externalMapping !== undefined) {
+      if (typeof grouping.externalMapping !== 'object' || grouping.externalMapping === null) {
+        console.warn('Invalid externalMapping (must be object), ignoring');
+        return false;
+      }
+
+      if (typeof grouping.externalMapping.system !== 'string') {
+        console.warn('Invalid externalMapping.system (must be string)');
+        return false;
+      }
+
+      if (typeof grouping.externalMapping.field !== 'string') {
+        console.warn('Invalid externalMapping.field (must be string)');
+        return false;
+      }
     }
   }
 
@@ -317,6 +380,14 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
           delete userConfig.worktree.basePath;
         }
       }
+    }
+  }
+
+  // Validate groupings configuration if present
+  if (userConfig.groupings !== undefined) {
+    if (!validateGroupingsConfig(userConfig.groupings)) {
+      console.warn('Invalid groupings configuration, using defaults');
+      delete userConfig.groupings;
     }
   }
 

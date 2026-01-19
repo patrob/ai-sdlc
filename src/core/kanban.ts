@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
-import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder, ReviewDecision, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, StoryStatus } from '../types/index.js';
+import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder, ReviewDecision, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, StoryStatus, GroupingDimension, GroupingSummary, DEFAULT_GROUPINGS } from '../types/index.js';
 import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt, moveToBlocked, getEffectiveMaxRetries, sanitizeReasonText, findStoryById } from './story.js';
 import { loadConfig } from './config.js';
 import { determineTargetPhase } from '../agents/rework.js';
@@ -404,4 +404,323 @@ export function getBoardStats(sdlcRoot: string): Record<KanbanFolder, number> {
   }
 
   return stats;
+}
+
+/**
+ * Maximum allowed pattern length to prevent ReDoS attacks
+ */
+const MAX_PATTERN_LENGTH = 100;
+
+/**
+ * Check if a label matches a glob pattern.
+ * Supports wildcard (*) for pattern matching with proper regex escaping.
+ *
+ * @param label - The label to test
+ * @param pattern - The glob pattern (e.g., 'epic-*', '*-test')
+ * @returns true if label matches pattern
+ * @throws Error if pattern exceeds maximum length
+ *
+ * @example
+ * labelMatchesPattern('epic-ticketing', 'epic-*') // true
+ * labelMatchesPattern('sprint-2024-q1', 'epic-*') // false
+ * labelMatchesPattern('test.label', 'test.label') // true (special chars escaped)
+ */
+export function labelMatchesPattern(label: string, pattern: string): boolean {
+  // Security: Prevent ReDoS by limiting pattern length
+  if (pattern.length > MAX_PATTERN_LENGTH) {
+    throw new Error(`Pattern exceeds maximum length of ${MAX_PATTERN_LENGTH} characters`);
+  }
+
+  // Handle empty pattern edge case
+  if (pattern === '') {
+    return label === '';
+  }
+
+  // Escape special regex characters except *
+  // Characters that need escaping: . + ? ^ $ { } ( ) | [ ] \
+  const escapedPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+
+  // Convert glob wildcard (*) to regex (.*)
+  const regexPattern = escapedPattern.replace(/\*/g, '.*');
+
+  // Create anchored regex (exact match from start to end)
+  const regex = new RegExp(`^${regexPattern}$`);
+
+  return regex.test(label);
+}
+
+/**
+ * Find stories by exact label match.
+ * Returns stories sorted by priority ascending.
+ *
+ * @param sdlcRoot - Path to .ai-sdlc folder
+ * @param label - Exact label to match
+ * @returns Array of stories with the specified label
+ *
+ * @example
+ * findStoriesByLabel(sdlcRoot, 'epic-ticketing')
+ */
+export function findStoriesByLabel(sdlcRoot: string, label: string): Story[] {
+  const allStories = findAllStories(sdlcRoot);
+
+  return allStories
+    .filter(story => story.frontmatter.labels.includes(label))
+    .sort((a, b) => {
+      // Sort by priority ascending
+      if (a.frontmatter.priority !== b.frontmatter.priority) {
+        return a.frontmatter.priority - b.frontmatter.priority;
+      }
+      // Tiebreaker: sort by creation date
+      return a.frontmatter.created.localeCompare(b.frontmatter.created);
+    });
+}
+
+/**
+ * Find stories by multiple labels with AND/OR logic.
+ * Returns stories sorted by priority ascending.
+ *
+ * @param sdlcRoot - Path to .ai-sdlc folder
+ * @param labels - Array of labels to match
+ * @param mode - 'all' requires all labels (AND), 'any' requires at least one (OR)
+ * @returns Array of matching stories
+ *
+ * @example
+ * // Stories with BOTH epic-ticketing AND team-backend
+ * findStoriesByLabels(sdlcRoot, ['epic-ticketing', 'team-backend'], 'all')
+ *
+ * // Stories with EITHER epic-ticketing OR epic-auth
+ * findStoriesByLabels(sdlcRoot, ['epic-ticketing', 'epic-auth'], 'any')
+ */
+export function findStoriesByLabels(
+  sdlcRoot: string,
+  labels: string[],
+  mode: 'all' | 'any'
+): Story[] {
+  // Return empty array for empty labels input
+  if (labels.length === 0) {
+    return [];
+  }
+
+  const allStories = findAllStories(sdlcRoot);
+
+  const filtered = allStories.filter(story => {
+    if (mode === 'all') {
+      // All labels must be present (AND logic)
+      return labels.every(label => story.frontmatter.labels.includes(label));
+    } else {
+      // At least one label must be present (OR logic)
+      return labels.some(label => story.frontmatter.labels.includes(label));
+    }
+  });
+
+  return filtered.sort((a, b) => {
+    // Sort by priority ascending
+    if (a.frontmatter.priority !== b.frontmatter.priority) {
+      return a.frontmatter.priority - b.frontmatter.priority;
+    }
+    // Tiebreaker: sort by creation date
+    return a.frontmatter.created.localeCompare(b.frontmatter.created);
+  });
+}
+
+/**
+ * Find stories by glob pattern matching on labels.
+ * Returns deduplicated stories sorted by priority ascending.
+ *
+ * @param sdlcRoot - Path to .ai-sdlc folder
+ * @param pattern - Glob pattern (e.g., 'epic-*', '*-test', 'team-*-backend')
+ * @returns Array of stories with at least one matching label
+ *
+ * @example
+ * findStoriesByPattern(sdlcRoot, 'epic-*') // All stories with epic-* labels
+ * findStoriesByPattern(sdlcRoot, '*-test') // All stories with *-test labels
+ */
+export function findStoriesByPattern(sdlcRoot: string, pattern: string): Story[] {
+  // Return empty array for empty pattern
+  if (pattern === '') {
+    return [];
+  }
+
+  const allStories = findAllStories(sdlcRoot);
+
+  const filtered = allStories.filter(story => {
+    // Check if any label matches the pattern
+    return story.frontmatter.labels.some(label => labelMatchesPattern(label, pattern));
+  });
+
+  // Deduplicate by story ID (in case multiple labels match)
+  const seen = new Set<string>();
+  const deduplicated = filtered.filter(story => {
+    if (seen.has(story.frontmatter.id)) {
+      return false;
+    }
+    seen.add(story.frontmatter.id);
+    return true;
+  });
+
+  return deduplicated.sort((a, b) => {
+    // Sort by priority ascending
+    if (a.frontmatter.priority !== b.frontmatter.priority) {
+      return a.frontmatter.priority - b.frontmatter.priority;
+    }
+    // Tiebreaker: sort by creation date
+    return a.frontmatter.created.localeCompare(b.frontmatter.created);
+  });
+}
+
+/**
+ * Get all unique labels across all stories.
+ * Returns labels sorted alphabetically.
+ *
+ * @param sdlcRoot - Path to .ai-sdlc folder
+ * @returns Sorted array of unique labels
+ *
+ * @example
+ * getUniqueLabels(sdlcRoot) // ['epic-auth', 'epic-ticketing', 'team-backend', ...]
+ */
+export function getUniqueLabels(sdlcRoot: string): string[] {
+  const allStories = findAllStories(sdlcRoot);
+
+  const labelsSet = new Set<string>();
+  for (const story of allStories) {
+    for (const label of story.frontmatter.labels) {
+      labelsSet.add(label);
+    }
+  }
+
+  return Array.from(labelsSet).sort();
+}
+
+/**
+ * Get grouping summaries for a specific dimension.
+ * Returns groupings sorted by story count descending.
+ *
+ * @param sdlcRoot - Path to .ai-sdlc folder
+ * @param dimension - Grouping dimension ('thematic', 'temporal', 'structural')
+ * @returns Array of grouping summaries with story counts and status breakdowns
+ *
+ * @example
+ * getGroupings(sdlcRoot, 'thematic')
+ * // [
+ * //   { id: 'ticketing', label: 'epic-ticketing', dimension: 'thematic',
+ * //     storyCount: 5, statusBreakdown: { backlog: 2, ready: 1, ... } },
+ * //   ...
+ * // ]
+ */
+export function getGroupings(sdlcRoot: string, dimension: GroupingDimension): GroupingSummary[] {
+  // Find the default configuration for this dimension
+  const config = DEFAULT_GROUPINGS.find(g => g.dimension === dimension);
+  if (!config) {
+    return [];
+  }
+
+  const allStories = findAllStories(sdlcRoot);
+  const prefix = config.prefix;
+
+  // Collect all labels matching this dimension's prefix
+  const groupingMap = new Map<string, {
+    label: string;
+    stories: Story[];
+  }>();
+
+  for (const story of allStories) {
+    const matchingLabels = story.frontmatter.labels.filter(label => label.startsWith(prefix));
+
+    // Check for cardinality violations (multiple labels when cardinality is 'single')
+    if (config.cardinality === 'single' && matchingLabels.length > 1) {
+      console.warn(
+        `Story ${story.frontmatter.id} has multiple ${dimension} labels (${matchingLabels.join(', ')}) ` +
+        `but cardinality is 'single'. Consider using only one ${prefix}* label per story.`
+      );
+    }
+
+    for (const label of matchingLabels) {
+      if (!groupingMap.has(label)) {
+        groupingMap.set(label, {
+          label,
+          stories: [],
+        });
+      }
+      groupingMap.get(label)!.stories.push(story);
+    }
+  }
+
+  // Convert to GroupingSummary array
+  const summaries: GroupingSummary[] = [];
+  for (const [label, data] of groupingMap.entries()) {
+    // Extract ID by removing prefix
+    const id = label.substring(prefix.length);
+
+    // Calculate status breakdown
+    const statusBreakdown: Record<StoryStatus, number> = {
+      backlog: 0,
+      ready: 0,
+      'in-progress': 0,
+      done: 0,
+      blocked: 0,
+    };
+
+    for (const story of data.stories) {
+      statusBreakdown[story.frontmatter.status]++;
+    }
+
+    summaries.push({
+      id,
+      label,
+      dimension,
+      storyCount: data.stories.length,
+      statusBreakdown,
+    });
+  }
+
+  // Sort by story count descending
+  return summaries.sort((a, b) => b.storyCount - a.storyCount);
+}
+
+/**
+ * Find stories by epic label (convenience wrapper).
+ * Queries for stories with 'epic-{epicId}' label.
+ *
+ * @param sdlcRoot - Path to .ai-sdlc folder
+ * @param epicId - Epic identifier (without 'epic-' prefix)
+ * @returns Array of stories with the specified epic label
+ *
+ * @example
+ * findStoriesByEpic(sdlcRoot, 'ticketing-integration')
+ * // Returns stories with label 'epic-ticketing-integration'
+ */
+export function findStoriesByEpic(sdlcRoot: string, epicId: string): Story[] {
+  return findStoriesByPattern(sdlcRoot, `epic-${epicId}`);
+}
+
+/**
+ * Find stories by sprint label (convenience wrapper).
+ * Queries for stories with 'sprint-{sprintId}' label.
+ *
+ * @param sdlcRoot - Path to .ai-sdlc folder
+ * @param sprintId - Sprint identifier (without 'sprint-' prefix)
+ * @returns Array of stories with the specified sprint label
+ *
+ * @example
+ * findStoriesBySprint(sdlcRoot, '2024-q1')
+ * // Returns stories with label 'sprint-2024-q1'
+ */
+export function findStoriesBySprint(sdlcRoot: string, sprintId: string): Story[] {
+  return findStoriesByPattern(sdlcRoot, `sprint-${sprintId}`);
+}
+
+/**
+ * Find stories by team label (convenience wrapper).
+ * Queries for stories with 'team-{teamId}' label.
+ *
+ * @param sdlcRoot - Path to .ai-sdlc folder
+ * @param teamId - Team identifier (without 'team-' prefix)
+ * @returns Array of stories with the specified team label
+ *
+ * @example
+ * findStoriesByTeam(sdlcRoot, 'backend')
+ * // Returns stories with label 'team-backend'
+ */
+export function findStoriesByTeam(sdlcRoot: string, teamId: string): Story[] {
+  return findStoriesByPattern(sdlcRoot, `team-${teamId}`);
 }

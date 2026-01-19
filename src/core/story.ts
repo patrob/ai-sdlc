@@ -19,6 +19,11 @@ export function parseStory(filePath: string): Story {
 
   const frontmatter = data as StoryFrontmatter;
 
+  // Ensure labels field exists (backward compatibility with old stories)
+  if (!frontmatter.labels) {
+    frontmatter.labels = [];
+  }
+
   // Extract slug from frontmatter (new architecture) or filename (old architecture fallback)
   let slug: string;
   if (frontmatter.slug) {

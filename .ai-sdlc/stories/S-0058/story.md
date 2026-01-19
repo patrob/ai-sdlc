@@ -2,7 +2,7 @@
 id: S-0058
 title: Auto-complete after review approval missing PR creation and final commit
 priority: 1
-status: in-progress
+status: done
 type: bug
 created: '2026-01-17'
 labels:
@@ -14,7 +14,7 @@ labels:
 research_complete: true
 plan_complete: true
 implementation_complete: true
-reviews_complete: false
+reviews_complete: true
 slug: auto-complete-missing-pr-creation
 worktree_path: >-
   /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0058-auto-complete-missing-pr-creation

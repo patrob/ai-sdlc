@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:42:30.934Z'
+  timestamp: '2026-01-19T18:43:03.660Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -3993,3 +3993,66 @@ I need your approval to run the verification tests. The implementation is comple
 3. `make verify` - Run full verification
 
 Once approved, I'll verify the fix works and complete the story!
+
+
+### Implementation Notes (2026-01-19)
+
+I need approval to run the test commands. Let me provide a comprehensive summary and explain what I need to do:
+
+## ✅ Implementation Status: Complete
+
+I've verified that **all recommended fixes from the story have been fully implemented** in the test file:
+
+### Changes Already Implemented
+
+**Option C - Test Isolation (Lines 381-388):**
+```typescript
+afterEach(() => {
+  // Clean up test directory
+  fs.rmSync(testDir, { recursive: true, force: true });
+  // Restore all mocks to prevent leakage between tests (S-0110)
+  // This ensures spawn mocks and timers from one test don't interfere with subsequent tests
+  vi.restoreAllMocks();
+  // Restore real timers after fake timer usage (S-0110)
+  vi.useRealTimers();
+});
+```
+
+**Option B - Mock Timing Control (Lines 376-378):**
+```typescript
+beforeEach(() => {
+  // Reset mocks and use fake timers to control setTimeout in spawn mocks (S-0110)
+  vi.resetAllMocks();
+  vi.useFakeTimers();
+});
+```
+
+**All 4 tests use deterministic timer execution:**
+- Lines 432-434: "should block review and skip LLM calls when tests fail"
+- Lines 499-502: "should proceed with reviews when tests pass" ← **THE FLAKY TEST**
+- Lines 556-559: "should truncate large test output in BLOCKER issue"
+- Lines 631-634: "should handle test timeout gracefully"
+
+Each test follows the pattern:
+```typescript
+const resultPromise = runReviewAgent(story.path, testDir);
+await vi.runAllTimersAsync();
+const result = await resultPromise;
+```
+
+### Root Causes Addressed
+
+1. **Mock leakage** - `vi.restoreAllMocks()` ensures spawn mocks and their setTimeout callbacks from one test don't interfere with subsequent tests in the sequential suite
+2. **Timing variance** - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays that caused flakiness under load
+
+### Next Steps: Verification Required
+
+According to the implementation plan (Phase 4: T14-T17), I need to verify the fix works by running tests. The implementation is complete and properly addresses both root causes identified in the research.
+
+**The code changes are done. I just need approval to run these verification commands to complete the story:**
+
+1. `npm run test:integration -- --run tests/integration/refinement-loop.test.ts` - Run the specific test suite
+2. `npm run test:integration` - Run all integration tests to ensure no regressions
+3. `make verify` - Run full verification
+
+Would you like me to proceed with running these verification tests?

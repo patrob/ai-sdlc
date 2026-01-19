@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:52:13.295Z'
+  timestamp: '2026-01-19T18:52:43.851Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -4884,3 +4884,49 @@ make verify
 The implementation is complete and properly addresses both root causes identified in the research. Once you approve these commands, I'll verify the fix resolves the flakiness issue and meets all acceptance criteria (test passes reliably in full integration suite).
 
 **The code changes are done - I'm ready to run the verification tests to complete the story.**
+
+
+### Implementation Notes (2026-01-19)
+
+I need approval to run the test commands. Based on my analysis, the implementation is **complete**. Both recommended fixes from the story have been properly applied:
+
+### ✅ Changes Already Implemented
+
+**Option C - Test Isolation (Lines 381-388):**
+```typescript
+afterEach(() => {
+  // Clean up test directory
+  fs.rmSync(testDir, { recursive: true, force: true });
+  // Restore all mocks to prevent leakage between tests (S-0110)
+  // This ensures spawn mocks and timers from one test don't interfere with subsequent tests
+  vi.restoreAllMocks();
+  // Restore real timers after fake timer usage (S-0110)
+  vi.useRealTimers();
+});
+```
+
+**Option B - Mock Timing Control (Lines 376-378):**
+```typescript
+beforeEach(() => {
+  // Reset mocks and use fake timers to control setTimeout in spawn mocks (S-0110)
+  vi.resetAllMocks();
+  vi.useFakeTimers();
+});
+```
+
+**All 4 tests use deterministic timer execution:**
+- Lines 432-435: "should block review and skip LLM calls when tests fail"
+- Lines 499-502: "should proceed with reviews when tests pass" ← **THE FLAKY TEST**
+- Lines 556-559: "should truncate large test output in BLOCKER issue"
+- Lines 631-634: "should handle test timeout gracefully"
+
+### Root Causes Addressed
+
+1. **Mock leakage** - `vi.restoreAllMocks()` ensures spawn mocks and their setTimeout callbacks from one test don't interfere with subsequent tests in the sequential suite
+2. **Timing variance** - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays that caused flakiness under load
+
+### Summary
+
+The implementation is **complete** and addresses both root causes identified in the story. The fix follows established patterns from the codebase and includes detailed comments referencing S-0110. 
+
+According to the acceptance criteria, I should verify the fix with 10 consecutive test runs, but I need approval to run test commands. The code changes are done and ready for testing to confirm they resolve the flakiness issue.

@@ -16,7 +16,11 @@ import {
   buildRetryPrompt,
   detectMissingDependencies,
   sanitizeTestOutput,
+  extractChangedFiles,
+  buildRetryHistorySection,
   type TDDPhaseResult,
+  type AttemptHistoryEntry,
+  type AttemptOutcome,
 } from './implementation.js';
 import { Story, TDDTestCycle } from '../types/index.js';
 import * as storyModule from '../core/story.js';
@@ -1350,6 +1354,281 @@ Build completed with errors
         const input = 'Normal test output with no escape codes';
         const output = sanitizeTestOutput(input);
         expect(output).toBe(input);
+      });
+    });
+  });
+
+  describe('Pre-Flight Check Functions', () => {
+    describe('extractChangedFiles', () => {
+      beforeEach(() => {
+        vi.mocked(spawnSync).mockReset();
+      });
+
+      it('should return comma-separated list of changed files', () => {
+        vi.mocked(spawnSync).mockReturnValue({
+          status: 0,
+          stdout: 'src/foo.ts\nsrc/bar.ts\npackage.json',
+          stderr: '',
+          output: [],
+          pid: 1,
+          signal: null,
+        });
+
+        const result = extractChangedFiles('/test/dir');
+        expect(result).toBe('src/foo.ts, src/bar.ts, package.json');
+      });
+
+      it('should return single filename for one changed file', () => {
+        vi.mocked(spawnSync).mockReturnValue({
+          status: 0,
+          stdout: 'src/single-file.ts',
+          stderr: '',
+          output: [],
+          pid: 1,
+          signal: null,
+        });
+
+        const result = extractChangedFiles('/test/dir');
+        expect(result).toBe('src/single-file.ts');
+      });
+
+      it('should return "No changes detected" for empty diff', () => {
+        vi.mocked(spawnSync).mockReturnValue({
+          status: 0,
+          stdout: '',
+          stderr: '',
+          output: [],
+          pid: 1,
+          signal: null,
+        });
+
+        const result = extractChangedFiles('/test/dir');
+        expect(result).toBe('No changes detected');
+      });
+
+      it('should return "No changes detected" when git status is 0 but only whitespace', () => {
+        vi.mocked(spawnSync).mockReturnValue({
+          status: 0,
+          stdout: '\n\n  \n',
+          stderr: '',
+          output: [],
+          pid: 1,
+          signal: null,
+        });
+
+        const result = extractChangedFiles('/test/dir');
+        expect(result).toBe('No changes detected');
+      });
+
+      it('should handle git errors gracefully', () => {
+        vi.mocked(spawnSync).mockImplementation(() => {
+          throw new Error('git not found');
+        });
+
+        const result = extractChangedFiles('/test/dir');
+        expect(result).toBe('Unable to determine changes');
+      });
+
+      it('should call git diff HEAD --name-only', () => {
+        vi.mocked(spawnSync).mockReturnValue({
+          status: 0,
+          stdout: 'file.ts',
+          stderr: '',
+          output: [],
+          pid: 1,
+          signal: null,
+        });
+
+        extractChangedFiles('/test/dir');
+
+        expect(spawnSync).toHaveBeenCalledWith(
+          'git',
+          ['diff', 'HEAD', '--name-only'],
+          expect.objectContaining({ cwd: '/test/dir' })
+        );
+      });
+    });
+
+    describe('buildRetryHistorySection', () => {
+      it('should return empty string for empty history', () => {
+        expect(buildRetryHistorySection([])).toBe('');
+      });
+
+      it('should return empty string for null/undefined history', () => {
+        expect(buildRetryHistorySection(null as unknown as AttemptHistoryEntry[])).toBe('');
+        expect(buildRetryHistorySection(undefined as unknown as AttemptHistoryEntry[])).toBe('');
+      });
+
+      it('should format single attempt correctly', () => {
+        const history: AttemptHistoryEntry[] = [
+          {
+            attempt: 1,
+            testFailures: 2,
+            buildFailures: 0,
+            testSnippet: 'Expected true but got false',
+            buildSnippet: '',
+            changesSummary: 'src/foo.ts, src/bar.ts',
+            outcome: 'failed_tests',
+          },
+        ];
+
+        const result = buildRetryHistorySection(history);
+
+        expect(result).toContain('PREVIOUS ATTEMPT HISTORY');
+        expect(result).toContain('Attempt 1: src/foo.ts, src/bar.ts -> Tests failed');
+        expect(result).toContain('Expected true but got false');
+        expect(result).toContain('Do NOT repeat the same fixes');
+      });
+
+      it('should format multiple attempts with truncation to 2 errors each', () => {
+        const history: AttemptHistoryEntry[] = [
+          {
+            attempt: 1,
+            testFailures: 1,
+            buildFailures: 1,
+            testSnippet: 'Test error 1',
+            buildSnippet: 'Build error 1',
+            changesSummary: 'src/a.ts',
+            outcome: 'failed_build',
+          },
+          {
+            attempt: 2,
+            testFailures: 2,
+            buildFailures: 0,
+            testSnippet: 'Test error 2',
+            buildSnippet: '',
+            changesSummary: 'src/b.ts',
+            outcome: 'failed_tests',
+          },
+        ];
+
+        const result = buildRetryHistorySection(history);
+
+        expect(result).toContain('Attempt 1: src/a.ts -> Build failed');
+        expect(result).toContain('Attempt 2: src/b.ts -> Tests failed');
+        expect(result).toContain('Test error 1');
+        expect(result).toContain('Build error 1');
+        expect(result).toContain('Test error 2');
+      });
+
+      it('should limit history to last 3 attempts when more exist', () => {
+        const history: AttemptHistoryEntry[] = [
+          { attempt: 1, testFailures: 1, buildFailures: 0, testSnippet: 'err1', buildSnippet: '', changesSummary: 'f1', outcome: 'failed_tests' },
+          { attempt: 2, testFailures: 1, buildFailures: 0, testSnippet: 'err2', buildSnippet: '', changesSummary: 'f2', outcome: 'failed_tests' },
+          { attempt: 3, testFailures: 1, buildFailures: 0, testSnippet: 'err3', buildSnippet: '', changesSummary: 'f3', outcome: 'failed_tests' },
+          { attempt: 4, testFailures: 1, buildFailures: 0, testSnippet: 'err4', buildSnippet: '', changesSummary: 'f4', outcome: 'failed_tests' },
+          { attempt: 5, testFailures: 1, buildFailures: 0, testSnippet: 'err5', buildSnippet: '', changesSummary: 'f5', outcome: 'failed_tests' },
+        ];
+
+        const result = buildRetryHistorySection(history);
+
+        expect(result).toContain('Last 3 attempts');
+        expect(result).not.toContain('Attempt 1:');
+        expect(result).not.toContain('Attempt 2:');
+        expect(result).toContain('Attempt 3:');
+        expect(result).toContain('Attempt 4:');
+        expect(result).toContain('Attempt 5:');
+      });
+
+      it('should format no_change outcome correctly', () => {
+        const history: AttemptHistoryEntry[] = [
+          {
+            attempt: 2,
+            testFailures: 0,
+            buildFailures: 0,
+            testSnippet: '',
+            buildSnippet: '',
+            changesSummary: 'No changes detected',
+            outcome: 'no_change',
+          },
+        ];
+
+        const result = buildRetryHistorySection(history);
+
+        expect(result).toContain('Attempt 2: No changes detected -> No changes made');
+      });
+
+      it('should include "Do NOT repeat" instruction', () => {
+        const history: AttemptHistoryEntry[] = [
+          { attempt: 1, testFailures: 1, buildFailures: 0, testSnippet: '', buildSnippet: '', changesSummary: 'file.ts', outcome: 'failed_tests' },
+        ];
+
+        const result = buildRetryHistorySection(history);
+
+        expect(result).toContain('Do NOT repeat the same fixes');
+        expect(result).toContain('Try a different approach');
+      });
+
+      it('should truncate long error snippets', () => {
+        const longSnippet = 'x'.repeat(200);
+        const history: AttemptHistoryEntry[] = [
+          {
+            attempt: 1,
+            testFailures: 1,
+            buildFailures: 0,
+            testSnippet: longSnippet,
+            buildSnippet: '',
+            changesSummary: 'file.ts',
+            outcome: 'failed_tests',
+          },
+        ];
+
+        const result = buildRetryHistorySection(history);
+
+        expect(result).not.toContain(longSnippet);
+        expect(result.length).toBeLessThan(longSnippet.length + 500);
+      });
+    });
+
+    describe('buildRetryPrompt with attemptHistory', () => {
+      it('should include retry history section when attempts > 0', () => {
+        const history: AttemptHistoryEntry[] = [
+          {
+            attempt: 1,
+            testFailures: 2,
+            buildFailures: 0,
+            testSnippet: 'Test failed',
+            buildSnippet: '',
+            changesSummary: 'src/foo.ts',
+            outcome: 'failed_tests',
+          },
+        ];
+
+        const prompt = buildRetryPrompt('test output', '', 2, 3, history);
+
+        expect(prompt).toContain('PREVIOUS ATTEMPT HISTORY');
+        expect(prompt).toContain('Attempt 1: src/foo.ts -> Tests failed');
+        expect(prompt).toContain('Do NOT repeat the same fixes');
+      });
+
+      it('should omit retry history section when no history provided', () => {
+        const prompt = buildRetryPrompt('test output', '', 1, 3);
+
+        expect(prompt).not.toContain('PREVIOUS ATTEMPT HISTORY');
+        expect(prompt).not.toContain('Do NOT repeat');
+      });
+
+      it('should omit retry history section when empty array provided', () => {
+        const prompt = buildRetryPrompt('test output', '', 1, 3, []);
+
+        expect(prompt).not.toContain('PREVIOUS ATTEMPT HISTORY');
+        expect(prompt).not.toContain('Do NOT repeat');
+      });
+
+      it('should place history after error classification and before output sections', () => {
+        const history: AttemptHistoryEntry[] = [
+          { attempt: 1, testFailures: 1, buildFailures: 0, testSnippet: '', buildSnippet: '', changesSummary: 'f.ts', outcome: 'failed_tests' },
+        ];
+
+        const prompt = buildRetryPrompt('test output here', 'build output here', 2, 3, history);
+
+        const historyIndex = prompt.indexOf('PREVIOUS ATTEMPT HISTORY');
+        const testOutputIndex = prompt.indexOf('Test Output:');
+        const buildOutputIndex = prompt.indexOf('Build Output:');
+
+        expect(historyIndex).toBeGreaterThan(0);
+        expect(buildOutputIndex).toBeGreaterThan(historyIndex);
+        expect(testOutputIndex).toBeGreaterThan(historyIndex);
       });
     });
   });

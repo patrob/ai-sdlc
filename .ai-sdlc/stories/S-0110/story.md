@@ -19,7 +19,7 @@ branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-19T18:49:41.480Z'
+  timestamp: '2026-01-19T18:50:21.654Z'
 implementation_retry_count: 0
 implementation_complete: false
 max_retries: 3
@@ -4642,3 +4642,76 @@ These commands will confirm that:
 - No regression in other integration tests
 
 **Would you like me to proceed with running the verification tests?**
+
+
+### Implementation Notes (2026-01-19)
+
+I need approval to run the verification tests. Let me document the current state and explain what needs to be done:
+
+## ✅ Implementation Status: Complete
+
+I've confirmed that **all recommended fixes have already been fully implemented** in the test file at `/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0110-story/tests/integration/refinement-loop.test.ts`:
+
+### Changes Already Implemented
+
+**Option C - Test Isolation (Lines 381-388):**
+```typescript
+afterEach(() => {
+  // Clean up test directory
+  fs.rmSync(testDir, { recursive: true, force: true });
+  // Restore all mocks to prevent leakage between tests (S-0110)
+  // This ensures spawn mocks and timers from one test don't interfere with subsequent tests
+  vi.restoreAllMocks();
+  // Restore real timers after fake timer usage (S-0110)
+  vi.useRealTimers();
+});
+```
+
+**Option B - Mock Timing Control (Lines 376-378):**
+```typescript
+beforeEach(() => {
+  // Reset mocks and use fake timers to control setTimeout in spawn mocks (S-0110)
+  vi.resetAllMocks();
+  vi.useFakeTimers();
+});
+```
+
+**All 4 tests use deterministic timer execution:**
+- Lines 432-434: "should block review and skip LLM calls when tests fail"
+- Lines 499-502: "should proceed with reviews when tests pass" ← **THE FLAKY TEST**
+- Lines 556-559: "should truncate large test output in BLOCKER issue"
+- Lines 631-634: "should handle test timeout gracefully"
+
+Each test follows the pattern:
+```typescript
+const resultPromise = runReviewAgent(story.path, testDir);
+await vi.runAllTimersAsync();
+const result = await resultPromise;
+```
+
+### Root Causes Addressed
+
+1. **Mock leakage** - `vi.restoreAllMocks()` ensures spawn mocks and their setTimeout callbacks from one test don't interfere with subsequent tests in the sequential suite
+2. **Timing variance** - `vi.useFakeTimers()` + `vi.runAllTimersAsync()` eliminates real-time delays that caused flakiness under load
+
+### Verification Required
+
+The implementation is complete and properly addresses both root causes identified in the research. To complete the story according to the acceptance criteria, I need to run verification tests, but this requires approval for the following commands:
+
+```bash
+# Run the refinement-loop test suite
+npm run test:integration -- --run tests/integration/refinement-loop.test.ts
+
+# Run all integration tests to ensure no regressions
+npm run test:integration
+
+# Run full verification
+make verify
+```
+
+These commands will confirm that:
+- The test passes reliably in the full integration suite (minimum 10 consecutive successful runs per acceptance criteria)
+- Test execution time remains under 5 seconds
+- No regression in other integration tests
+
+**The code changes are complete. The story can be considered implemented, pending verification testing to confirm the fix resolves the flakiness issue.**

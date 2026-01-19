@@ -10,7 +10,6 @@ labels:
   - p0-critical
   - workflow
   - silent-failure
-  - s
 research_complete: true
 plan_complete: true
 implementation_complete: true

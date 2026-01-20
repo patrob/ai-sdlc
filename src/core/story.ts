@@ -5,6 +5,18 @@ import * as properLockfile from 'proper-lockfile';
 import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, DEFAULT_PRIORITY_GAP, LockOptions, ReviewResult, ReviewDecision } from '../types/index.js';
 
 /**
+ * Section file names for split story outputs.
+ * Each agent writes to its own file within the story folder.
+ */
+export const SECTION_FILES = {
+  research: 'research.md',
+  plan: 'plan.md',
+  review: 'review.md',
+} as const;
+
+export type SectionType = keyof typeof SECTION_FILES;
+
+/**
  * Parse a story markdown file into a Story object
  *
  * In the new architecture, story ID is extracted from the parent folder name,
@@ -433,7 +445,8 @@ export async function createStory(
       .replace(/<script[^>]*>.*?<\/script>/gis, '')
       .replace(/<iframe[^>]*>.*?<\/iframe>/gis, '');
   } else {
-    // Default template
+    // Default template - lean story.md without section placeholders
+    // Agent outputs (research, plan, review) go to separate files in the story folder
     storyContent = `# ${title}
 
 ## Summary
@@ -442,19 +455,7 @@ export async function createStory(
 
 ## Acceptance Criteria
 
-- [ ] (Define acceptance criteria)
-
-## Research
-
-<!-- Populated by research agent -->
-
-## Implementation Plan
-
-<!-- Populated by planning agent -->
-
-## Review Notes
-
-<!-- Populated by review agents -->`;
+- [ ] (Define acceptance criteria)`;
   }
 
   const story: Story = {
@@ -487,6 +488,7 @@ export async function updateStoryField<K extends keyof StoryFrontmatter>(
 
 /**
  * Append content to a section in the story
+ * @deprecated Use writeSectionContent() for new code. This function writes to story.md.
  */
 export async function appendToSection(story: Story, section: string, content: string): Promise<Story> {
   const sectionHeader = `## ${section}`;
@@ -515,6 +517,148 @@ export async function appendToSection(story: Story, section: string, content: st
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
   await writeStory(story);
   return story;
+}
+
+/**
+ * Get the path to a section file within a story folder.
+ *
+ * @param storyPath - Path to the story.md file
+ * @param section - Section type (research, plan, review)
+ * @returns Absolute path to the section file
+ */
+export function getSectionFilePath(storyPath: string, section: SectionType): string {
+  const storyDir = path.dirname(storyPath);
+  return path.join(storyDir, SECTION_FILES[section]);
+}
+
+/**
+ * Read section content from section file, with fallback to story.md for backward compatibility.
+ *
+ * Lookup order:
+ * 1. Section file (e.g., research.md) - preferred
+ * 2. Extract from story.md section (e.g., ## Research) - backward compat
+ * 3. Return empty string if neither exists
+ *
+ * @param storyPath - Path to the story.md file
+ * @param section - Section type (research, plan, review)
+ * @returns Section content or empty string
+ */
+export async function readSectionContent(storyPath: string, section: SectionType): Promise<string> {
+  const sectionFilePath = getSectionFilePath(storyPath, section);
+
+  // Try section file first (new architecture)
+  if (fs.existsSync(sectionFilePath)) {
+    return fs.readFileSync(sectionFilePath, 'utf-8');
+  }
+
+  // Fall back to extracting from story.md (backward compatibility)
+  const sectionHeaders: Record<SectionType, string> = {
+    research: 'Research',
+    plan: 'Implementation Plan',
+    review: 'Review Notes',
+  };
+
+  try {
+    const storyContent = fs.readFileSync(storyPath, 'utf-8');
+    const { content } = matter(storyContent, {});
+    const sectionHeader = `## ${sectionHeaders[section]}`;
+    const sectionIndex = content.indexOf(sectionHeader);
+
+    if (sectionIndex === -1) {
+      return '';
+    }
+
+    // Find the section content
+    const afterHeader = sectionIndex + sectionHeader.length;
+    const nextSectionMatch = content.substring(afterHeader).match(/\n## /);
+    const endIndex = nextSectionMatch
+      ? afterHeader + nextSectionMatch.index!
+      : content.length;
+
+    return content.substring(afterHeader, endIndex).trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Format iteration header for retry/rework scenarios.
+ *
+ * @param iteration - Iteration number (1-based)
+ * @param isRework - Whether this is a rework iteration (vs initial or retry)
+ * @returns Formatted header string
+ */
+export function formatIterationHeader(iteration: number, isRework?: boolean): string {
+  const timestamp = new Date().toISOString().split('T')[0];
+  if (iteration === 1 && !isRework) {
+    return `---\n*Generated: ${timestamp}*\n\n`;
+  }
+  const label = isRework ? 'Rework' : 'Iteration';
+  return `\n\n---\n\n## ${label} ${iteration}\n*Generated: ${timestamp}*\n\n`;
+}
+
+/**
+ * Write or append content to a section file.
+ *
+ * Creates the section file if it doesn't exist. When appending,
+ * adds an iteration header for clarity.
+ *
+ * @param storyPath - Path to the story.md file
+ * @param section - Section type (research, plan, review)
+ * @param content - Content to write
+ * @param options - Write options
+ * @param options.append - If true, append to existing content
+ * @param options.iteration - Iteration number for header formatting
+ * @param options.isRework - If true, format as rework iteration
+ */
+export async function writeSectionContent(
+  storyPath: string,
+  section: SectionType,
+  content: string,
+  options?: { append?: boolean; iteration?: number; isRework?: boolean }
+): Promise<void> {
+  const sectionFilePath = getSectionFilePath(storyPath, section);
+  const append = options?.append ?? false;
+  const iteration = options?.iteration ?? 1;
+  const isRework = options?.isRework ?? false;
+
+  let finalContent: string;
+
+  if (append && fs.existsSync(sectionFilePath)) {
+    // Append with iteration header
+    const existing = fs.readFileSync(sectionFilePath, 'utf-8');
+    const header = formatIterationHeader(iteration, isRework);
+    finalContent = existing + header + content;
+  } else {
+    // Write fresh content with initial header
+    const header = formatIterationHeader(1, false);
+    finalContent = header + content;
+  }
+
+  fs.writeFileSync(sectionFilePath, finalContent);
+}
+
+/**
+ * Get story context including all section files.
+ * Useful for agents that need to read other phases' output.
+ *
+ * @param storyPath - Path to the story.md file
+ * @returns Object with story and all section content
+ */
+export async function getStoryContext(storyPath: string): Promise<{
+  story: Story;
+  research: string;
+  plan: string;
+  review: string;
+}> {
+  const story = parseStory(storyPath);
+  const [research, plan, review] = await Promise.all([
+    readSectionContent(storyPath, 'research'),
+    readSectionContent(storyPath, 'plan'),
+    readSectionContent(storyPath, 'review'),
+  ]);
+
+  return { story, research, plan, review };
 }
 
 /**

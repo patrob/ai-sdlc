@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
 import { ProcessManager } from '../core/process-manager.js';
-import { parseStory, writeStory, updateStoryStatus, appendToSection, updateStoryField, isAtMaxRetries, appendReviewHistory, snapshotMaxRetries, getEffectiveMaxRetries, getEffectiveMaxImplementationRetries } from '../core/story.js';
+import { parseStory, writeStory, updateStoryStatus, updateStoryField, isAtMaxRetries, appendReviewHistory, snapshotMaxRetries, getEffectiveMaxRetries, getEffectiveMaxImplementationRetries, writeSectionContent } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from '../core/config.js';
@@ -1536,8 +1536,16 @@ ${passed ? '✅ **PASSED** - All reviews approved' : '❌ **FAILED** - Issues mu
 *Review completed: ${new Date().toISOString().split('T')[0]}*
 `;
 
-    // Append reviews to story
-    await appendToSection(story, 'Review Notes', reviewNotes);
+    // Determine if this is a retry (retry_count > 0)
+    const retryCount = story.frontmatter.retry_count || 0;
+    const isRetry = retryCount > 0;
+
+    // Write review notes to section file
+    await writeSectionContent(storyPath, 'review', reviewNotes, {
+      append: isRetry,
+      iteration: retryCount + 1,
+      isRework: isRetry,
+    });
     changesMade.push('Added unified collaborative review notes');
 
     // Determine decision

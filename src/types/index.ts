@@ -4,6 +4,12 @@ export type StoryType = 'feature' | 'bug' | 'chore' | 'spike';
 export type EffortEstimate = 'small' | 'medium' | 'large';
 
 /**
+ * Section types for split story outputs.
+ * Each section is stored in a separate file within the story folder.
+ */
+export type SectionType = 'research' | 'plan' | 'review';
+
+/**
  * Content type classification for story implementation.
  * Distinguishes between different kinds of implementation work to enable appropriate validation.
  *

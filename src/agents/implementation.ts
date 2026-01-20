@@ -10,6 +10,7 @@ import {
   isAtMaxImplementationRetries,
   getEffectiveMaxImplementationRetries,
   incrementTotalRecoveryAttempts,
+  readSectionContent,
 } from '../core/story.js';
 import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
@@ -797,12 +798,17 @@ export async function attemptImplementationWithRetries(
   let lastDiffHash = ''; // Initialize to empty string, will capture after first failure
   const attemptHistory: AttemptHistoryEntry[] = [];
 
+  // Read plan and research from section files (with backward compat fallback)
+  const planContent = await readSectionContent(storyPath, 'plan');
+  const researchContent = await readSectionContent(storyPath, 'research');
+
   while (attemptNumber <= maxRetries) {
     attemptNumber++;
 
     const contentType = story.frontmatter.content_type || 'code';
     const contentTypeGuidance = getContentTypeGuidance(contentType);
 
+    // Build prompt with story content plus separate section files
     let prompt = `Implement this story based on the plan:
 
 Title: ${story.frontmatter.title}
@@ -810,6 +816,22 @@ ${contentTypeGuidance}
 
 Story content:
 ${story.content}`;
+
+    // Include research findings if available
+    if (researchContent.trim()) {
+      prompt += `
+
+## Research Findings
+${researchContent}`;
+    }
+
+    // Include implementation plan if available
+    if (planContent.trim()) {
+      prompt += `
+
+## Implementation Plan
+${planContent}`;
+    }
 
     if (reworkContext) {
       prompt += `

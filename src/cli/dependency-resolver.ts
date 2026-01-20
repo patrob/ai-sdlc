@@ -13,6 +13,7 @@ export interface DependencyValidationResult {
  * Uses iterative topological sort to identify stories that can run concurrently.
  *
  * @param stories - Array of stories to group
+ * @param preSatisfiedDeps - Optional set of dependency IDs that are already satisfied (e.g., done stories)
  * @returns Array of phases, where each phase contains stories that can run in parallel
  * @throws Error if circular dependencies detected
  *
@@ -20,10 +21,10 @@ export interface DependencyValidationResult {
  * // Stories: A -> B, A -> C, B -> D, C -> D
  * // Returns: [[A], [B, C], [D]]
  */
-export function groupStoriesByPhase(stories: Story[]): Story[][] {
+export function groupStoriesByPhase(stories: Story[], preSatisfiedDeps?: Set<string>): Story[][] {
   const phases: Story[][] = [];
   const remaining = new Set(stories);
-  const completed = new Set<string>();
+  const completed = new Set<string>(preSatisfiedDeps || []);
 
   while (remaining.size > 0) {
     // Find all stories whose dependencies are satisfied
@@ -116,6 +117,7 @@ export function detectCircularDependencies(stories: Story[]): string[] {
  * Checks for missing dependencies and circular references.
  *
  * @param stories - Array of stories to validate
+ * @param preSatisfiedDeps - Optional set of dependency IDs that are already satisfied (e.g., done stories)
  * @returns Validation result with errors if any
  *
  * @example
@@ -124,15 +126,16 @@ export function detectCircularDependencies(stories: Story[]): string[] {
  *   console.error(result.errors);
  * }
  */
-export function validateDependencies(stories: Story[]): DependencyValidationResult {
+export function validateDependencies(stories: Story[], preSatisfiedDeps?: Set<string>): DependencyValidationResult {
   const errors: string[] = [];
   const storyIds = new Set(stories.map(s => s.frontmatter.id));
+  const satisfiedDeps = preSatisfiedDeps || new Set<string>();
 
-  // Check for missing dependencies
+  // Check for missing dependencies (excluding pre-satisfied ones like done stories)
   for (const story of stories) {
     const deps = story.frontmatter.dependencies || [];
     for (const dep of deps) {
-      if (!storyIds.has(dep)) {
+      if (!storyIds.has(dep) && !satisfiedDeps.has(dep)) {
         errors.push(
           `Story ${story.frontmatter.id} depends on ${dep}, but ${dep} is not in the epic`
         );
@@ -144,7 +147,7 @@ export function validateDependencies(stories: Story[]): DependencyValidationResu
   // (missing dependencies will cause groupStoriesByPhase to fail with misleading error)
   if (errors.length === 0) {
     try {
-      groupStoriesByPhase(stories);
+      groupStoriesByPhase(stories, preSatisfiedDeps);
     } catch (error) {
       if (error instanceof Error) {
         errors.push(error.message);

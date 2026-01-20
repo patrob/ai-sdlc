@@ -18,10 +18,7 @@ plan_complete: true
 implementation_complete: true
 reviews_complete: true
 content_type: code
-worktree_path: >-
-  /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0114-implementation-retry-count-resets-on-verification-
 updated: '2026-01-20'
-branch: ai-sdlc/implementation-retry-count-resets-on-verification-
 last_test_run:
   passed: true
   failures: 0

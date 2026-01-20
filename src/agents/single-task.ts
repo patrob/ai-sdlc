@@ -18,7 +18,7 @@ export const TASK_AGENT_SYSTEM_PROMPT = `You are a senior software engineer exec
 Your job is to:
 1. Read and understand the task description
 2. Review the existing code in the target files
-3. Make the necessary changes to satisfy the task requirements
+3. Make the necessary changes per the story's content_type requirements
 4. Follow the project conventions strictly
 5. Write clean, maintainable code that follows existing patterns
 

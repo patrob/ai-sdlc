@@ -80,6 +80,10 @@ Never write multiple tests before making the first one pass.`;
 
 const IMPLEMENTATION_SYSTEM_PROMPT = `You are a senior software engineer implementing features based on a detailed plan. Your job is to execute each phase of the implementation plan.
 
+IMPORTANT: Each story has a content_type that determines what files you must modify.
+The specific requirements will be provided in the prompt. Follow them exactly or
+your implementation will fail validation.
+
 When implementing:
 1. Follow the plan step by step
 2. Write clean, maintainable code
@@ -97,6 +101,56 @@ CRITICAL RULES ABOUT TESTS:
 - Implementation is not done until all tests pass
 
 You have access to tools for reading and writing files, running commands, and searching the codebase.`;
+
+/**
+ * Generate implementation guidance based on story content type.
+ * Matches validation logic in review.ts
+ */
+export function getContentTypeGuidance(contentType: string): string {
+  switch (contentType) {
+    case 'code':
+      return `
+IMPLEMENTATION REQUIREMENTS (content_type: code):
+- You MUST create or modify source code files: .ts, .tsx, .js, .jsx
+- Source files belong in src/ directory
+- Test files: .test.ts, .spec.ts colocated with source or in tests/
+- Writing ONLY to story/documentation files will FAIL validation
+- Validation checks: git diff for .ts/.tsx/.js/.jsx changes`;
+
+    case 'configuration':
+      return `
+IMPLEMENTATION REQUIREMENTS (content_type: configuration):
+- You MUST modify configuration files
+- Valid locations: .claude/, .github/, or root config files (tsconfig.json, package.json, etc.)
+- Source code changes are NOT required
+- Writing ONLY to story files will FAIL validation
+- Validation checks: git diff for config file changes`;
+
+    case 'documentation':
+      return `
+IMPLEMENTATION REQUIREMENTS (content_type: documentation):
+- You MUST create or modify documentation files
+- Valid files: .md files, files in docs/ directory
+- Source code changes are NOT required
+- Writing ONLY to the story file will FAIL validation
+- Validation checks: git diff for .md or docs/ changes`;
+
+    case 'mixed':
+      return `
+IMPLEMENTATION REQUIREMENTS (content_type: mixed):
+- You MUST make BOTH source code AND configuration changes
+- Source code: .ts, .tsx, .js, .jsx files in src/
+- Configuration: .claude/, .github/, or root config files
+- Writing only one type will FAIL validation
+- Validation checks: git diff for both code AND config changes`;
+
+    default:
+      return `
+IMPLEMENTATION REQUIREMENTS:
+- Create or modify appropriate files based on the plan
+- Story-only updates are NOT valid implementation`;
+  }
+}
 
 /**
  * Run a single test file and return pass/fail result
@@ -746,9 +800,13 @@ export async function attemptImplementationWithRetries(
   while (attemptNumber <= maxRetries) {
     attemptNumber++;
 
+    const contentType = story.frontmatter.content_type || 'code';
+    const contentTypeGuidance = getContentTypeGuidance(contentType);
+
     let prompt = `Implement this story based on the plan:
 
 Title: ${story.frontmatter.title}
+${contentTypeGuidance}
 
 Story content:
 ${story.content}`;
@@ -779,9 +837,12 @@ severity issues - these must be resolved. Review the specific feedback and make 
 
 Execute the implementation plan. For each task:
 1. Read relevant existing files
-2. Make necessary code changes
-3. Write tests if applicable
+2. Make the required changes per IMPLEMENTATION REQUIREMENTS above
+3. Write tests if applicable (for code content_type)
 4. Verify the changes work
+
+Your implementation will be validated by checking git diff for the required file types.
+Files in .ai-sdlc/ do not count toward validation.
 
 Use the available tools to read files, write code, and run commands as needed.`;
     }

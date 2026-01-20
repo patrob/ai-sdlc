@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768876026050-a6073dcb",
+  "timestamp": "2026-01-20T03:00:00.000Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0111",
+      "completedAt": "2026-01-20T02:27:25.048Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0111",
+      "completedAt": "2026-01-20T02:30:47.970Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0111",
+      "completedAt": "2026-01-20T02:31:22.594Z"
+    },
+    {
+      "type": "implement",
+      "storyId": "S-0111",
+      "completedAt": "2026-01-20T02:54:19.763Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0111-story/.ai-sdlc"
+  }
+}

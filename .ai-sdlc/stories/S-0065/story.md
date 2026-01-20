@@ -15,9 +15,6 @@ plan_complete: false
 implementation_complete: false
 reviews_complete: false
 slug: backlog-processor-core-loop
-dependencies:
-  - S-0062
-  - S-0063
 ---
 # Backlog Processor Core Loop
 

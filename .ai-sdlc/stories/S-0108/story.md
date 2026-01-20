@@ -16,7 +16,6 @@ implementation_complete: false
 reviews_complete: false
 slug: approval-gates-ui
 dependencies:
-  - S-0090
   - S-0106
 ---
 # Add Approval Gates UI Integration

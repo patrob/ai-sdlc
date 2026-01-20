@@ -496,7 +496,7 @@ reviews_complete: false
     createStory('story-3', ['sprint-2024-q1', 'team-frontend']);
 
     const labels = getUniqueLabels(sdlcRoot);
-    expect(labels.sort()).toEqual(['epic-test', 'sprint-2024-q1', 'team-backend', 'team-frontend'].sort());
+    expect(labels).toEqual(['epic-test', 'sprint-2024-q1', 'team-backend', 'team-frontend']);
   });
 
   it('should return empty array for no stories', () => {

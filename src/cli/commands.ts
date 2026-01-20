@@ -6,7 +6,7 @@ import * as readline from 'readline';
 import { execSync, spawnSync } from 'child_process';
 import { getSdlcRoot, loadConfig, initConfig, validateWorktreeBasePath, DEFAULT_WORKTREE_CONFIG } from '../core/config.js';
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoriesByStatus } from '../core/kanban.js';
-import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId, autoCompleteStoryAfterReview, incrementImplementationRetryCount, getEffectiveMaxImplementationRetries, isAtMaxImplementationRetries, updateStoryStatus } from '../core/story.js';
+import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId, autoCompleteStoryAfterReview, incrementImplementationRetryCount, resetImplementationRetryCount, getEffectiveMaxImplementationRetries, isAtMaxImplementationRetries, updateStoryStatus } from '../core/story.js';
 import { GitWorktreeService, WorktreeStatus, getLastCompletedPhase, getNextPhase } from '../core/worktree.js';
 import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext, WorktreeInfo, PreFlightResult } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
@@ -2227,6 +2227,10 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
 
           // Log auto-completion if it occurred
           if (reviewResult.decision === ReviewDecision.APPROVED && config.reviewConfig.autoCompleteOnApproval) {
+            // Reset implementation retry count on successful review approval
+            await resetImplementationRetryCount(story);
+            storyLogger?.log('INFO', 'Implementation retry count reset after review approval');
+
             spinner.text = c.success('Review approved - auto-completing story');
             storyLogger?.log('INFO', `Story auto-completed after review approval: "${story.frontmatter.title}"`);
 

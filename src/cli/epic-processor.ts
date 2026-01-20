@@ -112,10 +112,11 @@ async function processStoryInWorktree(
     logger.log('INFO', `Starting story execution in worktree: ${worktreePath}`);
 
     // Spawn ai-sdlc run process in worktree
+    // Use --no-worktree since we're already in an isolated worktree
     const result = await new Promise<{ success: boolean; error?: string }>((resolve) => {
       const proc = spawn(
         'npx',
-        ['ai-sdlc', 'run', '--story', storyId, '--auto'],
+        ['ai-sdlc', 'run', '--story', storyId, '--auto', '--no-worktree'],
         {
           cwd: worktreePath,
           stdio: ['ignore', 'pipe', 'pipe'],
@@ -135,6 +136,14 @@ async function processStoryInWorktree(
       });
 
       proc.on('close', (code) => {
+        // Log subprocess output for debugging
+        if (stdout.trim()) {
+          logger.log('DEBUG', `Subprocess stdout:\n${stdout}`);
+        }
+        if (stderr.trim()) {
+          logger.log('DEBUG', `Subprocess stderr:\n${stderr}`);
+        }
+
         if (code === 0) {
           logger.log('INFO', 'Story execution completed successfully');
           resolve({ success: true });

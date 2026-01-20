@@ -112,12 +112,12 @@ async function processStoryInWorktree(
     logger.log('INFO', `Starting story execution in worktree: ${worktreePath}`);
 
     // Spawn ai-sdlc run process in worktree
-    // Use node directly since npx can't find local bin (project isn't a dependency of itself)
+    // Use the same invocation method as the current process (handles global install, npx, or dev mode)
     // Use --no-worktree since we're already in an isolated worktree
     const result = await new Promise<{ success: boolean; error?: string }>((resolve) => {
       const proc = spawn(
-        'node',
-        ['dist/index.js', 'run', '--story', storyId, '--auto', '--no-worktree'],
+        process.execPath,
+        [process.argv[1], 'run', '--story', storyId, '--auto', '--no-worktree'],
         {
           cwd: worktreePath,
           stdio: ['ignore', 'pipe', 'pipe'],

@@ -175,6 +175,71 @@ export function isLocalBehindRemote(workingDir: string): boolean {
   return behind > 0;
 }
 
+/**
+ * Detect the base branch for the repository (main or master)
+ *
+ * @param workingDir - Working directory to check
+ * @returns 'main' or 'master' depending on which exists
+ * @throws Error if neither main nor master branch exists
+ */
+export function getBaseBranch(workingDir: string): string {
+  // Check for 'main' first
+  const mainResult = spawnSync('git', ['rev-parse', '--verify', 'main'], {
+    cwd: workingDir,
+    encoding: 'utf-8',
+    shell: false,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  if (mainResult.status === 0) {
+    return 'main';
+  }
+
+  // Check for 'master' as fallback
+  const masterResult = spawnSync('git', ['rev-parse', '--verify', 'master'], {
+    cwd: workingDir,
+    encoding: 'utf-8',
+    shell: false,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  if (masterResult.status === 0) {
+    return 'master';
+  }
+
+  throw new Error('No base branch found. Expected "main" or "master" branch to exist.');
+}
+
+/**
+ * Get the merge-base (common ancestor) between a base branch and HEAD
+ *
+ * This is useful for comparing all changes on a feature branch against the base branch,
+ * rather than just comparing to the immediate parent commit (HEAD~1).
+ *
+ * @param workingDir - Working directory to check
+ * @param baseBranch - Base branch name (e.g., 'main' or 'master')
+ * @returns Commit SHA of the merge-base, or null if it cannot be determined
+ */
+export function getMergeBase(workingDir: string, baseBranch: string): string | null {
+  try {
+    const result = spawnSync('git', ['merge-base', baseBranch, 'HEAD'], {
+      cwd: workingDir,
+      encoding: 'utf-8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (result.status !== 0) {
+      return null;
+    }
+
+    const output = result.stdout?.toString().trim() || '';
+    return output || null;
+  } catch {
+    return null;
+  }
+}
+
 export function validateGitState(
   workingDir: string,
   options: GitValidationOptions = {}

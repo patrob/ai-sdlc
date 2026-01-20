@@ -76,6 +76,7 @@ const ERROR_MESSAGES = {
   LIST_FAILED: 'Failed to list worktrees',
   REMOVE_FAILED: 'Failed to remove worktree',
   INSTALL_FAILED: 'Failed to install dependencies',
+  BUILD_FAILED: 'Failed to build project',
 } as const;
 
 /**
@@ -220,6 +221,9 @@ export class GitWorktreeService {
     // Install dependencies in the new worktree
     this.installDependencies(worktreePath);
 
+    // Build the project (required for TypeScript projects)
+    this.buildProject(worktreePath);
+
     return worktreePath;
   }
 
@@ -258,6 +262,56 @@ export class GitWorktreeService {
     if (result.status !== 0) {
       const stderr = result.stderr?.toString() || '';
       throw new Error(`${ERROR_MESSAGES.INSTALL_FAILED}: ${stderr}`);
+    }
+  }
+
+  /**
+   * Build the project in a worktree
+   * Runs 'npm run build' if a build script exists in package.json
+   * @param worktreePath - Path to the worktree
+   * @throws Error if build fails
+   */
+  buildProject(worktreePath: string): void {
+    const packageJsonPath = path.join(worktreePath, 'package.json');
+
+    // Skip if not a Node.js project
+    if (!existsSync(packageJsonPath)) {
+      return;
+    }
+
+    // Check if build script exists
+    try {
+      const packageJson = JSON.parse(
+        require('fs').readFileSync(packageJsonPath, 'utf-8')
+      );
+      if (!packageJson.scripts?.build) {
+        return; // No build script, skip
+      }
+    } catch {
+      return; // Can't read package.json, skip
+    }
+
+    // Detect package manager from lock file
+    let packageManager = 'npm'; // default
+    for (const [lockFile, pm] of Object.entries(LOCK_FILE_TO_PM)) {
+      if (existsSync(path.join(worktreePath, lockFile))) {
+        packageManager = pm;
+        break;
+      }
+    }
+
+    // Run build command
+    const result = spawnSync(packageManager, ['run', 'build'], {
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 120000, // 2 minute timeout
+    });
+
+    if (result.status !== 0) {
+      const stderr = result.stderr?.toString() || '';
+      throw new Error(`${ERROR_MESSAGES.BUILD_FAILED}: ${stderr}`);
     }
   }
 

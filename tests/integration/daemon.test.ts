@@ -17,6 +17,9 @@ describe('Daemon Integration Tests', () => {
   let mockRunner: any;
 
   beforeEach(async () => {
+    // Setup fake timers
+    vi.useFakeTimers();
+
     // Setup mocks
     mockChokidar = await import('chokidar');
     mockConfig = await import('../../src/core/config.js');
@@ -75,6 +78,7 @@ describe('Daemon Integration Tests', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
     vi.restoreAllMocks();
   });
@@ -85,7 +89,7 @@ describe('Daemon Integration Tests', () => {
       const startPromise = daemon.start();
 
       // Give it a moment to initialize
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await vi.advanceTimersByTimeAsync(100);
 
       // Verify chokidar was initialized with the watch directories
       expect(mockChokidar.default.watch).toHaveBeenCalled();
@@ -115,7 +119,7 @@ describe('Daemon Integration Tests', () => {
       const startPromise = daemon.start();
 
       // Give it a moment to initialize
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await vi.advanceTimersByTimeAsync(100);
 
       // Verify event handlers were registered
       expect(mockWatcher.on).toHaveBeenCalledWith('add', expect.any(Function));
@@ -129,7 +133,7 @@ describe('Daemon Integration Tests', () => {
       const startPromise = daemon.start();
 
       // Give it a moment to initialize
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await vi.advanceTimersByTimeAsync(100);
 
       // Verify startup logging
       expect(consoleLogSpy).toHaveBeenCalled();
@@ -155,7 +159,7 @@ describe('Daemon Integration Tests', () => {
       daemon.start();
 
       // Give it a moment to initialize
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await vi.advanceTimersByTimeAsync(100);
 
       // Get the 'add' event handler
       const addHandler = mockWatcher.on.mock.calls.find(
@@ -200,7 +204,7 @@ describe('Daemon Integration Tests', () => {
       daemon.start();
 
       // Give it a moment to initialize
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await vi.advanceTimersByTimeAsync(100);
 
       // Get the 'error' event handler
       const errorHandler = mockWatcher.on.mock.calls.find(
@@ -237,7 +241,7 @@ describe('Daemon Integration Tests', () => {
       daemon.start();
 
       // Give it a moment to initialize
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await vi.advanceTimersByTimeAsync(100);
 
       // Stop daemon
       await daemon.stop();
@@ -258,7 +262,7 @@ describe('Daemon Integration Tests', () => {
 
       // Start daemon
       daemon.start();
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await vi.advanceTimersByTimeAsync(100);
 
       // Stop daemon
       await daemon.stop();
@@ -282,7 +286,7 @@ describe('Daemon Integration Tests', () => {
 
       // Start daemon
       daemon.start();
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await vi.advanceTimersByTimeAsync(100);
 
       // Stop daemon - should complete without throwing
       // Note: process.exit is called by the signal handler, not stop() itself
@@ -409,7 +413,7 @@ describe('Daemon Integration Tests', () => {
 
       // Start daemon
       await daemon.start();
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await vi.advanceTimersByTimeAsync(200);
 
       // Verify the highest priority story was picked for processing
       expect(processedStories.length).toBeGreaterThanOrEqual(1);
@@ -480,7 +484,7 @@ describe('Daemon Integration Tests', () => {
       };
 
       await daemon.start();
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await vi.advanceTimersByTimeAsync(200);
 
       // Verify story-a was picked first for processing
       expect(processedStories.length).toBeGreaterThanOrEqual(1);
@@ -561,7 +565,7 @@ describe('Daemon Integration Tests', () => {
 
       // Start daemon
       await daemon.start();
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await vi.advanceTimersByTimeAsync(200);
 
       // Verify more complete story is picked first (lowest priority number)
       expect(processedStories.length).toBeGreaterThanOrEqual(1);
@@ -635,7 +639,7 @@ describe('Daemon Integration Tests', () => {
 
       // Start daemon
       await daemon.start();
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await vi.advanceTimersByTimeAsync(200);
 
       // Verify lower frontmatter priority is picked first
       expect(processedStories.length).toBeGreaterThanOrEqual(1);

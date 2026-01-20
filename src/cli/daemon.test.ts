@@ -726,13 +726,22 @@ describe('file path handling', () => {
 });
 
 describe('initial assessment on startup', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
   it('should set ignoreInitial to true in watcher options', async () => {
     const daemon = new DaemonRunner();
     const mockChokidar = await import('chokidar');
     const watchSpy = vi.spyOn(mockChokidar.default, 'watch');
 
     await daemon.start();
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     expect(watchSpy).toHaveBeenCalledWith(
       expect.any(Array),
@@ -757,7 +766,7 @@ describe('initial assessment on startup', () => {
     });
 
     await daemon.start();
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     expect(assessStateMock).toHaveBeenCalled();
     await daemon.stop();
@@ -804,7 +813,7 @@ describe('initial assessment on startup', () => {
     vi.spyOn(daemonAny, 'processQueue').mockImplementation(() => {});
 
     await daemon.start();
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     // Should have exactly one story in queue (the top one)
     expect(daemonAny.processingQueue.length).toBe(1);
@@ -837,7 +846,7 @@ describe('initial assessment on startup', () => {
     });
 
     await daemon.start();
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     const logCalls = consoleLogSpy.mock.calls.map(call => call[0]);
     const hasFoundMessage = logCalls.some(msg =>
@@ -869,7 +878,7 @@ describe('initial assessment on startup', () => {
     });
 
     await daemon.start();
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     // Should have empty queue
     expect(daemonAny.processingQueue.length).toBe(0);

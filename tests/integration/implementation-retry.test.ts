@@ -129,8 +129,9 @@ implementation:
 
       // Read the story file to verify retry count was tracked
       const updatedStory = parseStory(storyPath);
-      // After success, retry count should be reset to 0
-      expect(updatedStory.frontmatter.implementation_retry_count).toBe(0);
+      // After verification passes, retry count should persist (not be reset)
+      // It will only be reset by review agent on APPROVED decision
+      expect(updatedStory.frontmatter.implementation_retry_count).toBe(2);
     });
 
     it('should preserve retry count in frontmatter after max retries exhausted', async () => {

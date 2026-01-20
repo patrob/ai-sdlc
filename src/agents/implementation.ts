@@ -6,7 +6,6 @@ import {
   writeStory,
   updateStoryStatus,
   updateStoryField,
-  resetImplementationRetryCount,
   incrementImplementationRetryCount,
   isAtMaxImplementationRetries,
   getEffectiveMaxImplementationRetries,
@@ -857,8 +856,7 @@ ${implementationResult}
     });
 
     if (verification.passed) {
-      // Success! Reset retry count and return success
-      await resetImplementationRetryCount(updatedStory);
+      // Success! Return success - retry count will be reset by review agent on APPROVED
       changesMade.push('Verification passed - implementation successful');
 
       // Send success progress callback
@@ -1118,9 +1116,6 @@ export async function runImplementationAgent(
 
         if (!verification.passed) {
           // TDD final verification failed - this is unexpected since TDD should ensure all tests pass
-          // Reset retry count since this is the first failure at this stage
-          await resetImplementationRetryCount(tddResult.story);
-
           return {
             success: false,
             story: parseStory(currentStoryPath),
@@ -1129,9 +1124,7 @@ export async function runImplementationAgent(
           };
         }
 
-        // Success - reset retry count
-        await resetImplementationRetryCount(tddResult.story);
-
+        // Success - retry count will be reset by review agent on APPROVED
         await updateStoryField(tddResult.story, 'implementation_complete', true);
         changesMade.push('Marked implementation_complete: true');
 

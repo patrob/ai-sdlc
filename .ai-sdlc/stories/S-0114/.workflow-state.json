@@ -1,0 +1,65 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768869078023-392ee6c4",
+  "timestamp": "2026-01-20T00:43:21.827Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0114",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0114-implementation-retry-count-resets-on-verification-/.ai-sdlc/stories/S-0114/story.md",
+      "completedAt": "2026-01-20T00:31:38.803Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0114",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0114-implementation-retry-count-resets-on-verification-/.ai-sdlc/stories/S-0114/story.md",
+      "completedAt": "2026-01-20T00:33:57.276Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0114",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0114-implementation-retry-count-resets-on-verification-/.ai-sdlc/stories/S-0114/story.md",
+      "completedAt": "2026-01-20T00:34:34.401Z"
+    },
+    {
+      "type": "implement",
+      "storyId": "S-0114",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0114-implementation-retry-count-resets-on-verification-/.ai-sdlc/stories/S-0114/story.md",
+      "completedAt": "2026-01-20T00:38:27.376Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0114",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0114-implementation-retry-count-resets-on-verification-/.ai-sdlc/stories/S-0114/story.md",
+      "completedAt": "2026-01-20T00:40:40.779Z"
+    },
+    {
+      "type": "implement",
+      "storyId": "S-0114",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0114-implementation-retry-count-resets-on-verification-/.ai-sdlc/stories/S-0114/story.md",
+      "completedAt": "2026-01-20T00:42:06.064Z"
+    },
+    {
+      "type": "implement",
+      "storyId": "S-0114",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0114-implementation-retry-count-resets-on-verification-/.ai-sdlc/stories/S-0114/story.md",
+      "completedAt": "2026-01-20T00:42:29.689Z"
+    },
+    {
+      "type": "implement",
+      "storyId": "S-0114",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0114-implementation-retry-count-resets-on-verification-/.ai-sdlc/stories/S-0114/story.md",
+      "completedAt": "2026-01-20T00:43:21.827Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0114-implementation-retry-count-resets-on-verification-/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0114",
+      "fullSDLC": true
+    },
+    "storyContentHash": "5a9f40f4c8adfc316528ad93e0c26ef3838cc6c8959b5ce743a49ce338cafb8a"
+  }
+}

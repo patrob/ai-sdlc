@@ -87,7 +87,7 @@ const { mockExecSync, mockSpawnSync, mockSpawn, capturedGhCommand, testDirRef, i
       on: vi.fn((event: string, callback: (code: number) => void) => {
         if (event === 'close') {
           // All spawned commands succeed (exit code 0)
-          setTimeout(() => callback(0), 10);
+          process.nextTick(() => callback(0));
         }
         return mockProcess;
       }),
@@ -95,12 +95,12 @@ const { mockExecSync, mockSpawnSync, mockSpawn, capturedGhCommand, testDirRef, i
     };
 
     // Simulate successful test output
-    setTimeout(() => {
+    process.nextTick(() => {
       const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
       if (stdoutCallback) {
         stdoutCallback(Buffer.from('All tests passed\n'));
       }
-    }, 5);
+    });
 
     return mockProcess;
   });

@@ -125,26 +125,26 @@ describe('Review Agent - Pre-check Optimization', () => {
             if (event === 'close') {
               // Build passes (first call), test fails (second call)
               const exitCode = isTestCommand ? 1 : 0;
-              setTimeout(() => callback(exitCode), 10);
+              process.nextTick(() => callback(exitCode));
             }
           }),
         };
 
         // Simulate test output only for test command
         if (isTestCommand) {
-          setTimeout(() => {
+          process.nextTick(() => {
             const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
             if (stdoutCallback) {
               stdoutCallback(Buffer.from('FAIL tests/example.test.ts\n  ✗ example test failed\n    Expected: true\n    Received: false\n'));
             }
-          }, 5);
+          });
         } else if (isBuildCommand) {
-          setTimeout(() => {
+          process.nextTick(() => {
             const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
             if (stdoutCallback) {
               stdoutCallback(Buffer.from('Build successful\n'));
             }
-          }, 5);
+          });
         }
 
         return mockProcess;
@@ -192,12 +192,12 @@ describe('Review Agent - Pre-check Optimization', () => {
             if (event === 'close') {
               // Build passes, test fails
               const exitCode = isTestCommand ? 1 : 0;
-              setTimeout(() => callback(exitCode), 10);
+              process.nextTick(() => callback(exitCode));
             }
           }),
         };
 
-        setTimeout(() => {
+        process.nextTick(() => {
           const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
           if (stdoutCallback) {
             if (isTestCommand) {
@@ -206,7 +206,7 @@ describe('Review Agent - Pre-check Optimization', () => {
               stdoutCallback(Buffer.from('Build successful\n'));
             }
           }
-        }, 5);
+        });
 
         return mockProcess;
       }) as any);
@@ -241,12 +241,12 @@ describe('Review Agent - Pre-check Optimization', () => {
             if (event === 'close') {
               // Build passes, test fails with large output
               const exitCode = isTestCommand ? 1 : 0;
-              setTimeout(() => callback(exitCode), 10);
+              process.nextTick(() => callback(exitCode));
             }
           }),
         };
 
-        setTimeout(() => {
+        process.nextTick(() => {
           const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
           if (stdoutCallback) {
             if (isTestCommand) {
@@ -255,7 +255,7 @@ describe('Review Agent - Pre-check Optimization', () => {
               stdoutCallback(Buffer.from('Build successful\n'));
             }
           }
-        }, 5);
+        });
 
         return mockProcess;
       }) as any);
@@ -290,18 +290,18 @@ describe('Review Agent - Pre-check Optimization', () => {
             if (event === 'close') {
               // First call (build) fails, second call (test) would pass
               const exitCode = callCount === 1 ? 1 : 0;
-              setTimeout(() => callback(exitCode), 10);
+              process.nextTick(() => callback(exitCode));
             }
           }),
         };
 
         if (callCount === 1) {
-          setTimeout(() => {
+          process.nextTick(() => {
             const stderrCallback = mockProcess.stderr.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
             if (stderrCallback) {
               stderrCallback(Buffer.from('Build failed: TypeScript compilation error\n'));
             }
-          }, 5);
+          });
         }
 
         return mockProcess;
@@ -337,17 +337,17 @@ describe('Review Agent - Pre-check Optimization', () => {
           stderr: { on: vi.fn() },
           on: vi.fn((event, callback) => {
             if (event === 'close') {
-              setTimeout(() => callback(0), 10); // exit code 0 = success
+              process.nextTick(() => callback(0)); // exit code 0 = success
             }
           }),
         };
 
-        setTimeout(() => {
+        process.nextTick(() => {
           const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
           if (stdoutCallback) {
             stdoutCallback(Buffer.from('PASS tests/example.test.ts\n  ✓ all tests passed\n'));
           }
-        }, 5);
+        });
 
         return mockProcess;
       }) as any);
@@ -380,17 +380,17 @@ describe('Review Agent - Pre-check Optimization', () => {
           stderr: { on: vi.fn() },
           on: vi.fn((event, callback) => {
             if (event === 'close') {
-              setTimeout(() => callback(0), 10);
+              process.nextTick(() => callback(0));
             }
           }),
         };
 
-        setTimeout(() => {
+        process.nextTick(() => {
           const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
           if (stdoutCallback) {
             stdoutCallback(Buffer.from('All tests passed\n'));
           }
-        }, 5);
+        });
 
         return mockProcess;
       }) as any);
@@ -425,7 +425,7 @@ describe('Review Agent - Pre-check Optimization', () => {
           stderr: { on: vi.fn() },
           on: vi.fn((event, callback) => {
             if (event === 'close') {
-              setTimeout(() => callback(0), 10); // Success
+              process.nextTick(() => callback(0)); // Success
             }
           }),
         };
@@ -515,19 +515,19 @@ describe('Review Agent - Pre-check Optimization', () => {
             if (event === 'close') {
               // Build passes, test fails with no output
               const exitCode = isTestCommand ? 1 : 0;
-              setTimeout(() => callback(exitCode), 10);
+              process.nextTick(() => callback(exitCode));
             }
           }),
         };
 
         // No output - simulate silent failure
         if (!isTestCommand) {
-          setTimeout(() => {
+          process.nextTick(() => {
             const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
             if (stdoutCallback) {
               stdoutCallback(Buffer.from('Build successful\n'));
             }
-          }, 5);
+          });
         }
 
         return mockProcess;
@@ -559,17 +559,17 @@ describe('Review Agent - Pre-check Optimization', () => {
           stderr: { on: vi.fn() },
           on: vi.fn((event, callback) => {
             if (event === 'close') {
-              setTimeout(() => callback(1), 10); // All fail
+              process.nextTick(() => callback(1)); // All fail
             }
           }),
         };
 
-        setTimeout(() => {
+        process.nextTick(() => {
           const stderrCallback = mockProcess.stderr.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
           if (stderrCallback) {
             stderrCallback(Buffer.from('Error occurred\n'));
           }
-        }, 5);
+        });
 
         return mockProcess;
       }) as any);
@@ -607,17 +607,17 @@ describe('Review Agent - Pre-check Optimization', () => {
           on: vi.fn((event, callback) => {
             if (event === 'close') {
               // Both build and tests pass
-              setTimeout(() => callback(0), 10);
+              process.nextTick(() => callback(0));
             }
           }),
         };
 
-        setTimeout(() => {
+        process.nextTick(() => {
           const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
           if (stdoutCallback) {
             stdoutCallback(Buffer.from('Test Suites: 5 passed, 5 total\nTests:       12 passed, 12 total\n'));
           }
-        }, 5);
+        });
 
         return mockProcess;
       }) as any);
@@ -672,16 +672,16 @@ describe('Review Agent - Pre-check Optimization', () => {
           stderr: { on: vi.fn() },
           on: vi.fn((event, callback) => {
             if (event === 'close') {
-              setTimeout(() => callback(0), 10);
+              process.nextTick(() => callback(0));
             }
           }),
         };
-        setTimeout(() => {
+        process.nextTick(() => {
           const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
           if (stdoutCallback) {
             stdoutCallback(Buffer.from('Tests passed\n'));
           }
-        }, 5);
+        });
         return mockProcess;
       }) as any);
 
@@ -733,16 +733,16 @@ describe('Review Agent - Pre-check Optimization', () => {
           stderr: { on: vi.fn() },
           on: vi.fn((event, callback) => {
             if (event === 'close') {
-              setTimeout(() => callback(0), 10); // Tests PASS
+              process.nextTick(() => callback(0)); // Tests PASS
             }
           }),
         };
-        setTimeout(() => {
+        process.nextTick(() => {
           const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
           if (stdoutCallback) {
             stdoutCallback(Buffer.from('All tests passed\n'));
           }
-        }, 5);
+        });
         return mockProcess;
       }) as any);
 
@@ -790,16 +790,16 @@ describe('Review Agent - Pre-check Optimization', () => {
           stderr: { on: vi.fn() },
           on: vi.fn((event, callback) => {
             if (event === 'close') {
-              setTimeout(() => callback(0), 10);
+              process.nextTick(() => callback(0));
             }
           }),
         };
-        setTimeout(() => {
+        process.nextTick(() => {
           const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
           if (stdoutCallback) {
             stdoutCallback(Buffer.from('Tests passed\n'));
           }
-        }, 5);
+        });
         return mockProcess;
       }) as any);
 
@@ -1072,7 +1072,7 @@ describe('TDD Validation', () => {
           stderr: { on: vi.fn() },
           on: vi.fn((event, callback) => {
             if (event === 'close') {
-              setTimeout(() => callback(0), 10); // Success
+              process.nextTick(() => callback(0)); // Success
             }
           }),
         };
@@ -1143,7 +1143,7 @@ describe('TDD Validation', () => {
           stderr: { on: vi.fn() },
           on: vi.fn((event, callback) => {
             if (event === 'close') {
-              setTimeout(() => callback(0), 10); // Success
+              process.nextTick(() => callback(0)); // Success
             }
           }),
         };
@@ -2316,17 +2316,17 @@ describe('Pre-check Gate Logic', () => {
         stderr: { on: vi.fn() },
         on: vi.fn((event, callback) => {
           if (event === 'close') {
-            setTimeout(() => callback(0), 10); // Success
+            process.nextTick(() => callback(0)); // Success
           }
         }),
       };
 
-      setTimeout(() => {
+      process.nextTick(() => {
         const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
         if (stdoutCallback) {
           stdoutCallback(Buffer.from('All tests passed\n'));
         }
-      }, 5);
+      });
 
       return mockProcess;
     }) as any);
@@ -2366,17 +2366,17 @@ describe('Pre-check Gate Logic', () => {
         stderr: { on: vi.fn() },
         on: vi.fn((event, callback) => {
           if (event === 'close') {
-            setTimeout(() => callback(0), 10);
+            process.nextTick(() => callback(0));
           }
         }),
       };
 
-      setTimeout(() => {
+      process.nextTick(() => {
         const stdoutCallback = mockProcess.stdout.on.mock.calls.find((call: any) => call[0] === 'data')?.[1];
         if (stdoutCallback) {
           stdoutCallback(Buffer.from('Success\n'));
         }
-      }, 5);
+      });
 
       return mockProcess;
     }) as any);
@@ -2651,7 +2651,7 @@ describe('Unified Collaborative Review', () => {
           stderr: { on: vi.fn() },
           on: vi.fn((event, callback) => {
             if (event === 'close') {
-              setTimeout(() => callback(0), 10);
+              process.nextTick(() => callback(0));
             }
           }),
         };
@@ -2704,7 +2704,7 @@ describe('Unified Collaborative Review', () => {
           stderr: { on: vi.fn() },
           on: vi.fn((event, callback) => {
             if (event === 'close') {
-              setTimeout(() => callback(0), 10);
+              process.nextTick(() => callback(0));
             }
           }),
         };
@@ -2737,7 +2737,7 @@ describe('Unified Collaborative Review', () => {
           stderr: { on: vi.fn() },
           on: vi.fn((event, callback) => {
             if (event === 'close') {
-              setTimeout(() => callback(0), 10);
+              process.nextTick(() => callback(0));
             }
           }),
         };
@@ -2978,7 +2978,7 @@ describe('Unified Collaborative Review', () => {
           stderr: { on: vi.fn() },
           on: vi.fn((event, callback) => {
             if (event === 'close') {
-              setTimeout(() => callback(0), 10); // Pass
+              process.nextTick(() => callback(0)); // Pass
             }
           }),
         };

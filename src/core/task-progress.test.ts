@@ -284,9 +284,6 @@ Content here
     });
 
     it('should retry on transient errors', async () => {
-      // Use real timers for this test as retry logic uses setTimeout
-      vi.useRealTimers();
-
       vi.mocked(fs.promises.mkdir).mockResolvedValue(undefined);
 
       // Fail twice, succeed on third attempt
@@ -295,18 +292,18 @@ Content here
         .mockRejectedValueOnce(new Error('Temporary error'))
         .mockResolvedValueOnce(undefined);
 
-      await writeStoryFile('/path/to/story.md', 'Content');
+      const promise = writeStoryFile('/path/to/story.md', 'Content');
+
+      // Advance through retry delays: 100ms, then 200ms
+      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(200);
+
+      await promise;
 
       expect(writeFileAtomic).toHaveBeenCalledTimes(3);
-
-      // Restore fake timers for subsequent tests
-      vi.useFakeTimers();
     });
 
     it('should not retry on permission errors', async () => {
-      // Use real timers for this test since permission errors should throw immediately
-      vi.useRealTimers();
-
       vi.mocked(fs.promises.mkdir).mockResolvedValue(undefined);
 
       const error: any = new Error('Permission denied');
@@ -318,26 +315,27 @@ Content here
       );
 
       expect(writeFileAtomic).toHaveBeenCalledTimes(1); // No retry
-
-      // Restore fake timers for subsequent tests
-      vi.useFakeTimers();
     });
 
     it('should fail after 3 retry attempts', async () => {
-      // Use real timers for this test as retry logic uses setTimeout
-      vi.useRealTimers();
-
       vi.mocked(fs.promises.mkdir).mockResolvedValue(undefined);
       vi.mocked(writeFileAtomic).mockRejectedValue(new Error('Persistent error'));
 
-      await expect(writeStoryFile('/path/to/story.md', 'Content')).rejects.toThrow(
-        'Failed to write story file after 3 attempts'
-      );
+      let caughtError: Error | null = null;
+      const promise = writeStoryFile('/path/to/story.md', 'Content').catch(err => {
+        caughtError = err;
+      });
 
+      // Advance through all retry delays: 100ms, then 200ms, then 400ms
+      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(200);
+      await vi.advanceTimersByTimeAsync(400);
+
+      await promise;
+
+      expect(caughtError).toBeInstanceOf(Error);
+      expect(caughtError?.message).toContain('Failed to write story file after 3 attempts');
       expect(writeFileAtomic).toHaveBeenCalledTimes(3);
-
-      // Restore fake timers for subsequent tests
-      vi.useFakeTimers();
     });
   });
 

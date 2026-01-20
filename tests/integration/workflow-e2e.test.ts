@@ -437,11 +437,18 @@ labels: test, e2e
     expect(story.frontmatter.branch).toBeDefined();
     expect(story.frontmatter.branch).toMatch(/ai-sdlc\/end-to-end-test-story/);
 
-    // Verify story content has research section
-    expect(story.content).toContain('## Research');
+    // Verify research section file exists and has content
+    const storyDir = path.dirname(story.path);
+    const researchPath = path.join(storyDir, 'research.md');
+    expect(fs.existsSync(researchPath)).toBe(true);
+    const researchContent = fs.readFileSync(researchPath, 'utf-8');
+    expect(researchContent.length).toBeGreaterThan(0);
 
-    // Verify story content has implementation plan
-    expect(story.content).toContain('## Implementation Plan');
+    // Verify plan section file exists and has content
+    const planPath = path.join(storyDir, 'plan.md');
+    expect(fs.existsSync(planPath)).toBe(true);
+    const planContent = fs.readFileSync(planPath, 'utf-8');
+    expect(planContent.length).toBeGreaterThan(0);
 
     // Verify git commits were created (using real execSync)
     // Commit format is: feat(slug): Title

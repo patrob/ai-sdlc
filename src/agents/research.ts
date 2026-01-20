@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
-import { parseStory, writeStory, appendToSection, updateStoryField } from '../core/story.js';
+import { parseStory, writeStory, updateStoryField, writeSectionContent, readSectionContent } from '../core/story.js';
 import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
 import { Story, AgentResult, FARScore } from '../types/index.js';
 import { getLogger } from '../core/logger.js';
@@ -251,8 +251,16 @@ Format your response as markdown for the Research section of the story.`;
     // Sanitize research content before storage (prevent ANSI/markdown injection)
     const sanitizedResearch = sanitizeWebResearchContent(researchContent);
 
-    // Append codebase research to the story
-    await appendToSection(story, 'Research', sanitizedResearch);
+    // Determine if this is an iteration (rework context implies previous attempt)
+    const isIteration = !!options.reworkContext;
+    const iterationNum = isIteration ? (story.frontmatter.refinement_count || 0) + 1 : 1;
+
+    // Write codebase research to section file
+    await writeSectionContent(storyPath, 'research', sanitizedResearch, {
+      append: isIteration,
+      iteration: iterationNum,
+      isRework: isIteration,
+    });
     changesMade.push('Added codebase research findings');
 
     // Phase 2: Web Research (conditional)
@@ -268,9 +276,10 @@ Format your response as markdown for the Research section of the story.`;
         // Sanitize web research content before storage (prevent ANSI/markdown injection)
         const sanitizedWebResearch = sanitizeWebResearchContent(webResearchContent);
 
-        // Re-parse story to get updated content after codebase research
-        const updatedStory = parseStory(storyPath);
-        await appendToSection(updatedStory, 'Research', '\n## Web Research Findings\n\n' + sanitizedWebResearch);
+        // Read existing research and append web findings
+        const existingResearch = await readSectionContent(storyPath, 'research');
+        const combinedResearch = existingResearch + '\n\n## Web Research Findings\n\n' + sanitizedWebResearch;
+        await writeSectionContent(storyPath, 'research', combinedResearch);
         changesMade.push('Added web research findings');
       } else {
         getLogger().info('web-research', 'Web research returned empty - tools may be unavailable');

@@ -112,10 +112,13 @@ As a developer, I want to integrate Stripe API for payments.
     expect(result.changesMade).toContain('Added codebase research findings');
     expect(result.changesMade).toContain('Added web research findings');
 
-    // Verify story was updated with both sections
+    // Verify research section file was created with both findings
+    const researchFilePath = path.join(path.dirname(storyPath), 'research.md');
+    expect(fs.existsSync(researchFilePath)).toBe(true);
+    const researchContent = fs.readFileSync(researchFilePath, 'utf-8');
+    expect(researchContent).toContain('Web Research Findings');
+
     const updatedStory = parseStory(storyPath);
-    expect(updatedStory.content).toContain('## Research');
-    expect(updatedStory.content).toContain('## Web Research Findings');
     expect(updatedStory.frontmatter.research_complete).toBe(true);
 
     // Verify runAgentQuery was called twice (codebase + web)
@@ -155,10 +158,11 @@ As a developer, I want to refactor internal utility functions for better maintai
     expect(result.changesMade).toContain('Added codebase research findings');
     expect(result.changesMade).toContain('Web research skipped: no external dependencies detected');
 
-    // Verify story was updated with only codebase research
-    const updatedStory = parseStory(storyPath);
-    expect(updatedStory.content).toContain('## Research');
-    expect(updatedStory.content).not.toContain('## Web Research Findings');
+    // Verify research section file was created with codebase-only findings
+    const researchFilePath = path.join(path.dirname(storyPath), 'research.md');
+    expect(fs.existsSync(researchFilePath)).toBe(true);
+    const researchContent = fs.readFileSync(researchFilePath, 'utf-8');
+    expect(researchContent).not.toContain('Web Research Findings');
 
     // Verify runAgentQuery was called only once (codebase only)
     expect(mockRunAgentQuery).toHaveBeenCalledTimes(1);
@@ -175,10 +179,11 @@ As a developer, I want to refactor internal utility functions for better maintai
     expect(result.changesMade).toContain('Added codebase research findings');
     expect(result.changesMade).toContain('Web research skipped: tools unavailable');
 
-    // Verify story has codebase research but no web research section
-    const updatedStory = parseStory(storyPath);
-    expect(updatedStory.content).toContain('## Research');
-    expect(updatedStory.content).not.toContain('## Web Research Findings');
+    // Verify research section file was created but has no web research
+    const researchFilePath = path.join(path.dirname(storyPath), 'research.md');
+    expect(fs.existsSync(researchFilePath)).toBe(true);
+    const researchContent = fs.readFileSync(researchFilePath, 'utf-8');
+    expect(researchContent).not.toContain('Web Research Findings');
   });
 
   it('should handle web research failure gracefully', async () => {
@@ -193,8 +198,10 @@ As a developer, I want to refactor internal utility functions for better maintai
     expect(result.changesMade).toContain('Web research skipped: tools unavailable');
 
     // Research should still complete with codebase-only findings
+    const researchFilePath = path.join(path.dirname(storyPath), 'research.md');
+    expect(fs.existsSync(researchFilePath)).toBe(true);
+
     const updatedStory = parseStory(storyPath);
-    expect(updatedStory.content).toContain('## Research');
     expect(updatedStory.frontmatter.research_complete).toBe(true);
   });
 
@@ -392,11 +399,12 @@ As a developer, I want to integrate an external API.
 
     expect(result.success).toBe(true);
 
-    // Verify ANSI codes were stripped before storage
-    const updatedStory = parseStory(storyPath);
-    expect(updatedStory.content).toContain('Red text and bold green research finding');
-    expect(updatedStory.content).not.toContain('\x1b[');
-    expect(updatedStory.content).not.toContain('\x1b');
+    // Verify ANSI codes were stripped before storage in research section file
+    const researchFilePath = path.join(path.dirname(storyPath), 'research.md');
+    const researchContent = fs.readFileSync(researchFilePath, 'utf-8');
+    expect(researchContent).toContain('Red text and bold green research finding');
+    expect(researchContent).not.toContain('\x1b[');
+    expect(researchContent).not.toContain('\x1b');
   });
 
   it('should escape markdown injection attempts (triple backticks)', async () => {
@@ -435,10 +443,11 @@ As a developer, I want to integrate an external library.
 
     expect(result.success).toBe(true);
 
-    // Verify triple backticks were escaped
-    const updatedStory = parseStory(storyPath);
-    expect(updatedStory.content).toContain('\\`\\`\\`');
-    expect(updatedStory.content).not.toMatch(/```[^\\]/); // No unescaped triple backticks
+    // Verify triple backticks were escaped in research section file
+    const researchFilePath = path.join(path.dirname(storyPath), 'research.md');
+    const researchContent = fs.readFileSync(researchFilePath, 'utf-8');
+    expect(researchContent).toContain('\\`\\`\\`');
+    expect(researchContent).not.toMatch(/```[^\\]/); // No unescaped triple backticks
   });
 
   it('should remove control characters from web research results', async () => {
@@ -477,13 +486,14 @@ As a developer, I want to integrate an external SDK.
 
     expect(result.success).toBe(true);
 
-    // Verify control characters were removed
-    const updatedStory = parseStory(storyPath);
-    expect(updatedStory.content).toContain('Findingwithcontrolcharacters');
+    // Verify control characters were removed in research section file
+    const researchFilePath = path.join(path.dirname(storyPath), 'research.md');
+    const researchContent = fs.readFileSync(researchFilePath, 'utf-8');
+    expect(researchContent).toContain('Findingwithcontrolcharacters');
     // Check that specific control chars are gone
-    expect(updatedStory.content).not.toContain('\x00');
-    expect(updatedStory.content).not.toContain('\x0E');
-    expect(updatedStory.content).not.toContain('\x1F');
+    expect(researchContent).not.toContain('\x00');
+    expect(researchContent).not.toContain('\x0E');
+    expect(researchContent).not.toContain('\x1F');
   });
 
   it('should truncate extremely long web research results (>10KB)', async () => {
@@ -523,9 +533,11 @@ As a developer, I want to integrate an external API.
 
     expect(result.success).toBe(true);
 
-    // Verify content was truncated to 10KB
-    const updatedStory = parseStory(storyPath);
-    const webResearchSection = updatedStory.content.split('## Web Research Findings')[1];
+    // Verify content was truncated to 10KB in research section file
+    const researchFilePath = path.join(path.dirname(storyPath), 'research.md');
+    const researchContent = fs.readFileSync(researchFilePath, 'utf-8');
+    const webResearchSection = researchContent.split('## Web Research Findings')[1];
+    expect(webResearchSection).toBeDefined();
     expect(webResearchSection.length).toBeLessThan(11000); // Some overhead for section header
   });
 
@@ -646,11 +658,12 @@ As a developer, I want to integrate an external library.
 
     expect(result.success).toBe(true);
 
-    // Verify OSC sequences were removed
-    const updatedStory = parseStory(storyPath);
-    expect(updatedStory.content).toContain('Link: click here');
-    expect(updatedStory.content).not.toContain('\x1b]8');
-    expect(updatedStory.content).not.toContain('\x07');
+    // Verify OSC sequences were removed in research section file
+    const researchFilePath = path.join(path.dirname(storyPath), 'research.md');
+    const researchContent = fs.readFileSync(researchFilePath, 'utf-8');
+    expect(researchContent).toContain('Link: click here');
+    expect(researchContent).not.toContain('\x1b]8');
+    expect(researchContent).not.toContain('\x07');
   });
 });
 

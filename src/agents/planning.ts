@@ -1,4 +1,4 @@
-import { parseStory, writeStory, appendToSection, updateStoryField } from '../core/story.js';
+import { parseStory, updateStoryField, writeSectionContent } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
 import { Story, AgentResult } from '../types/index.js';
@@ -186,8 +186,16 @@ export async function runPlanningAgent(
       onProgress: options.onProgress,
     });
 
-    // Append plan to the story
-    await appendToSection(story, 'Implementation Plan', planContent);
+    // Determine if this is an iteration (rework context implies previous attempt)
+    const isIteration = !!options.reworkContext;
+    const iterationNum = isIteration ? (story.frontmatter.refinement_count || 0) + 1 : 1;
+
+    // Write plan to section file
+    await writeSectionContent(storyPath, 'plan', planContent, {
+      append: isIteration,
+      iteration: iterationNum,
+      isRework: isIteration,
+    });
     changesMade.push('Added implementation plan');
 
     // Mark plan as complete

@@ -221,9 +221,6 @@ export class GitWorktreeService {
     // Install dependencies in the new worktree
     this.installDependencies(worktreePath);
 
-    // Build the project (required for TypeScript projects)
-    this.buildProject(worktreePath);
-
     return worktreePath;
   }
 

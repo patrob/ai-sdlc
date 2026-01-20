@@ -6,6 +6,8 @@ import {
   isOnProtectedBranch,
   isLocalBehindRemote,
   validateGitState,
+  getBaseBranch,
+  getMergeBase,
   GitValidationResult,
   GitValidationOptions,
   CleanWorkingDirectoryOptions,
@@ -573,6 +575,115 @@ describe('git-utils', () => {
       expect(result.errors).toContain(
         'Working directory has uncommitted changes. Commit or stash your changes first.'
       );
+    });
+  });
+
+  describe('getBaseBranch', () => {
+    it('returns "main" when main branch exists', () => {
+      mockSpawnSync.mockReturnValueOnce(createSpawnResult('refs/heads/main\n')); // main exists
+
+      const result = getBaseBranch('/test/dir');
+
+      expect(result).toBe('main');
+      expect(mockSpawnSync).toHaveBeenCalledWith(
+        'git',
+        ['rev-parse', '--verify', 'main'],
+        expect.objectContaining({
+          cwd: '/test/dir',
+          shell: false,
+        })
+      );
+    });
+
+    it('returns "master" when main does not exist but master does', () => {
+      mockSpawnSync
+        .mockReturnValueOnce(createSpawnResult('', 1)) // main doesn't exist
+        .mockReturnValueOnce(createSpawnResult('refs/heads/master\n')); // master exists
+
+      const result = getBaseBranch('/test/dir');
+
+      expect(result).toBe('master');
+      expect(mockSpawnSync).toHaveBeenCalledWith(
+        'git',
+        ['rev-parse', '--verify', 'master'],
+        expect.objectContaining({
+          cwd: '/test/dir',
+          shell: false,
+        })
+      );
+    });
+
+    it('throws error when neither main nor master exists', () => {
+      mockSpawnSync
+        .mockReturnValueOnce(createSpawnResult('', 1)) // main doesn't exist
+        .mockReturnValueOnce(createSpawnResult('', 1)); // master doesn't exist
+
+      expect(() => getBaseBranch('/test/dir')).toThrow(
+        'No base branch found. Expected "main" or "master" branch to exist.'
+      );
+    });
+  });
+
+  describe('getMergeBase', () => {
+    it('returns commit SHA when merge-base exists', () => {
+      const mockSha = 'abc123def456';
+      mockSpawnSync.mockReturnValueOnce(createSpawnResult(`${mockSha}\n`));
+
+      const result = getMergeBase('/test/dir', 'main');
+
+      expect(result).toBe(mockSha);
+      expect(mockSpawnSync).toHaveBeenCalledWith(
+        'git',
+        ['merge-base', 'main', 'HEAD'],
+        expect.objectContaining({
+          cwd: '/test/dir',
+          shell: false,
+        })
+      );
+    });
+
+    it('returns null when git command fails', () => {
+      mockSpawnSync.mockReturnValueOnce(createSpawnResult('', 1));
+
+      const result = getMergeBase('/test/dir', 'main');
+
+      expect(result).toBe(null);
+    });
+
+    it('returns null when base branch does not exist', () => {
+      mockSpawnSync.mockReturnValueOnce(
+        createSpawnResult('fatal: Not a valid object name main\n', 128)
+      );
+
+      const result = getMergeBase('/test/dir', 'main');
+
+      expect(result).toBe(null);
+    });
+
+    it('returns null when no common ancestor exists', () => {
+      mockSpawnSync.mockReturnValueOnce(createSpawnResult('', 1));
+
+      const result = getMergeBase('/test/dir', 'main');
+
+      expect(result).toBe(null);
+    });
+
+    it('returns null when git throws exception', () => {
+      mockSpawnSync.mockImplementationOnce(() => {
+        throw new Error('ENOENT: git command not found');
+      });
+
+      const result = getMergeBase('/test/dir', 'main');
+
+      expect(result).toBe(null);
+    });
+
+    it('handles empty output gracefully', () => {
+      mockSpawnSync.mockReturnValueOnce(createSpawnResult(''));
+
+      const result = getMergeBase('/test/dir', 'main');
+
+      expect(result).toBe(null);
     });
   });
 });

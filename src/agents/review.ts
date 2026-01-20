@@ -11,6 +11,7 @@ import { extractStructuredResponseSync } from '../core/llm-utils.js';
 import { Story, AgentResult, ReviewResult, ReviewIssue, ReviewIssueSeverity, ReviewDecision, ReviewSeverity, ReviewAttempt, Config, TDDTestCycle, ContentType } from '../types/index.js';
 import { sanitizeInput, truncateText } from '../cli/formatting.js';
 import { detectTestDuplicationPatterns } from './test-pattern-detector.js';
+import { getBaseBranch, getMergeBase } from '../core/git-utils.js';
 
 /**
  * Security: Validate Git branch name to prevent command injection
@@ -716,7 +717,38 @@ function formatIssuesForDisplay(issues: ReviewIssue[]): string {
 }
 
 /**
+ * Get the base commit reference for git diff comparisons
+ *
+ * Attempts to find the merge-base between the current branch and the base branch (main/master).
+ * Falls back to HEAD~1 if merge-base cannot be determined.
+ *
+ * This allows detecting source code changes across the entire feature branch,
+ * not just from the most recent commit.
+ *
+ * @param workingDir - Working directory to run git commands in
+ * @returns Commit reference to use for git diff comparison
+ */
+function getBaseCommitForDiff(workingDir: string): string {
+  try {
+    const baseBranch = getBaseBranch(workingDir);
+    const mergeBase = getMergeBase(workingDir, baseBranch);
+
+    if (mergeBase) {
+      return mergeBase;
+    }
+  } catch {
+    // If we can't determine base branch or merge-base, fall back to HEAD~1
+  }
+
+  // Fallback to HEAD~1 (original behavior)
+  return 'HEAD~1';
+}
+
+/**
  * Get source code changes from git diff
+ *
+ * Compares current branch HEAD against the base branch (main/master) merge-base
+ * to detect all source code changes in the feature branch, not just the most recent commit.
  *
  * Returns list of source files that have been modified (excludes tests and story files).
  * Uses spawnSync for security (prevents command injection).
@@ -726,8 +758,10 @@ function formatIssuesForDisplay(issues: ReviewIssue[]): string {
  */
 export function getSourceCodeChanges(workingDir: string): string[] {
   try {
+    const baseCommit = getBaseCommitForDiff(workingDir);
+
     // Security: Use spawnSync with explicit args (not shell) to prevent injection
-    const result = spawnSync('git', ['diff', '--name-only', 'HEAD~1'], {
+    const result = spawnSync('git', ['diff', '--name-only', baseCommit], {
       cwd: workingDir,
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -756,6 +790,8 @@ export function getSourceCodeChanges(workingDir: string): string[] {
 /**
  * Get configuration file changes from git diff
  *
+ * Compares current branch HEAD against the base branch merge-base.
+ *
  * Detects changes to configuration files including:
  * - .claude/ directory (Agent SDK skills, CLAUDE.md)
  * - .github/ directory (workflows, actions, issue templates)
@@ -768,8 +804,10 @@ export function getSourceCodeChanges(workingDir: string): string[] {
  */
 export function getConfigurationChanges(workingDir: string): string[] {
   try {
+    const baseCommit = getBaseCommitForDiff(workingDir);
+
     // Security: Use spawnSync with explicit args (not shell) to prevent injection
-    const result = spawnSync('git', ['diff', '--name-only', 'HEAD~1'], {
+    const result = spawnSync('git', ['diff', '--name-only', baseCommit], {
       cwd: workingDir,
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -824,6 +862,8 @@ export function getConfigurationChanges(workingDir: string): string[] {
 /**
  * Get documentation file changes from git diff
  *
+ * Compares current branch HEAD against the base branch merge-base.
+ *
  * Detects changes to documentation files including:
  * - Markdown files (.md) anywhere in the project (excluding story files)
  * - docs/ directory (any file type)
@@ -835,8 +875,10 @@ export function getConfigurationChanges(workingDir: string): string[] {
  */
 export function getDocumentationChanges(workingDir: string): string[] {
   try {
+    const baseCommit = getBaseCommitForDiff(workingDir);
+
     // Security: Use spawnSync with explicit args (not shell) to prevent injection
-    const result = spawnSync('git', ['diff', '--name-only', 'HEAD~1'], {
+    const result = spawnSync('git', ['diff', '--name-only', baseCommit], {
       cwd: workingDir,
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -896,6 +938,8 @@ export function determineEffectiveContentType(story: Story): ContentType {
 /**
  * Check if test files exist in git diff
  *
+ * Compares current branch HEAD against the base branch merge-base.
+ *
  * Returns true if any test files have been modified/added, false otherwise.
  * Uses spawnSync for security (prevents command injection).
  *
@@ -904,8 +948,10 @@ export function determineEffectiveContentType(story: Story): ContentType {
  */
 export function hasTestFiles(workingDir: string): boolean {
   try {
+    const baseCommit = getBaseCommitForDiff(workingDir);
+
     // Security: Use spawnSync with explicit args (not shell) to prevent injection
-    const result = spawnSync('git', ['diff', '--name-only', 'HEAD~1'], {
+    const result = spawnSync('git', ['diff', '--name-only', baseCommit], {
       cwd: workingDir,
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],

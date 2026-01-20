@@ -4,7 +4,7 @@ title: >-
   getSourceCodeChanges compares HEAD~1 instead of base branch causing infinite
   recovery loops
 priority: 2
-status: in-progress
+status: done
 type: bug
 created: '2026-01-19'
 labels:
@@ -13,11 +13,9 @@ labels:
   - infinite-loop
   - s
 dependencies: []
-worktree_path: /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0113-story
 updated: '2026-01-20'
 research_complete: true
 plan_complete: true
-branch: ai-sdlc/story
 last_test_run:
   passed: true
   failures: 0

@@ -136,6 +136,18 @@ export interface StoryFrontmatter {
   branch?: string;
   worktree_path?: string;
   last_error?: string;
+  // External ticket integration (all optional)
+  /**
+   * Identifies the external ticketing system.
+   * Used for linking stories to GitHub Issues, Jira tickets, Linear issues, etc.
+   */
+  ticket_provider?: 'github' | 'jira' | 'linear';
+  /** External ticket identifier (e.g., "123", "PROJ-456") */
+  ticket_id?: string;
+  /** Direct link to the external ticket */
+  ticket_url?: string;
+  /** ISO 8601 timestamp of last sync with external ticket */
+  ticket_synced_at?: string;
   // Content type classification for validation
   /**
    * Type of implementation content (code, configuration, documentation, or mixed).

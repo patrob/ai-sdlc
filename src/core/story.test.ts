@@ -1538,3 +1538,292 @@ Test content
     expect(reloaded.frontmatter.status).toBe('ready');
   });
 });
+
+describe('Story ticket fields', () => {
+  let tempDir: string;
+  let sdlcRoot: string;
+
+  beforeEach(() => {
+    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-')));
+    sdlcRoot = path.join(tempDir, '.ai-sdlc');
+    fs.mkdirSync(sdlcRoot, { recursive: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  function createStoryWithTicketFields(storyId: string, ticketFields: any = {}): string {
+    const storiesFolder = path.join(sdlcRoot, 'stories');
+    fs.mkdirSync(storiesFolder, { recursive: true });
+
+    const storyFolder = path.join(storiesFolder, storyId);
+    fs.mkdirSync(storyFolder, { recursive: true });
+
+    const filePath = path.join(storyFolder, 'story.md');
+
+    const frontmatter: any = {
+      id: storyId,
+      title: `Test Story ${storyId}`,
+      slug: storyId.toLowerCase(),
+      priority: 10,
+      status: 'backlog',
+      type: 'feature',
+      created: '2024-01-01',
+      labels: [],
+      research_complete: false,
+      plan_complete: false,
+      implementation_complete: false,
+      reviews_complete: false,
+      ...ticketFields,
+    };
+
+    const yamlLines = Object.entries(frontmatter).map(([key, value]) => {
+      if (Array.isArray(value)) {
+        return `${key}: [${value.map(v => `'${v}'`).join(', ')}]`;
+      }
+      if (typeof value === 'string') {
+        return `${key}: '${value}'`;
+      }
+      return `${key}: ${value}`;
+    });
+
+    const content = `---
+${yamlLines.join('\n')}
+---
+
+# Test Story ${storyId}
+
+Test content`;
+
+    fs.writeFileSync(filePath, content);
+    return filePath;
+  }
+
+  it('should parse story with all ticket fields populated', () => {
+    const storyPath = createStoryWithTicketFields('S-0001', {
+      ticket_provider: 'github',
+      ticket_id: '456',
+      ticket_url: 'https://github.com/owner/repo/issues/456',
+      ticket_synced_at: '2026-01-15T10:30:00Z',
+    });
+
+    const story = parseStory(storyPath);
+
+    expect(story.frontmatter.ticket_provider).toBe('github');
+    expect(story.frontmatter.ticket_id).toBe('456');
+    expect(story.frontmatter.ticket_url).toBe('https://github.com/owner/repo/issues/456');
+    expect(story.frontmatter.ticket_synced_at).toBe('2026-01-15T10:30:00Z');
+  });
+
+  it('should parse story with partial ticket fields (provider and ID only)', () => {
+    const storyPath = createStoryWithTicketFields('S-0002', {
+      ticket_provider: 'jira',
+      ticket_id: 'PROJ-456',
+    });
+
+    const story = parseStory(storyPath);
+
+    expect(story.frontmatter.ticket_provider).toBe('jira');
+    expect(story.frontmatter.ticket_id).toBe('PROJ-456');
+    expect(story.frontmatter.ticket_url).toBeUndefined();
+    expect(story.frontmatter.ticket_synced_at).toBeUndefined();
+  });
+
+  it('should parse story with partial ticket fields (only URL)', () => {
+    const storyPath = createStoryWithTicketFields('S-0003', {
+      ticket_url: 'https://linear.app/company/issue/ABC-123',
+    });
+
+    const story = parseStory(storyPath);
+
+    expect(story.frontmatter.ticket_provider).toBeUndefined();
+    expect(story.frontmatter.ticket_id).toBeUndefined();
+    expect(story.frontmatter.ticket_url).toBe('https://linear.app/company/issue/ABC-123');
+    expect(story.frontmatter.ticket_synced_at).toBeUndefined();
+  });
+
+  it('should parse story without any ticket fields (backward compatibility)', () => {
+    const storyPath = createStoryWithTicketFields('S-0004');
+
+    const story = parseStory(storyPath);
+
+    expect(story.frontmatter.ticket_provider).toBeUndefined();
+    expect(story.frontmatter.ticket_id).toBeUndefined();
+    expect(story.frontmatter.ticket_url).toBeUndefined();
+    expect(story.frontmatter.ticket_synced_at).toBeUndefined();
+    // Verify story still parses correctly
+    expect(story.frontmatter.id).toBe('S-0004');
+    expect(story.frontmatter.status).toBe('backlog');
+  });
+
+  it('should write story preserving all ticket fields', async () => {
+    const storyPath = createStoryWithTicketFields('S-0005', {
+      ticket_provider: 'linear',
+      ticket_id: 'ABC-789',
+      ticket_url: 'https://linear.app/company/issue/ABC-789',
+      ticket_synced_at: '2026-01-16T14:20:00Z',
+    });
+
+    const story = parseStory(storyPath);
+    story.frontmatter.status = 'in-progress'; // Make a change
+    await writeStory(story);
+
+    // Re-read and verify ticket fields are preserved
+    const reloaded = parseStory(storyPath);
+    expect(reloaded.frontmatter.ticket_provider).toBe('linear');
+    expect(reloaded.frontmatter.ticket_id).toBe('ABC-789');
+    expect(reloaded.frontmatter.ticket_url).toBe('https://linear.app/company/issue/ABC-789');
+    expect(reloaded.frontmatter.ticket_synced_at).toBe('2026-01-16T14:20:00Z');
+    expect(reloaded.frontmatter.status).toBe('in-progress');
+  });
+
+  it('should write story with no ticket fields correctly', async () => {
+    const storyPath = createStoryWithTicketFields('S-0006');
+
+    const story = parseStory(storyPath);
+    story.frontmatter.status = 'ready'; // Make a change
+    await writeStory(story);
+
+    // Re-read and verify no ticket fields appear
+    const reloaded = parseStory(storyPath);
+    expect(reloaded.frontmatter.ticket_provider).toBeUndefined();
+    expect(reloaded.frontmatter.ticket_id).toBeUndefined();
+    expect(reloaded.frontmatter.ticket_url).toBeUndefined();
+    expect(reloaded.frontmatter.ticket_synced_at).toBeUndefined();
+    expect(reloaded.frontmatter.status).toBe('ready');
+
+    // Verify YAML output doesn't contain undefined ticket fields
+    const fileContent = fs.readFileSync(storyPath, 'utf-8');
+    expect(fileContent).not.toContain('ticket_provider:');
+    expect(fileContent).not.toContain('ticket_id:');
+    expect(fileContent).not.toContain('ticket_url:');
+    expect(fileContent).not.toContain('ticket_synced_at:');
+  });
+
+  it('should handle round-trip: parse → write → parse preserves ticket data', async () => {
+    const storyPath = createStoryWithTicketFields('S-0007', {
+      ticket_provider: 'github',
+      ticket_id: '999',
+      ticket_url: 'https://github.com/test/repo/issues/999',
+      ticket_synced_at: '2026-01-17T08:00:00Z',
+    });
+
+    // First parse
+    const story1 = parseStory(storyPath);
+    const original = {
+      ticket_provider: story1.frontmatter.ticket_provider,
+      ticket_id: story1.frontmatter.ticket_id,
+      ticket_url: story1.frontmatter.ticket_url,
+      ticket_synced_at: story1.frontmatter.ticket_synced_at,
+    };
+
+    // Write
+    await writeStory(story1);
+
+    // Second parse
+    const story2 = parseStory(storyPath);
+    const roundtrip = {
+      ticket_provider: story2.frontmatter.ticket_provider,
+      ticket_id: story2.frontmatter.ticket_id,
+      ticket_url: story2.frontmatter.ticket_url,
+      ticket_synced_at: story2.frontmatter.ticket_synced_at,
+    };
+
+    // Verify exact match
+    expect(roundtrip).toEqual(original);
+  });
+
+  it('should handle numeric ticket IDs ("123")', () => {
+    const storyPath = createStoryWithTicketFields('S-0008', {
+      ticket_provider: 'github',
+      ticket_id: '123',
+    });
+
+    const story = parseStory(storyPath);
+    expect(story.frontmatter.ticket_id).toBe('123');
+    expect(typeof story.frontmatter.ticket_id).toBe('string');
+  });
+
+  it('should handle alphanumeric ticket IDs ("PROJ-456")', () => {
+    const storyPath = createStoryWithTicketFields('S-0009', {
+      ticket_provider: 'jira',
+      ticket_id: 'PROJ-456',
+    });
+
+    const story = parseStory(storyPath);
+    expect(story.frontmatter.ticket_id).toBe('PROJ-456');
+  });
+
+  it('should handle hyphenated ticket IDs ("abc-def-123")', () => {
+    const storyPath = createStoryWithTicketFields('S-0010', {
+      ticket_provider: 'linear',
+      ticket_id: 'abc-def-123',
+    });
+
+    const story = parseStory(storyPath);
+    expect(story.frontmatter.ticket_id).toBe('abc-def-123');
+  });
+
+  it('should handle invalid ticket_synced_at timestamps gracefully', () => {
+    const storyPath = createStoryWithTicketFields('S-0011', {
+      ticket_provider: 'github',
+      ticket_synced_at: 'not a date',
+    });
+
+    // Should parse without throwing error
+    const story = parseStory(storyPath);
+    expect(story.frontmatter.ticket_synced_at).toBe('not a date');
+    // No validation - value stored as-is
+  });
+
+  it('should handle empty string ticket_synced_at', () => {
+    const storyPath = createStoryWithTicketFields('S-0012', {
+      ticket_provider: 'jira',
+      ticket_synced_at: '',
+    });
+
+    const story = parseStory(storyPath);
+    expect(story.frontmatter.ticket_synced_at).toBe('');
+  });
+
+  it('should handle comprehensive round-trip test with all scenarios', async () => {
+    // Scenario 1: All ticket fields
+    const path1 = createStoryWithTicketFields('S-0013', {
+      ticket_provider: 'github',
+      ticket_id: '100',
+      ticket_url: 'https://github.com/test/repo/issues/100',
+      ticket_synced_at: '2026-01-18T10:00:00Z',
+    });
+    let story1 = parseStory(path1);
+    await writeStory(story1);
+    story1 = parseStory(path1);
+    expect(story1.frontmatter.ticket_provider).toBe('github');
+    expect(story1.frontmatter.ticket_id).toBe('100');
+
+    // Scenario 2: Partial ticket fields
+    const path2 = createStoryWithTicketFields('S-0014', {
+      ticket_provider: 'jira',
+      ticket_id: 'TEST-200',
+    });
+    let story2 = parseStory(path2);
+    await writeStory(story2);
+    story2 = parseStory(path2);
+    expect(story2.frontmatter.ticket_provider).toBe('jira');
+    expect(story2.frontmatter.ticket_id).toBe('TEST-200');
+    expect(story2.frontmatter.ticket_url).toBeUndefined();
+
+    // Scenario 3: No ticket fields
+    const path3 = createStoryWithTicketFields('S-0015');
+    let story3 = parseStory(path3);
+    await writeStory(story3);
+    story3 = parseStory(path3);
+    expect(story3.frontmatter.ticket_provider).toBeUndefined();
+    expect(story3.frontmatter.ticket_id).toBeUndefined();
+    expect(story3.frontmatter.ticket_url).toBeUndefined();
+    expect(story3.frontmatter.ticket_synced_at).toBeUndefined();
+  });
+});

@@ -336,7 +336,275 @@ Controls GitHub PR creation behavior and integration settings.
 
 ---
 
-## Environment Variable Overrides
+## Story Ticket Fields
+
+ai-sdlc supports optional ticket fields in story frontmatter for linking to external ticketing systems like GitHub Issues, Jira, or Linear. These fields enable bidirectional integration with external project management tools while maintaining full backward compatibility.
+
+### Overview
+
+Ticket fields are **metadata-only** in this release—they don't trigger any automatic sync behavior. Future releases will add sync functionality to automatically pull ticket data from external systems or push story status updates.
+
+All ticket fields are optional and can be mixed and matched based on your needs. Stories without ticket fields continue to work exactly as before.
+
+### Available Fields
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `ticket_provider` | `'github' \| 'jira' \| 'linear'` | Identifies the external ticketing system | `"github"` |
+| `ticket_id` | `string` | External ticket identifier (supports numeric or alphanumeric formats) | `"456"` (GitHub), `"PROJ-456"` (Jira), `"ABC-123"` (Linear) |
+| `ticket_url` | `string` | Direct link to the external ticket | `"https://github.com/owner/repo/issues/456"` |
+| `ticket_synced_at` | `string` | ISO 8601 timestamp of last sync with external ticket | `"2026-01-15T10:30:00Z"` |
+
+### Usage Examples
+
+#### Example 1: GitHub Issue Integration
+
+Link a story to a GitHub Issue:
+
+```yaml
+---
+id: S-0042
+title: Add user authentication
+slug: add-user-authentication
+priority: 10
+status: in-progress
+type: feature
+created: '2026-01-15'
+labels: ['backend', 'security']
+ticket_provider: github
+ticket_id: "456"
+ticket_url: https://github.com/myorg/myrepo/issues/456
+ticket_synced_at: '2026-01-15T10:30:00Z'
+research_complete: true
+plan_complete: true
+implementation_complete: false
+reviews_complete: false
+---
+
+# Add user authentication
+
+Implement JWT-based authentication for API endpoints.
+```
+
+#### Example 2: Jira Ticket Integration
+
+Link a story to a Jira ticket:
+
+```yaml
+---
+id: S-0043
+title: Fix payment gateway timeout
+slug: fix-payment-gateway-timeout
+priority: 20
+status: backlog
+type: bug
+created: '2026-01-16'
+labels: ['payments', 'bug-fix']
+ticket_provider: jira
+ticket_id: "PROJ-456"
+ticket_url: https://mycompany.atlassian.net/browse/PROJ-456
+ticket_synced_at: '2026-01-16T14:00:00Z'
+research_complete: false
+plan_complete: false
+implementation_complete: false
+reviews_complete: false
+---
+
+# Fix payment gateway timeout
+
+Resolve timeout issues when processing high-value transactions.
+```
+
+#### Example 3: Linear Issue Integration
+
+Link a story to a Linear issue:
+
+```yaml
+---
+id: S-0044
+title: Optimize database queries
+slug: optimize-database-queries
+priority: 30
+status: ready
+type: chore
+created: '2026-01-17'
+labels: ['performance', 'database']
+ticket_provider: linear
+ticket_id: "ENG-789"
+ticket_url: https://linear.app/mycompany/issue/ENG-789
+research_complete: true
+plan_complete: true
+implementation_complete: false
+reviews_complete: false
+---
+
+# Optimize database queries
+
+Add indexes and optimize N+1 queries in user dashboard.
+```
+
+#### Example 4: Partial Ticket Data
+
+You can include only the fields you need. For example, just provider and ID:
+
+```yaml
+---
+id: S-0045
+title: Update documentation
+slug: update-documentation
+priority: 40
+status: backlog
+type: chore
+created: '2026-01-18'
+labels: ['docs']
+ticket_provider: github
+ticket_id: "789"
+research_complete: false
+plan_complete: false
+implementation_complete: false
+reviews_complete: false
+---
+
+# Update documentation
+
+Update README with new configuration options.
+```
+
+#### Example 5: No Ticket Fields (Backward Compatible)
+
+Stories without ticket fields work exactly as before:
+
+```yaml
+---
+id: S-0046
+title: Refactor API client
+slug: refactor-api-client
+priority: 50
+status: in-progress
+type: chore
+created: '2026-01-19'
+labels: ['refactoring']
+research_complete: true
+plan_complete: true
+implementation_complete: false
+reviews_complete: false
+---
+
+# Refactor API client
+
+Simplify error handling in HTTP client module.
+```
+
+### Field Formats
+
+#### `ticket_id` Format
+
+The `ticket_id` field is a flexible string that supports various formats:
+
+- **Numeric strings**: `"123"`, `"456"` (GitHub Issues)
+- **Alphanumeric with prefix**: `"PROJ-456"`, `"TEAM-789"` (Jira)
+- **Hyphenated identifiers**: `"ABC-123"`, `"eng-user-auth-42"` (Linear, custom systems)
+
+**Important:** Always use string format in YAML (with quotes), even for numeric IDs, to preserve leading zeros and ensure consistent parsing.
+
+#### `ticket_synced_at` Format
+
+The `ticket_synced_at` field should use **ISO 8601 format** for consistency:
+
+```yaml
+ticket_synced_at: '2026-01-15T10:30:00Z'  # UTC timestamp
+```
+
+**Note:** The parser doesn't validate timestamp format—invalid timestamps are stored as-is. This allows flexibility but means you should ensure timestamps are valid when setting them.
+
+### Future Sync Functionality
+
+**Coming in future releases** (S-0073+ ticketing integration stories):
+
+- **Automatic ticket sync**: Pull ticket title, description, status, and labels from external systems
+- **Status propagation**: Update external ticket status when story moves through workflow
+- **Bidirectional sync**: Keep story and external ticket in sync automatically
+- **Conflict resolution**: Handle cases where story and ticket diverge
+
+For now, these fields serve as **metadata placeholders** that you can populate manually or through custom scripts.
+
+### Best Practices
+
+1. **Use consistent provider values**: Stick to the literal types (`'github'`, `'jira'`, `'linear'`) to ensure future sync functionality works correctly.
+
+2. **Include ticket_url when possible**: Direct links make it easy to jump to the external ticket for context.
+
+3. **Update ticket_synced_at manually**: If you manually update ticket fields, set `ticket_synced_at` to the current timestamp for tracking purposes.
+
+4. **Don't rely on validation**: The parser doesn't validate URLs or provider-ID format combinations. Ensure your data is correct when setting these fields.
+
+5. **Use scripts for bulk operations**: If you need to add ticket fields to many stories, write a script rather than editing YAML manually.
+
+### Integration with External Tools
+
+#### GitHub CLI (`gh`)
+
+You can use the GitHub CLI to fetch issue data and populate ticket fields:
+
+```bash
+# Fetch issue data
+gh issue view 456 --json title,url,updatedAt
+
+# Example output:
+# {
+#   "title": "Add user authentication",
+#   "url": "https://github.com/myorg/myrepo/issues/456",
+#   "updatedAt": "2026-01-15T10:30:00Z"
+# }
+```
+
+#### Jira REST API
+
+Query Jira tickets programmatically:
+
+```bash
+curl -u user@example.com:api-token \
+  "https://mycompany.atlassian.net/rest/api/3/issue/PROJ-456"
+```
+
+#### Linear GraphQL API
+
+Fetch Linear issue data:
+
+```graphql
+query {
+  issue(id: "ABC-123") {
+    title
+    url
+    updatedAt
+  }
+}
+```
+
+### Troubleshooting
+
+#### Ticket fields not appearing after story creation
+
+**Cause:** You used `ai-sdlc create` without specifying ticket fields.
+
+**Solution:** Edit the story file manually to add ticket fields to the frontmatter, or use `ai-sdlc edit <story-id>` to update the story.
+
+#### Ticket ID format mismatch
+
+**Cause:** The ticket provider expects a different ID format than you provided.
+
+**Solution:** Check the external system's ID format requirements:
+- GitHub: Numeric (e.g., `"456"`)
+- Jira: Project prefix + number (e.g., `"PROJ-456"`)
+- Linear: Team prefix + number (e.g., `"ENG-789"`)
+
+#### Round-trip doesn't preserve ticket fields
+
+**Cause:** Unlikely—`parseStory()` and `writeStory()` preserve all optional fields automatically.
+
+**Solution:** If you encounter this issue, please file a bug report with reproduction steps.
+
+---
 
 The ai-sdlc CLI supports overriding specific configuration options via environment variables. This is useful for:
 - CI/CD pipelines where file-based config is inconvenient

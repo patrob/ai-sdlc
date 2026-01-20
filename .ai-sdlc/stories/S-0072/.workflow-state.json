@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1768884272042-53c682ab",
+  "timestamp": "2026-01-20T04:47:56.477Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0072",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0072-add-ticket-fields-to-story-schema/.ai-sdlc/stories/S-0072/story.md",
+      "completedAt": "2026-01-20T04:44:55.875Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0072",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0072-add-ticket-fields-to-story-schema/.ai-sdlc/stories/S-0072/story.md",
+      "completedAt": "2026-01-20T04:47:13.439Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0072",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0072-add-ticket-fields-to-story-schema/.ai-sdlc/stories/S-0072/story.md",
+      "completedAt": "2026-01-20T04:47:56.477Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0072-add-ticket-fields-to-story-schema/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0072",
+      "fullSDLC": true
+    },
+    "storyContentHash": "911a63c51286f99c2c1fc8118100601ed7f10d8e2d4f84bbd31c40d404e06d8b"
+  }
+}

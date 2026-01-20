@@ -1,7 +1,7 @@
 import path from 'path';
 import { spawn } from 'child_process';
 import { Story, EpicProcessingOptions, EpicSummary, PhaseExecutionResult } from '../types/index.js';
-import { getSdlcRoot, loadConfig } from '../core/config.js';
+import { getSdlcRoot, loadConfig, validateWorktreeBasePath } from '../core/config.js';
 import { findStoriesByEpic } from '../core/kanban.js';
 import { GitWorktreeService } from '../core/worktree.js';
 import { getThemedChalk } from '../core/theme.js';
@@ -28,13 +28,17 @@ export function normalizeEpicId(epicId: string): string {
 
 /**
  * Discover stories for an epic with normalized ID
+ * Filters out stories that are already done
  */
 export function discoverEpicStories(sdlcRoot: string, epicId: string): Story[] {
   const normalized = normalizeEpicId(epicId);
   const stories = findStoriesByEpic(sdlcRoot, normalized);
 
+  // Filter out stories that are already done
+  const activeStories = stories.filter(story => story.frontmatter.status !== 'done');
+
   // Sort by priority (ascending) then created date (ascending)
-  return stories.sort((a, b) => {
+  return activeStories.sort((a, b) => {
     if (a.frontmatter.priority !== b.frontmatter.priority) {
       return a.frontmatter.priority - b.frontmatter.priority;
     }
@@ -94,6 +98,13 @@ async function processStoryInWorktree(
       storyId,
       slug,
     });
+
+    // Verify worktree was created
+    if (!fs.existsSync(worktreePath)) {
+      const error = `Worktree creation failed: ${worktreePath} does not exist`;
+      markStoryFailed(dashboard, storyId, error);
+      return { success: false, error };
+    }
 
     // Log to story-specific epic run log
     const sdlcRoot = getSdlcRoot();
@@ -311,25 +322,38 @@ export async function processEpic(options: EpicProcessingOptions): Promise<numbe
     return 1;
   }
 
-  // Discover stories
+  // Discover stories (active only - done stories are filtered out)
   console.log(c.info(`Discovering stories for epic: ${options.epicId}`));
   const stories = discoverEpicStories(sdlcRoot, options.epicId);
 
+  // Also get done story IDs to treat as pre-satisfied dependencies
+  const normalized = normalizeEpicId(options.epicId);
+  const allEpicStories = findStoriesByEpic(sdlcRoot, normalized);
+  const doneStoryIds = new Set(
+    allEpicStories
+      .filter(s => s.frontmatter.status === 'done')
+      .map(s => s.frontmatter.id)
+  );
+
   if (stories.length === 0) {
-    console.log(c.warning(`No stories found for epic: ${options.epicId}`));
+    if (doneStoryIds.size > 0) {
+      console.log(c.success(`All ${doneStoryIds.size} stories in epic are already done!`));
+    } else {
+      console.log(c.warning(`No stories found for epic: ${options.epicId}`));
+    }
     return 0; // Not an error
   }
 
-  // Validate dependencies
-  const validation = validateDependencies(stories);
+  // Validate dependencies (done stories count as satisfied)
+  const validation = validateDependencies(stories, doneStoryIds);
   if (!validation.valid) {
     console.log(c.error('Error: Invalid dependencies detected:'));
     validation.errors.forEach(error => console.log(c.error(`  • ${error}`)));
     return 1;
   }
 
-  // Group into phases
-  const phases = groupStoriesByPhase(stories);
+  // Group into phases (done stories count as already completed)
+  const phases = groupStoriesByPhase(stories, doneStoryIds);
 
   // Display execution plan
   console.log(formatExecutionPlan(options.epicId, phases));
@@ -347,11 +371,15 @@ export async function processEpic(options: EpicProcessingOptions): Promise<numbe
     // TODO: Add actual prompt in interactive mode
   }
 
-  // Initialize worktree service
-  const worktreeService = new GitWorktreeService(
-    projectRoot,
-    config.worktree.basePath
-  );
+  // Initialize worktree service with resolved basePath
+  let resolvedBasePath: string;
+  try {
+    resolvedBasePath = validateWorktreeBasePath(config.worktree.basePath, projectRoot);
+  } catch (error) {
+    console.log(c.error(`Configuration Error: ${error instanceof Error ? error.message : String(error)}`));
+    return 1;
+  }
+  const worktreeService = new GitWorktreeService(projectRoot, resolvedBasePath);
 
   // Create dashboard
   const dashboard = createDashboard(options.epicId, phases);

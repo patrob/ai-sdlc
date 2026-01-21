@@ -11,7 +11,15 @@
   "defaultLabels": [],
   "settingSources": ["project"],
   "worktree": {
-      "enabled": true,
-      "basePath": ".ai-sdlc/worktrees"
-    }
+    "enabled": true,
+    "basePath": ".ai-sdlc/worktrees"
+  },
+  "merge": {
+    "enabled": true,
+    "strategy": "squash",
+    "deleteBranchAfterMerge": true,
+    "checksTimeout": 600000,
+    "checksPollingInterval": 10000,
+    "requireAllChecksPassing": true
+  }
 }

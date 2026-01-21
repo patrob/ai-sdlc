@@ -139,6 +139,9 @@ export interface StoryFrontmatter {
   implementation_complete: boolean;
   reviews_complete: boolean;
   pr_url?: string;
+  pr_merged?: boolean;
+  merge_sha?: string;
+  merged_at?: string;
   branch?: string;
   worktree_path?: string;
   last_error?: string;
@@ -466,6 +469,29 @@ export interface EpicConfig {
 }
 
 /**
+ * Merge strategy for pull requests
+ */
+export type MergeStrategy = 'squash' | 'merge' | 'rebase';
+
+/**
+ * Merge configuration for automatic PR merging in epic processing
+ */
+export interface MergeConfig {
+  /** Enable automatic PR merging after review approval. @default false */
+  enabled: boolean;
+  /** Strategy for merging PRs. @default 'squash' */
+  strategy: MergeStrategy;
+  /** Delete the branch after merge. @default true */
+  deleteBranchAfterMerge: boolean;
+  /** Timeout in ms for CI checks to complete. @default 600000 (10 min) */
+  checksTimeout: number;
+  /** Polling interval in ms for checking CI status. @default 10000 (10 sec) */
+  checksPollingInterval: number;
+  /** Require all CI checks to pass before merging. @default true */
+  requireAllChecksPassing: boolean;
+}
+
+/**
  * Logging configuration for ai-sdlc operations
  */
 export interface LogConfig {
@@ -724,6 +750,11 @@ export interface Config {
    */
   epic?: EpicConfig;
   /**
+   * Merge configuration for automatic PR merging in epic processing.
+   * Controls whether PRs are merged after CI passes.
+   */
+  merge?: MergeConfig;
+  /**
    * Enable sequential task orchestrator for implementation.
    * When true, implementation runs as separate agents orchestrated sequentially.
    * @default false
@@ -745,6 +776,10 @@ export interface EpicProcessingOptions {
   dryRun?: boolean;
   force?: boolean;
   keepWorktrees?: boolean;
+  /** Enable PR merging (overrides config) */
+  merge?: boolean;
+  /** Merge strategy (overrides config) */
+  mergeStrategy?: MergeStrategy;
 }
 
 /**

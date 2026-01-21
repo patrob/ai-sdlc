@@ -862,6 +862,31 @@ export async function markStoryComplete(story: Story): Promise<Story> {
 }
 
 /**
+ * Check if a story's PR has been merged
+ */
+export function isPRMerged(story: Story): boolean {
+  return story.frontmatter.pr_merged === true;
+}
+
+/**
+ * Mark a story's PR as merged and record the merge details
+ *
+ * @param story - The story to update
+ * @param mergeSha - The SHA of the merge commit (optional)
+ * @returns Updated story with merge metadata
+ */
+export async function markPRMerged(story: Story, mergeSha?: string): Promise<Story> {
+  story.frontmatter.pr_merged = true;
+  story.frontmatter.merged_at = new Date().toISOString();
+  if (mergeSha) {
+    story.frontmatter.merge_sha = mergeSha;
+  }
+  story.frontmatter.updated = new Date().toISOString().split('T')[0];
+  await writeStory(story);
+  return story;
+}
+
+/**
  * Auto-complete story after review approval
  * Handles marking story as complete and transitioning to done status
  *

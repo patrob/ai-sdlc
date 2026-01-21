@@ -1,7 +1,7 @@
 import path from 'path';
 import { spawn } from 'child_process';
-import { Story, EpicProcessingOptions, EpicSummary, PhaseExecutionResult } from '../types/index.js';
-import { getSdlcRoot, loadConfig, validateWorktreeBasePath } from '../core/config.js';
+import { Story, EpicProcessingOptions, EpicSummary, PhaseExecutionResult, Config } from '../types/index.js';
+import { getSdlcRoot, loadConfig, validateWorktreeBasePath, DEFAULT_MERGE_CONFIG } from '../core/config.js';
 import { findStoriesByEpic } from '../core/kanban.js';
 import { GitWorktreeService } from '../core/worktree.js';
 import { getThemedChalk } from '../core/theme.js';
@@ -16,6 +16,8 @@ import {
   DashboardState,
 } from './progress-dashboard.js';
 import { StoryLogger } from '../core/story-logger.js';
+import { parseStory, isPRMerged, markPRMerged } from '../core/story.js';
+import { waitForChecks, mergePullRequest } from '../agents/review.js';
 import fs from 'fs';
 
 /**
@@ -79,13 +81,106 @@ function formatExecutionPlan(epicId: string, phases: Story[][]): string {
 }
 
 /**
+ * Merge a story's PR after successful completion
+ * Waits for CI checks to pass before merging
+ */
+async function mergeStoryPR(
+  storyId: string,
+  worktreePath: string,
+  config: Config,
+  logger: StoryLogger
+): Promise<{ success: boolean; error?: string }> {
+  const mergeConfig = config.merge ?? DEFAULT_MERGE_CONFIG;
+
+  if (!mergeConfig.enabled) {
+    logger.log('DEBUG', 'PR merge is disabled in config');
+    return { success: true };
+  }
+
+  // Load the story from the worktree to get pr_url
+  const sdlcRoot = path.join(worktreePath, config.sdlcFolder);
+  const storyPath = path.join(sdlcRoot, 'stories', storyId, 'story.md');
+
+  if (!fs.existsSync(storyPath)) {
+    logger.log('WARN', `Story file not found in worktree: ${storyPath}`);
+    return { success: true }; // Not a failure - story might not have a PR
+  }
+
+  let story: Story;
+  try {
+    story = parseStory(storyPath);
+  } catch (error) {
+    logger.log('ERROR', `Failed to parse story: ${error}`);
+    return { success: false, error: `Failed to parse story: ${error}` };
+  }
+
+  // Check if story has a PR URL
+  const prUrl = story.frontmatter.pr_url;
+  if (!prUrl) {
+    logger.log('DEBUG', 'Story has no PR URL, skipping merge');
+    return { success: true };
+  }
+
+  // Check if already merged
+  if (isPRMerged(story)) {
+    logger.log('DEBUG', 'PR already merged');
+    return { success: true };
+  }
+
+  logger.log('INFO', `Waiting for CI checks on PR: ${prUrl}`);
+
+  // Wait for CI checks to pass
+  const checksResult = await waitForChecks(prUrl, worktreePath, {
+    timeout: mergeConfig.checksTimeout,
+    pollingInterval: mergeConfig.checksPollingInterval,
+    requireAllChecksPassing: mergeConfig.requireAllChecksPassing,
+  });
+
+  if (!checksResult.allPassed) {
+    if (checksResult.timedOut) {
+      logger.log('WARN', `CI checks timed out after ${mergeConfig.checksTimeout}ms`);
+      return { success: false, error: 'CI checks timed out - manual merge required' };
+    }
+    logger.log('ERROR', `CI checks failed: ${checksResult.error}`);
+    return { success: false, error: checksResult.error || 'CI checks failed' };
+  }
+
+  logger.log('INFO', 'CI checks passed, merging PR');
+
+  // Merge the PR
+  const mergeResult = await mergePullRequest(prUrl, worktreePath, {
+    strategy: mergeConfig.strategy,
+    deleteBranchAfterMerge: mergeConfig.deleteBranchAfterMerge,
+  });
+
+  if (!mergeResult.success) {
+    logger.log('ERROR', `PR merge failed: ${mergeResult.error}`);
+    return { success: false, error: mergeResult.error || 'PR merge failed' };
+  }
+
+  logger.log('INFO', `PR merged successfully${mergeResult.mergeSha ? ` (SHA: ${mergeResult.mergeSha})` : ''}`);
+
+  // Update story with merge metadata
+  try {
+    await markPRMerged(story, mergeResult.mergeSha);
+    logger.log('DEBUG', 'Updated story with merge metadata');
+  } catch (error) {
+    // Log but don't fail - the merge succeeded
+    logger.log('WARN', `Failed to update story with merge metadata: ${error}`);
+  }
+
+  return { success: true };
+}
+
+/**
  * Process a single story in an isolated worktree
  */
 async function processStoryInWorktree(
   story: Story,
   dashboard: DashboardState,
   worktreeService: GitWorktreeService,
-  keepWorktrees: boolean
+  keepWorktrees: boolean,
+  config: Config
 ): Promise<{ success: boolean; error?: string }> {
   const storyId = story.frontmatter.id;
   const slug = story.frontmatter.slug;
@@ -161,10 +256,23 @@ async function processStoryInWorktree(
       });
     });
 
+    // If execution succeeded, attempt PR merge (if enabled)
+    if (result.success && config.merge?.enabled) {
+      const mergeResult = await mergeStoryPR(storyId, worktreePath, config, logger);
+      if (!mergeResult.success) {
+        // Merge failure is a story failure
+        result.success = false;
+        result.error = mergeResult.error || 'PR merge failed';
+        logger.log('ERROR', `Story failed due to merge failure: ${result.error}`);
+      }
+    }
+
     // Cleanup worktree if not keeping
     if (!keepWorktrees) {
       try {
-        worktreeService.remove(worktreePath, false);
+        // Use force cleanup after successful merge since branch may be deleted
+        const forceCleanup = result.success && config.merge?.enabled && config.merge?.deleteBranchAfterMerge;
+        worktreeService.remove(worktreePath, forceCleanup);
       } catch (cleanupError) {
         // Log but don't fail the story
         logger.log('WARN', `Failed to cleanup worktree: ${cleanupError}`);
@@ -194,7 +302,8 @@ async function executePhase(
   maxConcurrent: number,
   dashboard: DashboardState,
   worktreeService: GitWorktreeService,
-  keepWorktrees: boolean
+  keepWorktrees: boolean,
+  config: Config
 ): Promise<PhaseExecutionResult> {
   const result: PhaseExecutionResult = {
     phase: phaseNumber,
@@ -210,7 +319,7 @@ async function executePhase(
     // Fill up to maxConcurrent
     while (active.size < maxConcurrent && queue.length > 0) {
       const story = queue.shift()!;
-      const promise = processStoryInWorktree(story, dashboard, worktreeService, keepWorktrees)
+      const promise = processStoryInWorktree(story, dashboard, worktreeService, keepWorktrees, config)
         .then(result => ({
           storyId: story.frontmatter.id,
           ...result,
@@ -326,6 +435,16 @@ export async function processEpic(options: EpicProcessingOptions): Promise<numbe
   const keepWorktrees = options.keepWorktrees ?? config.epic?.keepWorktrees ?? false;
   const continueOnFailure = config.epic?.continueOnFailure ?? true;
 
+  // Apply CLI overrides for merge config
+  if (options.merge !== undefined) {
+    config.merge = config.merge ?? { ...DEFAULT_MERGE_CONFIG };
+    config.merge.enabled = options.merge;
+  }
+  if (options.mergeStrategy !== undefined) {
+    config.merge = config.merge ?? { ...DEFAULT_MERGE_CONFIG };
+    config.merge.strategy = options.mergeStrategy;
+  }
+
   // Validate maxConcurrent
   if (maxConcurrent < 1) {
     console.log(c.error('Error: --max-concurrent must be >= 1'));
@@ -405,17 +524,47 @@ export async function processEpic(options: EpicProcessingOptions): Promise<numbe
     for (let i = 0; i < phases.length; i++) {
       const phase = phases[i];
 
-      // Check if any stories in this phase should be skipped due to failed dependencies
+      // Check if any stories in this phase should be skipped due to failed or unmerged dependencies
       const phaseToExecute = phase.filter(story => {
         const deps = story.frontmatter.dependencies || [];
-        const hasFailedDep = deps.some(dep => failedStories.has(dep));
 
+        // Check for failed dependencies
+        const hasFailedDep = deps.some(dep => failedStories.has(dep));
         if (hasFailedDep) {
           const failedDep = deps.find(dep => failedStories.has(dep))!;
           const reason = `Dependency failed: ${failedDep}`;
           markStorySkipped(dashboard, story.frontmatter.id, reason);
           skippedStories.set(story.frontmatter.id, reason);
           return false;
+        }
+
+        // If merge is enabled, check for unmerged dependencies
+        // A dependency is unmerged if it has a pr_url but pr_merged !== true
+        if (config.merge?.enabled) {
+          for (const depId of deps) {
+            // Skip done stories (already validated) and failed stories (handled above)
+            if (doneStoryIds.has(depId) || failedStories.has(depId)) continue;
+
+            // Check if this dependency story has been completed in this run
+            const depCompleted = phaseResults.some(pr => pr.succeeded.includes(depId));
+            if (!depCompleted) continue;
+
+            // Try to load the dependency story to check merge status
+            try {
+              const depStoryPath = path.join(sdlcRoot, 'stories', depId, 'story.md');
+              if (fs.existsSync(depStoryPath)) {
+                const depStory = parseStory(depStoryPath);
+                if (depStory.frontmatter.pr_url && !isPRMerged(depStory)) {
+                  const reason = `Waiting for dependency merge: ${depId}`;
+                  markStorySkipped(dashboard, story.frontmatter.id, reason);
+                  skippedStories.set(story.frontmatter.id, reason);
+                  return false;
+                }
+              }
+            } catch {
+              // If we can't read the story, skip this check
+            }
+          }
         }
 
         return true;
@@ -433,7 +582,8 @@ export async function processEpic(options: EpicProcessingOptions): Promise<numbe
         maxConcurrent,
         dashboard,
         worktreeService,
-        keepWorktrees
+        keepWorktrees,
+        config
       );
 
       phaseResults.push(result);

@@ -1538,3 +1538,186 @@ Test content
     expect(reloaded.frontmatter.status).toBe('ready');
   });
 });
+
+describe('isPRMerged', () => {
+  it('should return true when pr_merged is true', async () => {
+    const { isPRMerged } = await import('./story.js');
+    const story = {
+      path: '/test/story.md',
+      slug: 'test',
+      frontmatter: {
+        id: 'S-0001',
+        title: 'Test',
+        slug: 'test',
+        priority: 1,
+        status: 'done' as const,
+        type: 'feature' as const,
+        created: '2024-01-01',
+        labels: [],
+        research_complete: true,
+        plan_complete: true,
+        implementation_complete: true,
+        reviews_complete: true,
+        pr_url: 'https://github.com/test/repo/pull/1',
+        pr_merged: true,
+        merge_sha: 'abc123',
+      },
+      content: '# Test',
+    };
+
+    expect(isPRMerged(story)).toBe(true);
+  });
+
+  it('should return false when pr_merged is false', async () => {
+    const { isPRMerged } = await import('./story.js');
+    const story = {
+      path: '/test/story.md',
+      slug: 'test',
+      frontmatter: {
+        id: 'S-0001',
+        title: 'Test',
+        slug: 'test',
+        priority: 1,
+        status: 'done' as const,
+        type: 'feature' as const,
+        created: '2024-01-01',
+        labels: [],
+        research_complete: true,
+        plan_complete: true,
+        implementation_complete: true,
+        reviews_complete: true,
+        pr_url: 'https://github.com/test/repo/pull/1',
+        pr_merged: false,
+      },
+      content: '# Test',
+    };
+
+    expect(isPRMerged(story)).toBe(false);
+  });
+
+  it('should return false when pr_merged is undefined', async () => {
+    const { isPRMerged } = await import('./story.js');
+    const story = {
+      path: '/test/story.md',
+      slug: 'test',
+      frontmatter: {
+        id: 'S-0001',
+        title: 'Test',
+        slug: 'test',
+        priority: 1,
+        status: 'done' as const,
+        type: 'feature' as const,
+        created: '2024-01-01',
+        labels: [],
+        research_complete: true,
+        plan_complete: true,
+        implementation_complete: true,
+        reviews_complete: true,
+        pr_url: 'https://github.com/test/repo/pull/1',
+      },
+      content: '# Test',
+    };
+
+    expect(isPRMerged(story)).toBe(false);
+  });
+});
+
+describe('markPRMerged', () => {
+  let tempDir: string;
+  let sdlcRoot: string;
+
+  beforeEach(() => {
+    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-test-')));
+    sdlcRoot = path.join(tempDir, '.ai-sdlc');
+    fs.mkdirSync(sdlcRoot, { recursive: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  function createTestStoryWithPR(): string {
+    const storiesFolder = path.join(sdlcRoot, 'stories');
+    fs.mkdirSync(storiesFolder, { recursive: true });
+
+    const storyFolder = path.join(storiesFolder, 'S-0001');
+    fs.mkdirSync(storyFolder, { recursive: true });
+
+    const filePath = path.join(storyFolder, 'story.md');
+
+    const content = `---
+id: S-0001
+title: Test Story
+slug: test-story
+priority: 1
+status: done
+type: feature
+created: '2024-01-01'
+labels: []
+research_complete: true
+plan_complete: true
+implementation_complete: true
+reviews_complete: true
+pr_url: 'https://github.com/test/repo/pull/1'
+---
+
+# Test Story
+
+Test content
+`;
+
+    fs.writeFileSync(filePath, content);
+    return filePath;
+  }
+
+  it('should set pr_merged to true', async () => {
+    const { markPRMerged } = await import('./story.js');
+    const storyPath = createTestStoryWithPR();
+    let story = parseStory(storyPath);
+
+    expect(story.frontmatter.pr_merged).toBeUndefined();
+
+    story = await markPRMerged(story);
+
+    expect(story.frontmatter.pr_merged).toBe(true);
+  });
+
+  it('should set merge_sha when provided', async () => {
+    const { markPRMerged } = await import('./story.js');
+    const storyPath = createTestStoryWithPR();
+    let story = parseStory(storyPath);
+
+    story = await markPRMerged(story, 'abc123def456');
+
+    expect(story.frontmatter.merge_sha).toBe('abc123def456');
+  });
+
+  it('should set merged_at timestamp', async () => {
+    const { markPRMerged } = await import('./story.js');
+    const storyPath = createTestStoryWithPR();
+    let story = parseStory(storyPath);
+
+    story = await markPRMerged(story);
+
+    expect(story.frontmatter.merged_at).toBeDefined();
+    const timestamp = new Date(story.frontmatter.merged_at!);
+    expect(timestamp.getTime()).toBeGreaterThan(0);
+  });
+
+  it('should persist changes to disk', async () => {
+    const { markPRMerged } = await import('./story.js');
+    const storyPath = createTestStoryWithPR();
+    let story = parseStory(storyPath);
+
+    await markPRMerged(story, 'abc123');
+
+    // Re-read from disk
+    const reloaded = parseStory(storyPath);
+    expect(reloaded.frontmatter.pr_merged).toBe(true);
+    expect(reloaded.frontmatter.merge_sha).toBe('abc123');
+    expect(reloaded.frontmatter.merged_at).toBeDefined();
+  });
+});

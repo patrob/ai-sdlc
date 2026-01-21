@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig, EpicConfig } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig, EpicConfig, MergeConfig } from '../types/index.js';
 
 const CONFIG_FILENAME = '.ai-sdlc.json';
 
@@ -53,6 +53,51 @@ export const DEFAULT_EPIC_CONFIG: EpicConfig = {
   keepWorktrees: false,
   continueOnFailure: true,
 };
+
+/**
+ * Default merge configuration for automatic PR merging
+ */
+export const DEFAULT_MERGE_CONFIG: MergeConfig = {
+  enabled: false,
+  strategy: 'squash',
+  deleteBranchAfterMerge: true,
+  checksTimeout: 600000, // 10 minutes
+  checksPollingInterval: 10000, // 10 seconds
+  requireAllChecksPassing: true,
+};
+
+/**
+ * Validate merge configuration values with bounds checking
+ * @param config Partial merge configuration to validate
+ * @returns Validated merge configuration
+ * @throws Error if configuration values are out of bounds
+ */
+export function validateMergeConfig(config: Partial<MergeConfig>): MergeConfig {
+  const merged = { ...DEFAULT_MERGE_CONFIG, ...config };
+
+  // Validate strategy
+  const validStrategies = ['squash', 'merge', 'rebase'];
+  if (!validStrategies.includes(merged.strategy)) {
+    throw new Error(`Invalid merge strategy "${merged.strategy}". Must be one of: ${validStrategies.join(', ')}`);
+  }
+
+  // Validate checksTimeout bounds (1 second to 1 hour)
+  if (merged.checksTimeout < 1000 || merged.checksTimeout > 3600000) {
+    throw new Error(`checksTimeout must be between 1000ms and 3600000ms (1 hour), got ${merged.checksTimeout}`);
+  }
+
+  // Validate checksPollingInterval bounds (1 second to 5 minutes)
+  if (merged.checksPollingInterval < 1000 || merged.checksPollingInterval > 300000) {
+    throw new Error(`checksPollingInterval must be between 1000ms and 300000ms (5 min), got ${merged.checksPollingInterval}`);
+  }
+
+  // Ensure polling interval is less than timeout
+  if (merged.checksPollingInterval >= merged.checksTimeout) {
+    throw new Error(`checksPollingInterval (${merged.checksPollingInterval}) must be less than checksTimeout (${merged.checksTimeout})`);
+  }
+
+  return merged;
+}
 
 /**
  * Default implementation configuration
@@ -127,6 +172,8 @@ export const DEFAULT_CONFIG: Config = {
   logging: { ...DEFAULT_LOGGING_CONFIG },
   // Epic configuration
   epic: { ...DEFAULT_EPIC_CONFIG },
+  // Merge configuration
+  merge: { ...DEFAULT_MERGE_CONFIG },
   // Orchestrator configuration
   useOrchestrator: false,
 };
@@ -468,6 +515,9 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
           ...DEFAULT_EPIC_CONFIG,
           ...userConfig.epic,
         },
+        merge: userConfig.merge
+          ? validateMergeConfig(userConfig.merge)
+          : { ...DEFAULT_MERGE_CONFIG },
       };
     } catch (error) {
       // Re-throw security-related errors (prototype pollution, etc.)

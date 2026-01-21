@@ -881,7 +881,7 @@ async function processBatchInternal(
 /**
  * Run the workflow (process one action or all)
  */
-export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; batch?: string; epic?: string; maxConcurrent?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean; clean?: boolean; keepWorktrees?: boolean }): Promise<void> {
+export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; batch?: string; epic?: string; maxConcurrent?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean; clean?: boolean; keepWorktrees?: boolean; merge?: boolean; mergeStrategy?: string }): Promise<void> {
   const config = loadConfig();
   // Parse maxIterations from CLI (undefined means use config default which is Infinity)
   const maxIterationsOverride = options.maxIterations !== undefined
@@ -926,12 +926,17 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     const { processEpic } = await import('./epic-processor.js');
     const maxConcurrent = options.maxConcurrent ? parseInt(options.maxConcurrent, 10) : undefined;
 
+    // Parse merge strategy if provided
+    const mergeStrategy = options.mergeStrategy as 'squash' | 'merge' | 'rebase' | undefined;
+
     const exitCode = await processEpic({
       epicId: options.epic,
       maxConcurrent,
       dryRun: options.dryRun,
       force: options.force,
       keepWorktrees: options.keepWorktrees,
+      merge: options.merge,
+      mergeStrategy,
     });
 
     process.exit(exitCode);

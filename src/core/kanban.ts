@@ -772,19 +772,30 @@ export function getGroupings(sdlcRoot: string, dimension: GroupingDimension): Gr
 }
 
 /**
- * Find stories by epic label (convenience wrapper).
- * Queries for stories with 'epic-{epicId}' label.
+ * Find stories belonging to a specific epic.
+ * Checks both the epic frontmatter field (primary) and labels (backwards compatibility).
  *
  * @param sdlcRoot - Path to .ai-sdlc folder
  * @param epicId - Epic identifier (without 'epic-' prefix)
- * @returns Array of stories with the specified epic label
+ * @returns Array of stories belonging to the specified epic
  *
  * @example
  * findStoriesByEpic(sdlcRoot, 'ticketing-integration')
- * // Returns stories with label 'epic-ticketing-integration'
+ * // Returns stories with epic: 'ticketing-integration' or label 'epic-ticketing-integration'
  */
 export function findStoriesByEpic(sdlcRoot: string, epicId: string): Story[] {
-  return findStoriesByPattern(sdlcRoot, `epic-${epicId}`);
+  const allStories = findAllStories(sdlcRoot);
+
+  return allStories.filter(story => {
+    // Check epic frontmatter field (primary)
+    if (story.frontmatter.epic === epicId || story.frontmatter.epic === `epic-${epicId}`) {
+      return true;
+    }
+    // Check labels for backwards compatibility
+    return story.frontmatter.labels.some(label =>
+      labelMatchesPattern(label, `epic-${epicId}`)
+    );
+  });
 }
 
 /**

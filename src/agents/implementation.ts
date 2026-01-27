@@ -11,15 +11,21 @@ import {
   getEffectiveMaxImplementationRetries,
   incrementTotalRecoveryAttempts,
   readSectionContent,
+  moveToBlocked,
 } from '../core/story.js';
 import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
-import { Story, AgentResult, TDDTestCycle, TDDConfig } from '../types/index.js';
+import { Story, AgentResult, TDDTestCycle, TDDConfig, ErrorFingerprint } from '../types/index.js';
 import { AgentOptions } from './research.js';
 import { loadConfig, DEFAULT_TDD_CONFIG } from '../core/config.js';
 import { verifyImplementation } from './verification.js';
 import { createHash } from 'crypto';
 import { parseTypeScriptErrors, classifyAndSortErrors } from '../services/error-classifier.js';
+import {
+  checkForIdenticalErrors,
+  updateErrorHistory,
+  DEFAULT_IDENTICAL_ERROR_THRESHOLD,
+} from '../services/error-fingerprint.js';
 
 // Re-export for convenience
 export type { AgentProgressCallback };
@@ -939,8 +945,13 @@ ${implementationResult}
     });
 
     if (verification.passed) {
-      // Success! Return success - retry count will be reset by review agent on APPROVED
+      // Success! Clear error history and return success
       changesMade.push('Verification passed - implementation successful');
+
+      // Clear error history on success (prevent stale fingerprints from affecting future cycles)
+      const successStory = parseStory(storyPath);
+      successStory.frontmatter.error_history = [];
+      await writeStory(successStory);
 
       // Send success progress callback
       if (onProgress) {
@@ -976,6 +987,41 @@ ${implementationResult}
 
     // Determine outcome based on what failed
     const outcome: AttemptOutcome = hasBuildErrors ? 'failed_build' : 'failed_tests';
+
+    // --- ERROR FINGERPRINTING: Detect identical error loops ---
+    // Combine test and build output for fingerprinting
+    const combinedErrorOutput = `${verification.buildOutput}\n---\n${verification.testsOutput}`;
+    const errorHistory = updatedStory.frontmatter.error_history || [];
+    const fingerprintCheck = checkForIdenticalErrors(
+      combinedErrorOutput,
+      errorHistory,
+      DEFAULT_IDENTICAL_ERROR_THRESHOLD
+    );
+
+    // Update error history in story
+    const newErrorHistory = updateErrorHistory(errorHistory, fingerprintCheck);
+    updatedStory.frontmatter.error_history = newErrorHistory;
+    await writeStory(updatedStory);
+
+    // Check for identical error loop - block early to prevent wasted cycles
+    if (fingerprintCheck.isIdentical) {
+      changesMade.push(`Identical error detected ${fingerprintCheck.consecutiveCount} times - blocking early`);
+
+      // Block the story with diagnostic information
+      await moveToBlocked(storyPath, `Identical error loop detected: same error occurred ${fingerprintCheck.consecutiveCount} consecutive times`, {
+        identicalErrorsDetected: true,
+        consecutiveIdenticalCount: fingerprintCheck.consecutiveCount,
+        suggestedFix: 'The implementation is stuck on the same error. Manual investigation needed to fix the root cause.',
+      });
+
+      return {
+        success: false,
+        story: parseStory(storyPath),
+        changesMade,
+        error: `Implementation blocked: Identical error occurred ${fingerprintCheck.consecutiveCount} consecutive times.\n\nError preview:\n${fingerprintCheck.errorPreview}\n\nThis indicates a stuck retry loop. Manual intervention required.`,
+      };
+    }
+    // --- END ERROR FINGERPRINTING ---
 
     // Record this attempt in history with both test and build failures
     attemptHistory.push({

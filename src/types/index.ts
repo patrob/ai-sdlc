@@ -116,6 +116,45 @@ export interface RefinementIteration {
   result: 'success' | 'failed' | 'in_progress';
 }
 
+/**
+ * Single error fingerprint entry for tracking identical errors
+ */
+export interface ErrorFingerprint {
+  /** SHA256 hash of normalized error output */
+  hash: string;
+  /** Timestamp when this error first occurred */
+  firstSeen: string;
+  /** Timestamp when this error last occurred */
+  lastSeen: string;
+  /** Number of consecutive times this exact error has occurred */
+  consecutiveCount: number;
+  /** First 200 chars of the error for human-readable context */
+  errorPreview: string;
+}
+
+/**
+ * Diagnostic summary generated when a story is blocked.
+ * Provides human-readable context for debugging and manual intervention.
+ */
+export interface FailureDiagnostic {
+  /** ISO timestamp when story was blocked */
+  blockedAt: string;
+  /** Human-readable reason for blocking */
+  reason: string;
+  /** Last phase the story was in (research, plan, implement, review) */
+  lastPhase: string;
+  /** Total number of errors/failures encountered */
+  errorCount: number;
+  /** Most common error pattern (first 200 chars) */
+  mostCommonError: string;
+  /** Suggested fix or next step (optional, AI-generated) */
+  suggestedFix?: string;
+  /** Whether identical errors were detected (indicates stuck retry loop) */
+  identicalErrorsDetected?: boolean;
+  /** Number of consecutive identical errors before blocking */
+  consecutiveIdenticalCount?: number;
+}
+
 export interface StoryFrontmatter {
   id: string;
   title: string;
@@ -182,6 +221,17 @@ export interface StoryFrontmatter {
   // Blocked tracking
   blocked_reason?: string;
   blocked_at?: string;
+  /**
+   * Diagnostic summary generated when story is blocked.
+   * Provides context for debugging stuck stories.
+   */
+  blocked_diagnostic?: FailureDiagnostic;
+  // Error fingerprinting for self-healing
+  /**
+   * History of error fingerprints for detecting identical error loops.
+   * Used by implementation retry logic to block early on repeated failures.
+   */
+  error_history?: ErrorFingerprint[];
   // TDD tracking
   tdd_enabled?: boolean;
   tdd_current_test?: TDDTestCycle;

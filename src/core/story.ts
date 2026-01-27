@@ -2,7 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import * as properLockfile from 'proper-lockfile';
-import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, DEFAULT_PRIORITY_GAP, LockOptions, ReviewResult, ReviewDecision } from '../types/index.js';
+import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, DEFAULT_PRIORITY_GAP, LockOptions, ReviewResult, ReviewDecision, FailureDiagnostic, ErrorFingerprint } from '../types/index.js';
+import { getMostCommonError } from '../services/error-fingerprint.js';
 
 /**
  * Section file names for split story outputs.
@@ -190,13 +191,95 @@ export async function moveStory(story: Story, toFolder: string, sdlcRoot: string
 }
 
 /**
- * Move a story to blocked status with reason and timestamp
+ * Options for moveToBlocked function
+ */
+export interface MoveToBlockedOptions {
+  /** Whether identical errors were detected during retries */
+  identicalErrorsDetected?: boolean;
+  /** Number of consecutive identical errors */
+  consecutiveIdenticalCount?: number;
+  /** Suggested fix or next step */
+  suggestedFix?: string;
+}
+
+/**
+ * Determine the last phase based on story completion flags
+ */
+function determineLastPhase(story: Story): string {
+  if (story.frontmatter.reviews_complete) return 'review';
+  if (story.frontmatter.implementation_complete) return 'review';
+  if (story.frontmatter.plan_complete) return 'implement';
+  if (story.frontmatter.research_complete) return 'plan';
+  return 'research';
+}
+
+/**
+ * Calculate total error count from various retry counters
+ */
+function calculateErrorCount(story: Story): number {
+  const implRetries = story.frontmatter.implementation_retry_count || 0;
+  const reviewRetries = story.frontmatter.retry_count || 0;
+  const refinements = story.frontmatter.refinement_count || 0;
+  const totalRecovery = story.frontmatter.total_recovery_attempts || 0;
+
+  // Use total_recovery_attempts if available, otherwise sum the others
+  return totalRecovery || (implRetries + reviewRetries + refinements);
+}
+
+/**
+ * Generate a failure diagnostic summary for a blocked story.
+ *
+ * Provides human-readable context for debugging stuck stories:
+ * - What phase was the story in
+ * - How many errors occurred
+ * - What the most common error was
+ * - Whether identical errors were detected (stuck loop indicator)
+ */
+export function generateFailureDiagnostic(
+  story: Story,
+  reason: string,
+  options?: MoveToBlockedOptions
+): FailureDiagnostic {
+  const errorHistory = story.frontmatter.error_history || [];
+  const mostCommonError = getMostCommonError(errorHistory);
+
+  // Build diagnostic object, only including defined optional fields
+  // YAML serialization fails on undefined values
+  const diagnostic: FailureDiagnostic = {
+    blockedAt: new Date().toISOString(),
+    reason: sanitizeReasonText(reason),
+    lastPhase: determineLastPhase(story),
+    errorCount: calculateErrorCount(story),
+    mostCommonError: mostCommonError || sanitizeReasonText(reason).substring(0, 200),
+  };
+
+  // Only add optional fields if they have values
+  if (options?.suggestedFix !== undefined) {
+    diagnostic.suggestedFix = options.suggestedFix;
+  }
+  if (options?.identicalErrorsDetected !== undefined) {
+    diagnostic.identicalErrorsDetected = options.identicalErrorsDetected;
+  }
+  if (options?.consecutiveIdenticalCount !== undefined) {
+    diagnostic.consecutiveIdenticalCount = options.consecutiveIdenticalCount;
+  }
+
+  return diagnostic;
+}
+
+/**
+ * Move a story to blocked status with reason, timestamp, and diagnostic summary
  * In the new architecture, this only updates frontmatter - file path remains unchanged
  *
  * @param storyPath - Absolute path to the story file
  * @param reason - Reason for blocking (e.g., "Max refinement attempts (2/2) reached")
+ * @param options - Optional additional context for diagnostics
  */
-export async function moveToBlocked(storyPath: string, reason: string): Promise<void> {
+export async function moveToBlocked(
+  storyPath: string,
+  reason: string,
+  options?: MoveToBlockedOptions
+): Promise<void> {
   // Security: Validate path BEFORE any file I/O operations
   const resolvedPath = path.resolve(storyPath);
   const storyDir = path.dirname(resolvedPath);
@@ -215,10 +298,14 @@ export async function moveToBlocked(storyPath: string, reason: string): Promise<
   // Parse the story (after security validation passes)
   const story = parseStory(storyPath);
 
+  // Generate diagnostic summary
+  const diagnostic = generateFailureDiagnostic(story, reason, options);
+
   // Update frontmatter only - no file moves in new architecture
   story.frontmatter.status = 'blocked';
   story.frontmatter.blocked_reason = sanitizeReasonText(reason);
   story.frontmatter.blocked_at = new Date().toISOString();
+  story.frontmatter.blocked_diagnostic = diagnostic;
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
 
   // Write back to same location

@@ -194,12 +194,18 @@ implementation:
       const { verifyImplementation } = await import('../../src/agents/verification.js');
       const mockVerify = verifyImplementation as Mock;
 
-      mockVerify.mockResolvedValue({
-        passed: false,
-        failures: 3,
-        timestamp: new Date().toISOString(),
-        testsOutput: 'TypeError: Cannot read property',
-        buildOutput: 'Build succeeded',
+      // Return DIFFERENT errors each time to avoid triggering identical error detection
+      // This tests the "max retries exhausted" path rather than the "identical error loop" path
+      let verifyCallCount = 0;
+      mockVerify.mockImplementation(() => {
+        verifyCallCount++;
+        return Promise.resolve({
+          passed: false,
+          failures: verifyCallCount,
+          timestamp: new Date().toISOString(),
+          testsOutput: `Error ${verifyCallCount}: Test failure with unique message ${Date.now()}`,
+          buildOutput: 'Build succeeded',
+        });
       });
 
       // Default beforeEach mock returns different diffs each time
@@ -246,6 +252,39 @@ implementation:
 
       // Should exit after detecting no changes (may be 1 or 2 calls depending on when detection happens)
       expect(mockVerify).toHaveBeenCalled();
+    });
+  });
+
+  describe('identical error detection', () => {
+    it('should block early when same error occurs 3 consecutive times', async () => {
+      const { verifyImplementation } = await import('../../src/agents/verification.js');
+      const mockVerify = verifyImplementation as Mock;
+
+      // Return the SAME error every time to trigger identical error detection
+      const sameError = 'TypeError: Cannot find module ./missing-mock';
+      mockVerify.mockResolvedValue({
+        passed: false,
+        failures: 1,
+        timestamp: new Date().toISOString(),
+        testsOutput: sameError,
+        buildOutput: 'Build succeeded',
+      });
+
+      const result = await runImplementationAgent(storyPath, sdlcRoot, {});
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Identical error');
+      expect(result.error).toContain('consecutive');
+      expect(result.error).toContain('stuck retry loop');
+
+      // Verify error history was populated
+      const story = parseStory(storyPath);
+      expect(story.frontmatter.error_history).toBeDefined();
+      expect(story.frontmatter.error_history!.length).toBeGreaterThan(0);
+
+      // Should block at 3 consecutive identical errors (threshold)
+      const lastError = story.frontmatter.error_history![story.frontmatter.error_history!.length - 1];
+      expect(lastError.consecutiveCount).toBeGreaterThanOrEqual(3);
     });
   });
 

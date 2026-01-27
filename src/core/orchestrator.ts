@@ -14,6 +14,7 @@
 
 import { spawn } from 'child_process';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import type {
   ProcessOrchestratorOptions,
   ProcessExecutionResult,
@@ -54,9 +55,6 @@ export class Orchestrator {
 
     console.log(`🚀 Starting orchestrator with ${stories.length} stories (concurrency: ${this.options.concurrency})`);
 
-    // Setup graceful shutdown handlers
-    this.setupShutdownHandlers();
-
     try {
       // Use manual queue pattern (same as epic-processor)
       const queue = [...stories];
@@ -70,14 +68,23 @@ export class Orchestrator {
 
           active.add(promise);
 
-          // Remove from active when done
-          promise.finally(() => active.delete(promise));
+          // Remove from active and collect result when done
+          promise.then(
+            (result) => {
+              active.delete(promise);
+              this.results.push(result);
+            },
+            (error) => {
+              active.delete(promise);
+              // Error should not happen as executeStory catches all errors
+              console.error('Unexpected error in executeStory:', error);
+            }
+          );
         }
 
         if (active.size > 0) {
           // Wait for at least one to complete
-          const result = await Promise.race(active);
-          this.results.push(result);
+          await Promise.race(active);
 
           // If shutdown requested, cancel queued stories
           if (this.shuttingDown) {
@@ -89,8 +96,7 @@ export class Orchestrator {
 
       // Wait for all active processes to complete
       if (active.size > 0) {
-        const remaining = await Promise.all(active);
-        this.results.push(...remaining);
+        await Promise.all(active);
       }
 
       return this.results;
@@ -169,15 +175,20 @@ export class Orchestrator {
     startTime: number
   ): Promise<ProcessExecutionResult> {
     return new Promise((resolve) => {
-      // Spawn ai-sdlc run process in worktree
-      // Use the same invocation method as the current process (handles global install, npx, or dev mode)
-      // Use --no-worktree since we're already in an isolated worktree
+      // Spawn agent-executor as child process entry point
+      // Determine the path to agent-executor (could be in dist/ or src/ depending on build state)
+      const currentFilePath = fileURLToPath(import.meta.url);
+      const agentExecutorPath = path.join(
+        path.dirname(currentFilePath),
+        'agent-executor.js'
+      );
+
       const proc = spawn(
         process.execPath,
-        [process.argv[1], 'run', '--story', storyId, '--auto', '--no-worktree'],
+        [agentExecutorPath, storyId],
         {
           cwd: worktreePath,
-          stdio: ['ignore', 'pipe', 'pipe'], // No IPC needed for this pattern
+          stdio: ['ignore', 'pipe', 'pipe', 'ipc'], // Enable IPC channel
           shell: false,
           env: {
             ...process.env,
@@ -213,6 +224,32 @@ export class Orchestrator {
         // Echo to parent console with prefix
         const lines = data.toString().split('\n').filter((l: string) => l.trim());
         lines.forEach((line: string) => console.error(`  [${storyId}] ${line}`));
+      });
+
+      // Handle IPC messages from child
+      proc.on('message', (msg: unknown) => {
+        if (!msg || typeof msg !== 'object') return;
+
+        const message = msg as { type: string; storyId: string; timestamp: number; payload?: unknown };
+
+        switch (message.type) {
+          case 'status_update':
+            // Log status updates from child
+            console.log(`  [${storyId}] Status update:`, message.payload);
+            break;
+          case 'health_response':
+            // Child responded to health check
+            console.log(`  [${storyId}] Health check OK`);
+            break;
+          case 'error':
+            // Child reported an error
+            console.error(`  [${storyId}] Error:`, message.payload);
+            break;
+          case 'complete':
+            // Child reported completion
+            console.log(`  [${storyId}] Complete:`, message.payload);
+            break;
+        }
       });
 
       // Handle process exit
@@ -256,25 +293,8 @@ export class Orchestrator {
   }
 
   /**
-   * Setup graceful shutdown handlers
-   */
-  private setupShutdownHandlers(): void {
-    const shutdown = async (signal: string) => {
-      if (this.shuttingDown) return;
-
-      console.log(`\n⚠️  Received ${signal}, shutting down orchestrator...`);
-      this.shuttingDown = true;
-
-      await this.shutdown();
-      process.exit(0);
-    };
-
-    process.once('SIGINT', () => shutdown('SIGINT'));
-    process.once('SIGTERM', () => shutdown('SIGTERM'));
-  }
-
-  /**
    * Graceful shutdown: SIGTERM → wait → SIGKILL
+   * Note: Signal handlers are managed by ProcessManager globally
    */
   async shutdown(): Promise<void> {
     if (this.children.size === 0) return;

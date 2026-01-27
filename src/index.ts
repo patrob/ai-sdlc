@@ -179,9 +179,10 @@ program
     }
 
     // Validate --keep-worktrees with --epic or --concurrent
-    if (options.keepWorktrees && !options.epic && !options.concurrent) {
+    const concurrentValue = options.concurrent ? parseInt(options.concurrent, 10) : 1;
+    if (options.keepWorktrees && !options.epic && concurrentValue <= 1) {
       const c = getThemedChalk(config);
-      console.log(c.error('Error: --keep-worktrees requires --epic or --concurrent flag'));
+      console.log(c.error('Error: --keep-worktrees requires --epic or --concurrent > 1 flag'));
       process.exit(1);
     }
 

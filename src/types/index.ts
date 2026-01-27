@@ -1001,5 +1001,91 @@ export interface OrchestratorResult {
   totalAgentInvocations: number;
 }
 
+/**
+ * Multi-Process Orchestrator Types
+ * Used for concurrent story execution via isolated child processes
+ */
+
+/**
+ * IPC message types for parent-child communication
+ */
+export type IPCMessageType =
+  | 'status_update'
+  | 'health_check'
+  | 'health_response'
+  | 'shutdown'
+  | 'error'
+  | 'complete';
+
+/**
+ * IPC message structure for bidirectional communication
+ */
+export interface IPCMessage {
+  type: IPCMessageType;
+  storyId: string;
+  timestamp: number;
+  payload?: {
+    status?: StoryStatus;
+    progress?: number;
+    error?: string;
+    result?: ProcessExecutionResult;
+  };
+}
+
+/**
+ * Options for multi-process orchestrator execution
+ */
+export interface ProcessOrchestratorOptions {
+  /** Maximum number of concurrent child processes (default: 1) */
+  concurrency: number;
+  /** Milliseconds before SIGKILL after SIGTERM (default: 10000) */
+  shutdownTimeout?: number;
+  /** Base path for worktrees (default: .ai-sdlc/worktrees) */
+  worktreeBasePath?: string;
+  /** Keep worktrees after execution (default: false) */
+  keepWorktrees?: boolean;
+}
+
+/**
+ * Result from a single child process execution
+ */
+export interface ProcessExecutionResult {
+  storyId: string;
+  success: boolean;
+  exitCode: number | null;
+  signal: NodeJS.Signals | null;
+  duration: number; // milliseconds
+  error?: string;
+}
+
+/**
+ * Information about a tracked child process
+ */
+export interface ChildProcessInfo {
+  storyId: string;
+  pid: number;
+  worktreePath: string;
+  startTime: number;
+}
+
+/**
+ * Process execution status
+ */
+export type ProcessStatus = 'queued' | 'running' | 'completed' | 'failed' | 'killed';
+
+/**
+ * State of the multi-process orchestrator
+ */
+export interface ProcessOrchestratorState {
+  /** Currently running child processes */
+  running: Map<string, ChildProcessInfo>;
+  /** Stories waiting in queue */
+  queued: string[];
+  /** Completed story results */
+  completed: ProcessExecutionResult[];
+  /** Whether shutdown is in progress */
+  shuttingDown: boolean;
+}
+
 // Export workflow state types
 export * from './workflow-state.js';

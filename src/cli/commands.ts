@@ -881,7 +881,7 @@ async function processBatchInternal(
 /**
  * Run the workflow (process one action or all)
  */
-export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; batch?: string; epic?: string; maxConcurrent?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean; clean?: boolean; keepWorktrees?: boolean; merge?: boolean; mergeStrategy?: string }): Promise<void> {
+export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; batch?: string; epic?: string; maxConcurrent?: string; concurrent?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean; clean?: boolean; keepWorktrees?: boolean; merge?: boolean; mergeStrategy?: string }): Promise<void> {
   const config = loadConfig();
   // Parse maxIterations from CLI (undefined means use config default which is Infinity)
   const maxIterationsOverride = options.maxIterations !== undefined
@@ -919,6 +919,62 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     const { startDaemon } = await import('./daemon.js');
     await startDaemon({ maxIterations: maxIterationsOverride });
     return; // Daemon runs indefinitely
+  }
+
+  // Handle concurrent mode
+  if (options.concurrent) {
+    const concurrency = parseInt(options.concurrent, 10);
+
+    // Validate concurrency value
+    if (isNaN(concurrency) || concurrency <= 0) {
+      console.log(c.warning(`Warning: Invalid --concurrent value "${options.concurrent}". Defaulting to 1 (single-story mode).`));
+      // Fall through to normal single-story mode
+    } else if (concurrency > 1) {
+      // Import orchestrator and run concurrent mode
+      const { Orchestrator } = await import('../core/orchestrator.js');
+      const { findStoriesByStatus } = await import('../core/kanban.js');
+
+      // Query database for ready stories, sorted by priority
+      const readyStories = findStoriesByStatus(sdlcRoot, 'ready');
+
+      if (readyStories.length === 0) {
+        console.log(c.info('No ready stories found. Add stories to the ready column in the kanban board.'));
+        return;
+      }
+
+      // Limit to available stories
+      const storiesToRun = readyStories.slice(0, Math.min(concurrency, readyStories.length));
+      console.log(c.info(`🚀 Running ${storiesToRun.length} stories concurrently (concurrency: ${concurrency})`));
+
+      // Create orchestrator and execute
+      const orchestrator = new Orchestrator({
+        concurrency,
+        shutdownTimeout: 10000,
+        keepWorktrees: options.keepWorktrees,
+      });
+
+      const results = await orchestrator.execute(storiesToRun);
+
+      // Report results
+      const succeeded = results.filter((r) => r.success).length;
+      const failed = results.filter((r) => !r.success).length;
+
+      console.log('');
+      console.log(c.info('═══════════════════════════════════════════'));
+      console.log(c.info('Concurrent Execution Summary'));
+      console.log(c.info('═══════════════════════════════════════════'));
+      console.log(c.success(`✅ Succeeded: ${succeeded}`));
+      if (failed > 0) {
+        console.log(c.error(`❌ Failed: ${failed}`));
+      }
+      console.log('');
+
+      // Exit with error code if any failed
+      if (failed > 0) {
+        process.exit(1);
+      }
+      return;
+    }
   }
 
   // Handle epic mode

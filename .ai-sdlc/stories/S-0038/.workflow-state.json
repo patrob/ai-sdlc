@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1769529716484-32c79eb9",
+  "timestamp": "2026-01-27T16:08:42.067Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0038",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0038-multi-process-orchestrator/.ai-sdlc/stories/S-0038/story.md",
+      "completedAt": "2026-01-27T16:02:34.911Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0038",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0038-multi-process-orchestrator/.ai-sdlc/stories/S-0038/story.md",
+      "completedAt": "2026-01-27T16:07:16.801Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0038",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0038-multi-process-orchestrator/.ai-sdlc/stories/S-0038/story.md",
+      "completedAt": "2026-01-27T16:08:42.067Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0038-multi-process-orchestrator/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0038",
+      "fullSDLC": true
+    },
+    "storyContentHash": "3c3ba379e947b8fd6ef30edf8c55420691c5bfcf2a124a340799d55f2d114791"
+  }
+}

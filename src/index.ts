@@ -91,6 +91,7 @@ program
   .option('--batch <story-ids>', 'Process multiple stories sequentially (comma-separated list, e.g., S-001,S-002,S-003)')
   .option('--epic <epic-id>', 'Process all stories labeled epic-{epic-id} with parallel execution (e.g., --epic ticketing matches epic-ticketing)')
   .option('--max-concurrent <n>', 'Maximum parallel stories for --epic (default: 3)', '3')
+  .option('--concurrent <n>', 'Run N ready stories concurrently in isolated worktrees (default: 1)', '1')
   .option('--step <phase>', 'Run a specific phase (refine, research, plan, implement, review) - cannot be combined with --auto --story')
   .option('--max-iterations <number>', 'Maximum retry iterations (default: infinite)')
   .option('--watch', 'Run in daemon mode, continuously processing backlog')
@@ -177,11 +178,36 @@ program
       process.exit(1);
     }
 
-    // Validate --keep-worktrees with --epic
-    if (options.keepWorktrees && !options.epic) {
+    // Validate --keep-worktrees with --epic or --concurrent
+    const concurrentValue = options.concurrent ? parseInt(options.concurrent, 10) : 1;
+    if (options.keepWorktrees && !options.epic && concurrentValue <= 1) {
       const c = getThemedChalk(config);
-      console.log(c.error('Error: --keep-worktrees requires --epic flag'));
+      console.log(c.error('Error: --keep-worktrees requires --epic or --concurrent > 1 flag'));
       process.exit(1);
+    }
+
+    // Validate --concurrent mutual exclusivity
+    if (options.concurrent && parseInt(options.concurrent, 10) > 1) {
+      if (options.story) {
+        const c = getThemedChalk(config);
+        console.log(c.error('Error: --concurrent cannot be used with --story'));
+        process.exit(1);
+      }
+      if (options.epic) {
+        const c = getThemedChalk(config);
+        console.log(c.error('Error: --concurrent cannot be used with --epic'));
+        process.exit(1);
+      }
+      if (options.batch) {
+        const c = getThemedChalk(config);
+        console.log(c.error('Error: --concurrent cannot be used with --batch'));
+        process.exit(1);
+      }
+      if (options.watch) {
+        const c = getThemedChalk(config);
+        console.log(c.error('Error: --concurrent cannot be used with --watch'));
+        process.exit(1);
+      }
     }
 
     return run(options);

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { assessState, calculateCompletionScore, findAllStories } from './kanban.js';
+import { assessState, calculateCompletionScore, findAllStories, findStoriesByEpic } from './kanban.js';
 import * as storyModule from './story.js';
 import { ReviewDecision, Story } from '../types/index.js';
 
@@ -731,5 +731,107 @@ Content.
     const expectedPaths = [canonical1, canonical2, canonical3].sort();
 
     expect(returnedPaths).toEqual(expectedPaths);
+  });
+});
+
+describe('findStoriesByEpic', () => {
+  let tempDir: string;
+  let sdlcRoot: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-epic-test-'));
+    sdlcRoot = path.join(tempDir, '.ai-sdlc');
+    fs.mkdirSync(sdlcRoot, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  function createStoryWithEpic(id: string, epic?: string, labels: string[] = []): void {
+    const storiesFolder = path.join(sdlcRoot, 'stories', id);
+    fs.mkdirSync(storiesFolder, { recursive: true });
+
+    const epicLine = epic ? `epic: ${epic}\n` : '';
+    const labelsYaml = labels.length > 0
+      ? `labels:\n${labels.map(l => `  - ${l}`).join('\n')}`
+      : 'labels: []';
+
+    const content = `---
+id: ${id}
+title: Test Story ${id}
+slug: test-story-${id.toLowerCase()}
+priority: 10
+status: ready
+type: feature
+created: '2024-01-01'
+${labelsYaml}
+${epicLine}research_complete: false
+plan_complete: false
+implementation_complete: false
+reviews_complete: false
+---
+
+# Test Story ${id}
+
+Story content.
+`;
+
+    fs.writeFileSync(path.join(storiesFolder, 'story.md'), content);
+  }
+
+  it('should find stories by epic frontmatter field', () => {
+    createStoryWithEpic('S-0001', 'my-epic');
+    createStoryWithEpic('S-0002', 'my-epic');
+    createStoryWithEpic('S-0003', 'other-epic');
+    createStoryWithEpic('S-0004'); // no epic
+
+    const stories = findStoriesByEpic(sdlcRoot, 'my-epic');
+
+    expect(stories).toHaveLength(2);
+    const ids = stories.map(s => s.frontmatter.id).sort();
+    expect(ids).toEqual(['S-0001', 'S-0002']);
+  });
+
+  it('should find stories by epic label for backwards compatibility', () => {
+    createStoryWithEpic('S-0001', undefined, ['epic-legacy-epic']);
+    createStoryWithEpic('S-0002', undefined, ['epic-legacy-epic', 'other-label']);
+    createStoryWithEpic('S-0003', undefined, ['unrelated-label']);
+
+    const stories = findStoriesByEpic(sdlcRoot, 'legacy-epic');
+
+    expect(stories).toHaveLength(2);
+    const ids = stories.map(s => s.frontmatter.id).sort();
+    expect(ids).toEqual(['S-0001', 'S-0002']);
+  });
+
+  it('should find stories with epic frontmatter prefixed with epic-', () => {
+    createStoryWithEpic('S-0001', 'epic-prefixed-epic');
+
+    const stories = findStoriesByEpic(sdlcRoot, 'prefixed-epic');
+
+    expect(stories).toHaveLength(1);
+    expect(stories[0].frontmatter.id).toBe('S-0001');
+  });
+
+  it('should return empty array when no stories match epic', () => {
+    createStoryWithEpic('S-0001', 'different-epic');
+    createStoryWithEpic('S-0002', undefined, ['epic-another-epic']);
+
+    const stories = findStoriesByEpic(sdlcRoot, 'nonexistent-epic');
+
+    expect(stories).toHaveLength(0);
+  });
+
+  it('should not duplicate stories that match both frontmatter and label', () => {
+    // Story has both epic field and matching label
+    createStoryWithEpic('S-0001', 'dual-epic', ['epic-dual-epic']);
+
+    const stories = findStoriesByEpic(sdlcRoot, 'dual-epic');
+
+    expect(stories).toHaveLength(1);
+    expect(stories[0].frontmatter.id).toBe('S-0001');
   });
 });

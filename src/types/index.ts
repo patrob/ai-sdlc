@@ -133,6 +133,11 @@ export interface StoryFrontmatter {
    * Array of story IDs that must complete before this story can start.
    */
   dependencies?: string[];
+  /**
+   * Epic identifier this story belongs to.
+   * Used by findStoriesByEpic to discover stories for epic processing.
+   */
+  epic?: string;
   // Workflow tracking
   research_complete: boolean;
   plan_complete: boolean;

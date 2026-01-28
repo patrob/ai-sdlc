@@ -2,7 +2,7 @@
 id: S-0074
 title: Implement GitHub read operations (import/link)
 priority: 40
-status: backlog
+status: ready
 type: feature
 created: '2026-01-19'
 labels:
@@ -10,6 +10,7 @@ labels:
   - integration
   - ticketing
   - epic-ticketing-integration
+epic: ticketing-integration
 research_complete: false
 plan_complete: false
 implementation_complete: false

@@ -2,7 +2,7 @@
 id: S-0073
 title: Create TicketProvider abstraction with NullProvider
 priority: 30
-status: backlog
+status: ready
 type: feature
 created: '2026-01-19'
 labels:
@@ -10,6 +10,7 @@ labels:
   - abstraction
   - ticketing
   - epic-ticketing-integration
+epic: ticketing-integration
 research_complete: false
 plan_complete: false
 implementation_complete: false

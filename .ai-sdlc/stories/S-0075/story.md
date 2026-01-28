@@ -2,7 +2,7 @@
 id: S-0075
 title: Implement GitHub write operations (status sync)
 priority: 50
-status: backlog
+status: ready
 type: feature
 created: '2026-01-19'
 labels:
@@ -11,6 +11,7 @@ labels:
   - sync
   - ticketing
   - epic-ticketing-integration
+epic: ticketing-integration
 research_complete: false
 plan_complete: false
 implementation_complete: false

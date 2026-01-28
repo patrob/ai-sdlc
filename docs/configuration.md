@@ -827,6 +827,75 @@ mkdir -p .ai-sdlc
 
 ---
 
+## Story Frontmatter: External Ticket Integration
+
+The ai-sdlc system supports optional fields in story frontmatter for linking stories to external ticketing systems like GitHub Issues, Jira, or Linear. These fields enable bi-directional synchronization between ai-sdlc stories and your existing ticket tracking tools.
+
+### Ticket Fields Reference
+
+All ticket integration fields are **optional**. Stories without these fields will continue to work normally as local-only stories.
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `ticket_provider` | `'github' \| 'jira' \| 'linear'` | The external ticketing system | `"github"` |
+| `ticket_id` | `string` | The ticket identifier in the external system | `"123"` for GitHub<br>`"PROJ-456"` for Jira<br>`"LIN-789"` for Linear |
+| `ticket_url` | `string` | Full URL to the external ticket | `"https://github.com/org/repo/issues/123"` |
+| `ticket_synced_at` | `string` | ISO 8601 timestamp of last synchronization | `"2026-01-27T10:00:00Z"` |
+
+### Example Story with Ticket Fields
+
+```yaml
+---
+id: S-0042
+title: Add user authentication
+slug: add-user-authentication
+priority: 20
+status: in-progress
+type: feature
+created: '2026-01-20'
+labels: [epic-auth, sprint-2026-q1]
+research_complete: true
+plan_complete: true
+implementation_complete: false
+reviews_complete: false
+# External ticket integration
+ticket_provider: github
+ticket_id: '123'
+ticket_url: https://github.com/org/repo/issues/123
+ticket_synced_at: '2026-01-27T10:00:00Z'
+---
+
+# Add user authentication
+
+...
+```
+
+### Usage Notes
+
+- **Backward Compatibility**: Stories without ticket fields continue to work without modification. The fields are purely optional metadata.
+- **No Behavior Changes**: These fields are for metadata storage only. They do not affect story execution or validation.
+- **Future Integration**: Ticket provider implementations (S-0073+) will use these fields to enable synchronization with external systems.
+- **Manual Updates**: Currently, these fields must be set manually. Future stories will add CLI commands for automatic synchronization.
+
+### Provider-Specific ID Formats
+
+Different ticketing systems use different ID formats:
+
+- **GitHub**: Numeric issue number as string (e.g., `"123"`, `"4567"`)
+- **Jira**: Project key + number (e.g., `"PROJ-456"`, `"AUTH-12"`)
+- **Linear**: Team prefix + number (e.g., `"LIN-789"`, `"ENG-42"`)
+
+### Timestamp Format
+
+The `ticket_synced_at` field uses ISO 8601 format with timezone:
+
+```yaml
+ticket_synced_at: '2026-01-27T15:30:00.000Z'  # Full timestamp with milliseconds
+ticket_synced_at: '2026-01-27T15:30:00Z'      # Without milliseconds (also valid)
+```
+
+---
+
 ## Additional Resources
 
 - **Story Documents**: See `docs/story-documents.md` for guidance on writing story files
@@ -836,4 +905,4 @@ mkdir -p .ai-sdlc
 
 ---
 
-**Last verified**: 2025-01-19 against `src/core/config.ts` and `src/types/index.ts`
+**Last verified**: 2026-01-27 against `src/core/config.ts`, `src/types/index.ts`, and `src/core/story.ts`

@@ -4,6 +4,8 @@ import matter from 'gray-matter';
 import * as properLockfile from 'proper-lockfile';
 import { Story, StoryFrontmatter, StoryStatus, FOLDER_TO_STATUS, ReviewAttempt, Config, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, DEFAULT_PRIORITY_GAP, LockOptions, ReviewResult, ReviewDecision, FailureDiagnostic, ErrorFingerprint } from '../types/index.js';
 import { getMostCommonError } from '../services/error-fingerprint.js';
+import { createTicketProvider } from '../services/ticket-provider/index.js';
+import { loadConfig } from './config.js';
 
 /**
  * Section file names for split story outputs.
@@ -142,10 +144,31 @@ export async function writeStory(story: Story, options?: LockOptions): Promise<v
 /**
  * Update story status in frontmatter without moving files
  * This is the preferred method in the new folder-per-story architecture
+ *
+ * If the story is linked to an external ticketing system and syncOnRun is enabled,
+ * this will also sync the status change to the external system (e.g., GitHub Issues).
  */
 export async function updateStoryStatus(story: Story, newStatus: StoryStatus): Promise<Story> {
   story.frontmatter.status = newStatus;
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
+
+  // Sync to external ticketing system if configured
+  if (story.frontmatter.ticket_id && story.frontmatter.ticket_provider) {
+    try {
+      const config = loadConfig();
+      if (config.ticketing?.syncOnRun && config.ticketing?.provider !== 'none') {
+        const provider = createTicketProvider(config);
+        const externalStatus = provider.mapStatusToExternal(newStatus);
+        await provider.updateStatus(story.frontmatter.ticket_id, externalStatus);
+        story.frontmatter.ticket_synced_at = new Date().toISOString();
+      }
+    } catch (error) {
+      // Log but don't fail - graceful degradation
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn(`Failed to sync status to ${story.frontmatter.ticket_provider}: ${errorMessage}`);
+    }
+  }
+
   await writeStory(story);
   return story;
 }

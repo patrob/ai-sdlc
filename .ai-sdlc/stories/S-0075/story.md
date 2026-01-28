@@ -2,7 +2,7 @@
 id: S-0075
 title: Implement GitHub write operations (status sync)
 priority: 50
-status: ready
+status: in-progress
 type: feature
 created: '2026-01-19'
 labels:
@@ -12,13 +12,17 @@ labels:
   - ticketing
   - epic-ticketing-integration
 epic: ticketing-integration
-research_complete: false
-plan_complete: false
+research_complete: true
+plan_complete: true
 implementation_complete: false
 reviews_complete: false
 slug: github-write-operations
 dependencies:
   - S-0074
+worktree_path: >-
+  /Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0075-github-write-operations
+updated: '2026-01-28'
+branch: ai-sdlc/github-write-operations
 ---
 # Implement GitHub write operations (status sync)
 

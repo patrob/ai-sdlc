@@ -242,6 +242,11 @@ export interface StoryFrontmatter {
     failures: number;
     timestamp: string;
   };
+  // External ticket integration (optional)
+  ticket_provider?: 'github' | 'jira' | 'linear';
+  ticket_id?: string;
+  ticket_url?: string;
+  ticket_synced_at?: string;
 }
 
 export interface Story {

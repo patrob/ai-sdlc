@@ -2,7 +2,7 @@
 id: S-0072
 title: Add ticket fields to story schema
 priority: 20
-status: backlog
+status: ready
 type: feature
 created: '2026-01-19'
 labels:
@@ -10,6 +10,7 @@ labels:
   - ticketing
   - non-breaking
   - epic-ticketing-integration
+epic: ticketing-integration
 research_complete: false
 plan_complete: false
 implementation_complete: false

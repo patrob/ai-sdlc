@@ -2,7 +2,7 @@
 id: S-0077
 title: Progress comments on milestones
 priority: 70
-status: backlog
+status: ready
 type: feature
 created: '2026-01-19'
 labels:
@@ -11,6 +11,7 @@ labels:
   - visibility
   - ticketing
   - epic-ticketing-integration
+epic: ticketing-integration
 research_complete: false
 plan_complete: false
 implementation_complete: false

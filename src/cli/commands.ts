@@ -21,6 +21,8 @@ import {
 import { renderStories, renderKanbanBoard, shouldUseKanbanLayout, KanbanColumn } from './table-renderer.js';
 import { getStoryFlags as getStoryFlagsUtil, formatStatus as formatStatusUtil } from './story-utils.js';
 import { migrateToFolderPerStory } from './commands/migrate.js';
+import { importIssue } from './commands/import-issue.js';
+import { linkIssue } from './commands/link-issue.js';
 import { generateReviewSummary } from '../agents/review.js';
 import { getTerminalWidth } from './formatting.js';
 import { validateGitState, GitValidationResult } from '../core/git-utils.js';
@@ -3444,3 +3446,6 @@ export async function removeWorktree(storyId: string, options?: { force?: boolea
     process.exit(1);
   }
 }
+
+// Export the GitHub integration commands
+export { importIssue, linkIssue };

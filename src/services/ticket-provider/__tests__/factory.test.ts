@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createTicketProvider, NullTicketProvider } from '../index.js';
+import { createTicketProvider, NullTicketProvider, GitHubTicketProvider } from '../index.js';
 import { Config } from '../../../types/index.js';
 
 describe('createTicketProvider', () => {
@@ -51,12 +51,29 @@ describe('createTicketProvider', () => {
   });
 
   describe('when provider is "github"', () => {
-    it('should throw "not yet implemented" error', () => {
+    it('should return GitHubTicketProvider', () => {
+      const config = {
+        ticketing: {
+          provider: 'github' as const,
+          github: { repo: 'owner/repo' },
+        },
+      } as Config;
+
+      const provider = createTicketProvider(config);
+
+      expect(provider).toBeInstanceOf(GitHubTicketProvider);
+      expect(provider.name).toBe('github');
+    });
+
+    it('should work without github config', () => {
       const config = {
         ticketing: { provider: 'github' as const },
       } as Config;
 
-      expect(() => createTicketProvider(config)).toThrow('GitHub provider not yet implemented');
+      const provider = createTicketProvider(config);
+
+      expect(provider).toBeInstanceOf(GitHubTicketProvider);
+      expect(provider.name).toBe('github');
     });
   });
 

@@ -53,6 +53,8 @@ ai-sdlc run --auto --story implement-user-authentication
 | `ai-sdlc run --epic <epic-id>` | Process all stories in an epic with parallel execution |
 | `ai-sdlc details <id>` | Show story details |
 | `ai-sdlc config [key] [value]` | View/set configuration |
+| `ai-sdlc import <issue-url>` | Import a GitHub Issue as a new story |
+| `ai-sdlc link <story-id> <issue-url>` | Link an existing story to a GitHub Issue |
 
 ## Workflow Phases
 
@@ -124,6 +126,58 @@ labels: [epic-ticketing-integration]
   }
 }
 ```
+
+## GitHub Integration
+
+Import and link GitHub Issues to ai-sdlc stories. Requires the [GitHub CLI (gh)](https://cli.github.com/) to be installed and authenticated.
+
+**Setup:**
+```bash
+# Install gh CLI
+brew install gh  # macOS
+# or visit https://cli.github.com/ for other platforms
+
+# Authenticate
+gh auth login
+
+# Configure ai-sdlc
+echo '{
+  "ticketing": {
+    "provider": "github",
+    "github": {
+      "repo": "owner/repo"
+    }
+  }
+}' > .ai-sdlc.json
+```
+
+**Import a GitHub Issue:**
+```bash
+# Import issue as a new story
+ai-sdlc import https://github.com/owner/repo/issues/123
+
+# Supported URL formats:
+# - https://github.com/owner/repo/issues/123
+# - github.com/owner/repo/issues/123
+# - owner/repo#123
+```
+
+**Link existing story to an issue:**
+```bash
+# Link story to issue (prompts to sync title/description)
+ai-sdlc link S-0042 https://github.com/owner/repo/issues/123
+
+# Skip sync prompt
+ai-sdlc link S-0042 owner/repo#123 --no-sync
+```
+
+**Features:**
+- Import issues as stories with metadata (ticket_id, ticket_url, ticket_synced_at)
+- Link existing stories to issues
+- Sync title and description from issues (optional)
+- Duplicate detection (warns if issue already imported)
+
+For full documentation, see [Configuration: GitHub Integration Commands](docs/configuration.md#github-integration-commands).
 
 ## Configuration
 

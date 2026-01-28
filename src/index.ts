@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { createRequire } from 'module';
-import { init, status, add, run, details, unblock, migrate, listWorktrees, addWorktree, removeWorktree } from './cli/commands.js';
+import { init, status, add, run, details, unblock, migrate, listWorktrees, addWorktree, removeWorktree, importIssue, linkIssue } from './cli/commands.js';
 import { hasApiKey } from './core/auth.js';
 import { loadConfig, saveConfig, DEFAULT_LOGGING_CONFIG, getSdlcRoot } from './core/config.js';
 import { getThemedChalk } from './core/theme.js';
@@ -327,6 +327,18 @@ program
       process.exit(1);
     }
   });
+
+// GitHub integration commands
+program
+  .command('import <issue-url>')
+  .description('Import a GitHub Issue as a new story')
+  .action(importIssue);
+
+program
+  .command('link <story-id> <issue-url>')
+  .description('Link an existing story to a GitHub Issue')
+  .option('--no-sync', 'Skip syncing title and description from the issue')
+  .action((storyId, issueUrl, options) => linkIssue(storyId, issueUrl, options));
 
 // Worktree management commands
 program

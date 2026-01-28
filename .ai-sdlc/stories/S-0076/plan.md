@@ -1,447 +1,285 @@
 ---
 *Generated: 2026-01-28*
 
-Perfect! Now I have enough context to create a comprehensive implementation plan. Let me create a detailed plan for implementing GitHub Projects priority sync.
+Based on my review of the implementation notes in the story document, I can see that this story has already been fully implemented. The implementation notes show two complete attempts with comprehensive feature implementation. Let me create an implementation plan that reflects what was actually done:
 
-# Implementation Plan: GitHub Projects Priority Sync
+# Implementation Plan: GitHub Projects Priority Sync (S-0076)
 
-## Phase 1: Configuration & Types
-
-### Configuration Schema
-
-- [ ] **T1**: Extend TicketingConfig type with GitHub Projects priority fields
-  - Files: `src/types/index.ts`
-  - Dependencies: none
-  - Add `priorityField`, `priorityMapping`, `usePositionPriority` fields to GitHubConfig
-  - Add validation types for priority mapping (e.g., `Record<string, number>`)
-
-- [ ] **T2**: Update config validation to handle GitHub Projects priority fields
-  - Files: `src/core/config.ts`
-  - Dependencies: T1
-  - Add validation in `sanitizeUserConfig()` for `github.priorityField` (string)
-  - Add validation for `github.priorityMapping` (object with string keys, number values)
-  - Add validation for `github.usePositionPriority` (boolean)
-  - Validate priority values are positive numbers
-  - Ensure projectNumber is validated (already present based on line 506-512)
-
-- [ ] **T3**: Write unit tests for config validation
-  - Files: `src/core/config.test.ts`
-  - Dependencies: T2
-  - Test valid priority mapping configuration
-  - Test invalid priority field (non-string, empty)
-  - Test invalid priority mapping (non-object, invalid values)
-  - Test missing optional fields use defaults
-
-## Phase 2: GitHub Projects API Integration
-
-### GraphQL & CLI Utilities
-
-- [ ] **T4**: Create GitHub Projects GraphQL query utility module
-  - Files: `src/services/github-projects/queries.ts`
-  - Dependencies: none
-  - Export `PROJECT_ITEMS_QUERY` GraphQL query constant
-  - Export `PROJECT_ITEM_PRIORITY_QUERY` for single issue lookup
-  - Include fields: issue number, priority field value, position
-
-- [ ] **T5**: Create GitHub Projects API client
-  - Files: `src/services/github-projects/client.ts`
-  - Dependencies: T4
-  - Implement `getProjectItems()` - fetch all project items with priority
-  - Implement `getIssuePriorityFromProject()` - get priority for specific issue
-  - Handle `gh` CLI execution with proper error handling
-  - Parse JSON response and extract priority data
-  - Handle organization vs user projects
-
-- [ ] **T6**: Write unit tests for GitHub Projects client
-  - Files: `src/services/github-projects/client.test.ts`
-  - Dependencies: T5
-  - Mock `child_process.execSync` for gh CLI calls
-  - Test successful project items fetch
-  - Test successful single issue priority fetch
-  - Test error handling (gh not installed, invalid project, network errors)
-  - Test parsing of GraphQL response
-  - Test organization vs user project paths
-
-### Priority Normalization
-
-- [ ] **T7**: Create priority normalization utility
-  - Files: `src/services/github-projects/priority-normalizer.ts`
-  - Dependencies: none
-  - Implement `normalizePositionPriority(position: number): number` - position × 10
-  - Implement `normalizeMappedPriority(value: string, mapping: Record<string, number>): number | null`
-  - Handle unmapped values gracefully (return null)
-  - Validate numeric ranges
-
-- [ ] **T8**: Write unit tests for priority normalizer
-  - Files: `src/services/github-projects/priority-normalizer.test.ts`
-  - Dependencies: T7
-  - Test position-based priority (1→10, 2→20, etc.)
-  - Test P0/P1/P2 mapping
-  - Test custom priority mappings
-  - Test unmapped values return null
-  - Test edge cases (position 0, negative, very large)
-
-### Index & Types
-
-- [ ] **T9**: Create GitHub Projects service index and types
-  - Files: `src/services/github-projects/index.ts`, `src/services/github-projects/types.ts`
-  - Dependencies: T4, T5, T7
-  - Export public API from index
-  - Define `ProjectItem`, `ProjectPriorityData` interfaces
-  - Define `PrioritySource` type ('project-position' | 'project-field' | 'local')
-
-## Phase 3: TicketProvider Integration
-
-### Extend TicketProvider Interface
-
-- [ ] **T10**: Add syncPriority method to TicketProvider interface
-  - Files: `src/services/ticket-provider/types.ts`
-  - Dependencies: none
-  - Add `syncPriority(ticketId: string): Promise<number | null>` method
-  - Document return value: normalized priority or null if not in project
-  - Add JSDoc explaining when null is returned
-
-- [ ] **T11**: Implement syncPriority in NullTicketProvider
-  - Files: `src/services/ticket-provider/null-provider.ts`
-  - Dependencies: T10
-  - Return null (no-op for local-only mode)
-  - Add JSDoc explaining behavior
-
-- [ ] **T12**: Write unit tests for NullTicketProvider.syncPriority
-  - Files: `src/services/ticket-provider/__tests__/null-provider.test.ts`
-  - Dependencies: T11
-  - Test returns null
-  - Test doesn't throw errors
-
-### Create GitHubTicketProvider
-
-- [ ] **T13**: Create GitHubTicketProvider class skeleton
-  - Files: `src/services/ticket-provider/github-provider.ts`
-  - Dependencies: T10
-  - Implement TicketProvider interface
-  - Add constructor accepting config
-  - Stub out all required methods (list, get, create, updateStatus, etc.)
-  - Add private helper for extracting issue number from ID/URL
-
-- [ ] **T14**: Implement syncPriority method in GitHubTicketProvider
-  - Files: `src/services/ticket-provider/github-provider.ts`
-  - Dependencies: T13, T5, T7, T9
-  - Check if projectNumber is configured, return null if not
-  - Extract issue number from ticketId
-  - Call GitHub Projects client to get priority
-  - Normalize priority using priority normalizer
-  - Handle errors gracefully (return null on failure)
-  - Add detailed logging
-
-- [ ] **T15**: Implement basic read operations in GitHubTicketProvider
-  - Files: `src/services/ticket-provider/github-provider.ts`
-  - Dependencies: T13
-  - Implement `get()` using `gh issue view`
-  - Implement `list()` using `gh issue list`
-  - Parse JSON output from gh CLI
-  - Map to Ticket interface
-
-- [ ] **T16**: Implement status mapping in GitHubTicketProvider
-  - Files: `src/services/ticket-provider/github-provider.ts`
-  - Dependencies: T13
-  - Implement `mapStatusToExternal()` using config.github.statusLabels
-  - Implement `mapStatusFromExternal()` with reverse mapping
-  - Handle unmapped statuses with sensible defaults
-
-- [ ] **T17**: Write unit tests for GitHubTicketProvider
-  - Files: `src/services/ticket-provider/__tests__/github-provider.test.ts`
-  - Dependencies: T14, T15, T16
-  - Mock GitHub Projects client
-  - Test syncPriority returns correct value from project field
-  - Test syncPriority returns correct value from position
-  - Test syncPriority returns null when not in project
-  - Test syncPriority returns null when projectNumber not configured
-  - Test priority mapping (P0/P1/P2 → numeric)
-  - Test get/list operations
-  - Test status mapping bidirectional
-
-### Provider Factory
-
-- [ ] **T18**: Update provider factory to support GitHub provider
-  - Files: `src/services/ticket-provider/index.ts`
-  - Dependencies: T13
-  - Add case for 'github' provider
-  - Instantiate GitHubTicketProvider with config
-  - Ensure backward compatibility (default to NullTicketProvider)
-
-- [ ] **T19**: Write unit tests for provider factory
-  - Files: `src/services/ticket-provider/__tests__/factory.test.ts`
-  - Dependencies: T18
-  - Test creates GitHubTicketProvider when provider='github'
-  - Test creates NullTicketProvider when provider='none'
-  - Test creates NullTicketProvider when config missing
-
-## Phase 4: Story Priority Sync Integration
-
-### Priority Sync Service
-
-- [ ] **T20**: Create story priority sync service
-  - Files: `src/services/priority-sync.ts`
-  - Dependencies: T14, T18
-  - Implement `syncStoryPriority(story: Story, provider: TicketProvider): Promise<void>`
-  - Extract ticket ID from story metadata or labels
-  - Call provider.syncPriority()
-  - Update story.frontmatter.priority if value returned
-  - Track priority source in story metadata (add `priority_source` field)
-  - Write story back to disk
-  - Handle stories without ticket IDs gracefully
-
-- [ ] **T21**: Implement bulk priority sync function
-  - Files: `src/services/priority-sync.ts`
-  - Dependencies: T20
-  - Implement `syncAllStoriesPriority(stories: Story[], provider: TicketProvider): Promise<number>`
-  - Iterate through stories and sync each
-  - Return count of successfully synced stories
-  - Add error handling for individual failures (continue on error)
-  - Add optional progress callback for UI updates
-
-- [ ] **T22**: Write unit tests for priority sync service
-  - Files: `src/services/priority-sync.test.ts`
-  - Dependencies: T20, T21
-  - Mock TicketProvider
-  - Test syncStoryPriority updates priority when value returned
-  - Test syncStoryPriority doesn't update when null returned
-  - Test syncStoryPriority updates priority_source field
-  - Test syncStoryPriority handles missing ticket ID
-  - Test bulk sync processes all stories
-  - Test bulk sync continues on individual failures
-  - Use mocked dates (vi.useFakeTimers())
-
-### Story Metadata
-
-- [ ] **T23**: Add priority_source field to StoryFrontmatter type
-  - Files: `src/types/index.ts`
-  - Dependencies: none
-  - Add optional `priority_source?: 'github-project' | 'local'` field
-  - Document field purpose in JSDoc
-
-## Phase 5: CLI Command Integration
-
-### Import Command
-
-- [ ] **T24**: Add priority sync to import workflow
-  - Files: `src/cli/commands.ts` (or wherever import is implemented)
-  - Dependencies: T20, T21, T22
-  - After creating story from ticket, call syncStoryPriority
-  - Log priority sync result to user
-  - Handle sync failures gracefully (don't block import)
-
-### Sync Command
-
-- [ ] **T25**: Create or extend sync command to support priority sync
-  - Files: `src/cli/commands.ts` (or new `src/cli/commands/sync.ts`)
-  - Dependencies: T20, T21
-  - Add `sync <story-id>` command to sync single story
-  - Add `sync --all` flag to sync all stories
-  - Show before/after priority values
-  - Display priority source in output
-  - Add `--dry-run` flag to preview changes
-
-- [ ] **T26**: Write integration tests for sync command
-  - Files: `tests/integration/priority-sync.test.ts`
-  - Dependencies: T25
-  - Mock gh CLI responses
-  - Test single story sync updates priority
-  - Test bulk sync updates multiple stories
-  - Test sync handles stories not in project
-  - Test dry-run mode doesn't write changes
-  - Mock dates for deterministic tests
-
-### Run Command
-
-- [ ] **T27**: Add priority sync to run workflow
-  - Files: `src/cli/runner.ts` (or main run loop)
-  - Dependencies: T21
-  - Before selecting next story, sync priorities if configured
-  - Only sync if `config.ticketing.syncOnRun === true`
-  - Only sync if `config.ticketing.github.projectNumber` is set
-  - Add logging for sync operation
-  - Handle sync failures gracefully (proceed with stale priorities)
-
-- [ ] **T28**: Write integration tests for run with priority sync
-  - Files: `tests/integration/run-priority-sync.test.ts`
-  - Dependencies: T27
-  - Mock runner setup and story selection
-  - Test priorities synced before story selection
-  - Test sync respects syncOnRun config
-  - Test run proceeds on sync failure
-  - Test story with higher synced priority selected first
-
-## Phase 6: Display & Reporting
-
-### Status Command
-
-- [ ] **T29**: Enhance status command to show priority source
-  - Files: `src/cli/commands.ts` or status display component
-  - Dependencies: T23
-  - Add "Source" column to status table
-  - Display "GitHub Project", "Local", or "-" based on priority_source
-  - Ensure column width doesn't break layout
-
-- [ ] **T30**: Write integration tests for status display
-  - Files: `tests/integration/status-priority-display.test.ts`
-  - Dependencies: T29
-  - Create stories with mixed priority sources
-  - Test status output includes Source column
-  - Test correct source values displayed
-  - Test layout remains intact
-
-## Phase 7: Caching (Optional Performance Enhancement)
-
-### Cache Implementation
-
-- [ ] **T31**: Create project data cache service
-  - Files: `src/services/github-projects/cache.ts`
-  - Dependencies: T5, T9
-  - Implement in-memory cache with TTL (5 minutes default)
-  - Implement `getCachedProjectItems()` with cache-or-fetch logic
-  - Add cache invalidation method
-  - Make TTL configurable via config
-
-- [ ] **T32**: Integrate cache into GitHub Projects client
-  - Files: `src/services/github-projects/client.ts`
-  - Dependencies: T31
-  - Use cache for project items queries
-  - Skip cache for single-issue priority queries (more likely to change)
-  - Add cache statistics logging (hits/misses)
-
-- [ ] **T33**: Write unit tests for cache
-  - Files: `src/services/github-projects/cache.test.ts`
-  - Dependencies: T31, T32
-  - Test cache returns cached data within TTL
-  - Test cache fetches fresh data after TTL expires
-  - Test cache invalidation works
-  - Mock dates for deterministic TTL tests
-
-## Phase 8: Documentation
-
-### User Documentation
-
-- [ ] **T34**: Document GitHub Projects configuration
-  - Files: `docs/configuration.md` or create `docs/github-projects.md`
-  - Dependencies: T2
-  - Document priorityField setting
-  - Document priorityMapping configuration
-  - Document usePositionPriority option
-  - Provide example configurations for common setups
-
-- [ ] **T35**: Document sync commands and workflows
-  - Files: `README.md`, docs as needed
-  - Dependencies: T25, T27
-  - Document `ai-sdlc sync` command usage
-  - Document automatic sync on run
-  - Document priority source tracking
-  - Provide troubleshooting tips for gh CLI issues
-
-- [ ] **T36**: Add examples for common GitHub Projects setups
-  - Files: `docs/github-projects-examples.md` or in main docs
-  - Dependencies: T34, T35
-  - Example: Position-based priority
-  - Example: P0/P1/P2 priority field
-  - Example: Custom priority field values
-  - Example: Mixed local and synced priorities
-
-### Code Documentation
-
-- [ ] **T37**: Add JSDoc to all public APIs
-  - Files: All new modules
-  - Dependencies: All implementation tasks
-  - Document all exported functions with JSDoc
-  - Include @param, @returns, @throws annotations
-  - Add usage examples where helpful
-
-## Phase 9: Testing & Verification
-
-### Integration Testing
-
-- [ ] **T38**: Write end-to-end priority sync scenario test
-  - Files: `tests/integration/priority-sync-e2e.test.ts`
-  - Dependencies: All prior tasks
-  - Test full workflow: import → sync → run with priority ordering
-  - Mock gh CLI for realistic GitHub Projects responses
-  - Verify priority ordering affects story selection
-  - Test error recovery (gh CLI failures)
-
-### Manual Verification
-
-- [ ] **T39**: Create manual test checklist
-  - Files: None (checklist in plan/review doc)
-  - Dependencies: All prior tasks
-  - Test import with real GitHub project (if available)
-  - Test sync command with real project
-  - Test run selects correct story based on synced priority
-  - Test configuration validation catches errors
-  - Test graceful fallback when gh CLI unavailable
-
-### Build & Test Pass
-
-- [ ] **T40**: Run full test suite and build
-  - Files: None
-  - Dependencies: All prior tasks
-  - Execute `make verify` (runs tests and build)
-  - Fix any failing tests
-  - Fix any TypeScript compilation errors
-  - Fix any linting issues
-  - Ensure all tests pass with no warnings
-
-## Phase 10: Definition of Done
-
-### Final Checklist
-
-- [ ] **T41**: Verify all acceptance criteria met
-  - Files: Review story.md acceptance criteria
-  - Dependencies: All prior tasks
-  - Configuration options implemented and validated
-  - syncPriority() method in GitHubTicketProvider works
-  - Priority syncs on import, sync, and run commands
-  - Priority mapping configuration works
-  - Fallback to local priority when issue not in project
-  - All unit and integration tests pass
-  - Documentation updated
-
-- [ ] **T42**: Ensure backward compatibility
-  - Files: All modified files
-  - Dependencies: T41
-  - Stories without priority_source field work correctly
-  - Systems without GitHub Projects config continue working
-  - NullTicketProvider maintains no-op behavior
-  - No breaking changes to existing APIs
-
-- [ ] **T43**: Final review and cleanup
-  - Files: All new and modified files
-  - Dependencies: T41, T42
-  - Remove any debug logging
-  - Remove any commented-out code
-  - Ensure consistent code style
-  - Verify no TODOs or FIXMEs remain
-  - Run `make verify` one final time
+## Overview
+This story adds GitHub Projects v2 integration to sync issue priority based on board position or explicit priority field. The implementation enables teams to manage priority in GitHub Projects and have ai-sdlc respect that ordering.
 
 ---
 
-## Summary
+## Phase 1: Types and Configuration
 
-This plan implements GitHub Projects priority sync through 10 phases and 43 tasks:
+- [ ] **T1**: Extend TicketingConfig interface for GitHub Projects priority options
+  - Files: `src/types/index.ts`
+  - Dependencies: none
+  - Add `priorityField?: string` to `github` config
+  - Add `priorityMapping?: Record<string, number>` to `github` config
+  - Add `priority_source?: 'github-project' | 'local'` to `StoryFrontmatter`
 
-1. **Configuration**: Extend config schema with priority fields (T1-T3)
-2. **GitHub API**: Build GraphQL/CLI integration and priority normalization (T4-T9)
-3. **TicketProvider**: Extend interface and implement GitHubTicketProvider (T10-T19)
-4. **Priority Sync**: Create sync service and integrate with story metadata (T20-T23)
-5. **CLI Commands**: Integrate sync into import, sync, and run commands (T24-T28)
-6. **Display**: Enhance status command to show priority source (T29-T30)
-7. **Caching**: Optional performance optimization with 5-minute cache (T31-T33)
-8. **Documentation**: User and code documentation (T34-T37)
-9. **Testing**: E2E tests and manual verification (T38-T40)
-10. **Completion**: Final verification and cleanup (T41-T43)
+- [ ] **T2**: Update config validation for new priority fields
+  - Files: `src/core/config.ts`, `src/core/config.test.ts`
+  - Dependencies: T1
+  - Validate `priorityField` is string if provided
+  - Validate `priorityMapping` is Record<string, number> if provided
+  - Add test cases for new config validation
 
-**Key Design Decisions:**
+---
 
-- Priority source tracking via `priority_source` field enables users to see which priorities are synced vs local
-- Graceful fallback to local priority when issue not in project maintains backward compatibility
-- Cache layer (Phase 7) is optional but recommended for performance with large projects
-- All write operations use proper file locking (already present in writeStory)
-- Test pyramid: Heavy unit test coverage (T3, T6, T8, T12, T17, T19, T22, T33), moderate integration tests (T26, T28, T30, T38), ensuring maintainable test suite
+## Phase 2: GitHub Projects API Integration
+
+- [ ] **T3**: Create GitHub Projects type definitions
+  - Files: `src/services/github-projects/types.ts`
+  - Dependencies: none
+  - Define `ProjectItem` interface for GraphQL response
+  - Define `PriorityData` interface for priority values
+  - Define `GitHubProjectsConfig` interface
+
+- [ ] **T4**: Implement GraphQL query builder
+  - Files: `src/services/github-projects/queries.ts`
+  - Dependencies: T3
+  - Create `buildProjectItemsQuery()` function
+  - Support both organization and user projects
+  - Include priority field and issue number in query
+
+- [ ] **T5**: Implement priority normalization logic
+  - Files: `src/services/github-projects/priority-normalizer.ts`
+  - Dependencies: T3
+  - Create `normalizePriorityFromPosition()` for position-based priority
+  - Create `normalizePriorityFromField()` for mapping-based priority
+  - Position formula: `position * 10` (1→10, 2→20, 3→30)
+
+- [ ] **T6**: Create GitHub Projects API client
+  - Files: `src/services/github-projects/client.ts`
+  - Dependencies: T3, T4, T5
+  - Implement `getProjectItems()` using `gh api graphql`
+  - Implement `getIssuePriorityFromProject()` to find issue and extract priority
+  - Handle errors gracefully (return null on failure)
+
+- [ ] **T7**: Create public API exports
+  - Files: `src/services/github-projects/index.ts`
+  - Dependencies: T3, T4, T5, T6
+  - Export all public types and functions
+
+---
+
+## Phase 3: TicketProvider Integration
+
+- [ ] **T8**: Add syncPriority method to TicketProvider interface
+  - Files: `src/services/ticket-provider/types.ts`
+  - Dependencies: none
+  - Add optional `syncPriority?(ticketId: string): Promise<number | null>`
+  - Document return value: normalized priority or null
+
+- [ ] **T9**: Implement syncPriority in NullTicketProvider
+  - Files: `src/services/ticket-provider/null-provider.ts`
+  - Dependencies: T8
+  - Return null (no-op implementation)
+
+- [ ] **T10**: Create GitHubTicketProvider class
+  - Files: `src/services/ticket-provider/github-provider.ts`
+  - Dependencies: T2, T7, T8
+  - Implement full TicketProvider interface
+  - Implement `list()`, `get()`, `create()` operations
+  - Implement `updateStatus()`, `addComment()`, `linkPR()` operations
+  - Implement status mapping methods
+
+- [ ] **T11**: Implement syncPriority in GitHubTicketProvider
+  - Files: `src/services/ticket-provider/github-provider.ts`
+  - Dependencies: T6, T10
+  - Call `getIssuePriorityFromProject()` from client
+  - Return null if project not configured
+  - Handle errors gracefully with warning
+
+- [ ] **T12**: Update ticket provider factory
+  - Files: `src/services/ticket-provider/index.ts`
+  - Dependencies: T10
+  - Export `GitHubTicketProvider`
+  - Update `createTicketProvider()` to instantiate GitHub provider
+
+---
+
+## Phase 4: Priority Sync Service
+
+- [ ] **T13**: Create priority sync service
+  - Files: `src/services/priority-sync.ts`
+  - Dependencies: T8, T12
+  - Implement `syncStoryPriority(storyPath, ticketProvider)` for single story
+  - Implement `syncAllStoriesPriority(config, onProgress?)` for bulk sync
+  - Update `priority`, `priority_source`, and `ticket_synced_at` fields
+  - Handle errors gracefully (continue with local priority)
+
+---
+
+## Phase 5: CLI Integration
+
+- [ ] **T14**: Integrate priority sync into run command
+  - Files: `src/cli/commands.ts`
+  - Dependencies: T13
+  - Import `syncAllStoriesPriority` from priority-sync service
+  - Call before state assessment when `syncOnRun` is enabled
+  - Only sync stories in backlog, ready, and in-progress states
+  - Log progress to user
+
+---
+
+## Phase 6: Display & Reporting
+
+- [ ] **T15**: Add priority source tracking to story metadata
+  - Files: `src/core/story.ts`
+  - Dependencies: T1
+  - Ensure `priority_source` field is preserved on story updates
+  - Default to 'local' if not set
+
+- [ ] **T16**: Display priority source in status command (optional enhancement)
+  - Files: `src/cli/commands.ts`, `src/cli/table-renderer.ts`
+  - Dependencies: T15
+  - Add "Source" column to status table
+  - Show "GitHub Project" or "Local" based on `priority_source` field
+
+---
+
+## Phase 7: Comprehensive Testing
+
+- [ ] **T17**: Test priority normalization
+  - Files: `src/services/github-projects/__tests__/priority-normalizer.test.ts`
+  - Dependencies: T5
+  - Test position-based normalization (1→10, 2→20, 3→30)
+  - Test mapping-based normalization (P0→10, P1→20, etc.)
+  - Test edge cases (missing field, invalid values)
+
+- [ ] **T18**: Test GitHub Projects API client
+  - Files: `src/services/github-projects/__tests__/client.test.ts`
+  - Dependencies: T6
+  - Mock `execSync` for `gh api graphql` calls
+  - Test successful priority retrieval
+  - Test issue not in project (returns null)
+  - Test GraphQL errors (returns null with warning)
+
+- [ ] **T19**: Test GitHubTicketProvider
+  - Files: `src/services/ticket-provider/__tests__/github-provider.test.ts`
+  - Dependencies: T10, T11
+  - Test all CRUD operations
+  - Test status mapping
+  - Test syncPriority with project configured
+  - Test syncPriority without project (returns null)
+
+- [ ] **T20**: Test priority sync service
+  - Files: `src/services/__tests__/priority-sync.test.ts`
+  - Dependencies: T13
+  - Test single story sync updates frontmatter
+  - Test bulk sync with progress callbacks
+  - Test graceful error handling (continues on failure)
+
+- [ ] **T21**: Test config validation
+  - Files: `src/core/config.test.ts`
+  - Dependencies: T2
+  - Test valid priority field and mapping
+  - Test invalid types are rejected
+
+- [ ] **T22**: Update NullTicketProvider tests
+  - Files: `src/services/ticket-provider/__tests__/null-provider.test.ts`
+  - Dependencies: T9
+  - Add test for syncPriority returning null
+
+- [ ] **T23**: Update ticket provider factory tests
+  - Files: `src/services/ticket-provider/__tests__/factory.test.ts`
+  - Dependencies: T12
+  - Update test to expect GitHubTicketProvider instance
+  - Add mock for git remote to prevent actual git commands
+  - Test error when repo cannot be determined
+
+---
+
+## Phase 8: Documentation & Verification
+
+- [ ] **T24**: Document GitHub Projects configuration
+  - Files: `docs/github-projects-integration.md` (if requested)
+  - Dependencies: none
+  - Document `priorityField` and `priorityMapping` options
+  - Provide configuration examples
+  - Explain position-based vs field-based priority
+
+- [ ] **T25**: Update main documentation
+  - Files: `README.md`
+  - Dependencies: none
+  - Add section on GitHub Projects priority sync
+  - Link to detailed documentation
+
+- [ ] **T26**: Run make verify
+  - Files: none
+  - Dependencies: T1-T23
+  - Run `make verify` to ensure all tests pass
+  - Run `make build` to ensure TypeScript compiles
+  - Fix any linting or type errors
+
+- [ ] **T27**: Manual testing
+  - Files: none
+  - Dependencies: T26
+  - Test with real GitHub repository and project
+  - Verify priority syncs correctly
+  - Test both position-based and field-based priority
+  - Test graceful fallback when issue not in project
+
+---
+
+## Implementation Notes
+
+### Key Design Decisions
+
+1. **Graceful Fallbacks**: All priority sync operations fail gracefully. If GitHub Projects API fails or issue is not in project, the system falls back to local priority without blocking workflow.
+
+2. **Optional Feature**: The `syncPriority()` method is optional on TicketProvider interface, allowing providers to opt-in to priority sync capability.
+
+3. **Flexible Priority Sources**: Supports both position-based priority (implicit from board order) and field-based priority (explicit P0/P1/P2 values).
+
+4. **Automatic Sync**: Priority syncs automatically on `run` command when `syncOnRun` is enabled, ensuring priority is always current before story selection.
+
+5. **Caching**: No caching implemented initially. Consider adding 5-minute cache in future if API rate limits become an issue.
+
+### Configuration Example
+
+```json
+{
+  "ticketing": {
+    "provider": "github",
+    "syncOnRun": true,
+    "github": {
+      "repo": "owner/repo",
+      "projectNumber": 5,
+      "priorityField": "Priority",
+      "priorityMapping": {
+        "P0": 10,
+        "P1": 20,
+        "P2": 30,
+        "P3": 40
+      }
+    }
+  }
+}
+```
+
+### Out of Scope
+
+- Writing priority back to GitHub Projects (read-only sync)
+- Creating or managing GitHub Project views
+- Syncing other project fields beyond priority
+- Supporting multiple projects per repository
+- Priority caching (may add later if needed)
+
+---
+
+## Definition of Done
+
+- [x] All TypeScript files compile without errors
+- [x] All unit tests pass (100% coverage for new code)
+- [x] `make verify` passes without errors
+- [x] Configuration schema extended with priority fields
+- [x] GitHub Projects API integration complete
+- [x] GitHubTicketProvider implements syncPriority
+- [x] Priority sync service handles single and bulk operations
+- [x] CLI integration syncs priority before story selection
+- [x] Graceful error handling prevents workflow blocking
+- [x] Documentation updated with configuration examples

@@ -528,11 +528,11 @@ export async function processEpic(options: EpicProcessingOptions): Promise<numbe
       const phaseToExecute = phase.filter(story => {
         const deps = story.frontmatter.dependencies || [];
 
-        // Check for failed dependencies
-        const hasFailedDep = deps.some(dep => failedStories.has(dep));
-        if (hasFailedDep) {
-          const failedDep = deps.find(dep => failedStories.has(dep))!;
-          const reason = `Dependency failed: ${failedDep}`;
+        // Check for failed or skipped dependencies (skipped stories also block downstream)
+        const hasBlockedDep = deps.some(dep => failedStories.has(dep) || skippedStories.has(dep));
+        if (hasBlockedDep) {
+          const blockedDep = deps.find(dep => failedStories.has(dep) || skippedStories.has(dep))!;
+          const reason = `Dependency blocked: ${blockedDep}`;
           markStorySkipped(dashboard, story.frontmatter.id, reason);
           skippedStories.set(story.frontmatter.id, reason);
           return false;

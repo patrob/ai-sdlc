@@ -879,9 +879,16 @@ async function processBatchInternal(
 }
 
 /**
+ * Result of the run() function execution
+ */
+export interface RunResult {
+  success: boolean;
+}
+
+/**
  * Run the workflow (process one action or all)
  */
-export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; batch?: string; epic?: string; maxConcurrent?: string; concurrent?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean; clean?: boolean; keepWorktrees?: boolean; merge?: boolean; mergeStrategy?: string }): Promise<void> {
+export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; batch?: string; epic?: string; maxConcurrent?: string; concurrent?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean; clean?: boolean; keepWorktrees?: boolean; merge?: boolean; mergeStrategy?: string }): Promise<RunResult> {
   const config = loadConfig();
   // Parse maxIterations from CLI (undefined means use config default which is Infinity)
   const maxIterationsOverride = options.maxIterations !== undefined
@@ -918,7 +925,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     console.log(c.info('🚀 Starting daemon mode...'));
     const { startDaemon } = await import('./daemon.js');
     await startDaemon({ maxIterations: maxIterationsOverride });
-    return; // Daemon runs indefinitely
+    return { success: true }; // Daemon runs indefinitely
   }
 
   // Handle concurrent mode
@@ -939,7 +946,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
       if (readyStories.length === 0) {
         console.log(c.info('No ready stories found. Add stories to the ready column in the kanban board.'));
-        return;
+        return { success: true }; // No error, just nothing to do
       }
 
       // Limit to available stories
@@ -973,7 +980,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       if (failed > 0) {
         process.exit(1);
       }
-      return;
+      return { success: true };
     }
   }
 
@@ -1005,7 +1012,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       validateBatchOptions(options);
     } catch (error) {
       console.log(c.error(`Error: ${error instanceof Error ? error.message : String(error)}`));
-      return;
+      return { success: false };
     }
 
     // Import batch validation modules
@@ -1017,7 +1024,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     if (rawStoryIds.length === 0) {
       console.log(c.error('Error: Empty batch - no story IDs provided'));
       console.log(c.dim('Usage: ai-sdlc run --batch S-001,S-002,S-003'));
-      return;
+      return { success: false };
     }
 
     // Deduplicate story IDs
@@ -1037,7 +1044,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       }
       console.log();
       console.log(c.dim('Fix the errors above and try again.'));
-      return;
+      return { success: false };
     }
 
     // Process the batch using internal function
@@ -1047,7 +1054,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       force: options.force,
     });
 
-    return; // Batch processing complete
+    return { success: true }; // Batch processing complete
   }
 
   // Valid step names for --step option
@@ -1059,13 +1066,13 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     if (!validSteps.includes(normalizedStep as any)) {
       console.log(c.error(`Error: Invalid step "${options.step}"`));
       console.log(c.dim(`Valid steps: ${validSteps.join(', ')}`));
-      return;
+      return { success: false };
     }
   }
 
   if (!kanbanExists(sdlcRoot)) {
     console.log(c.warning('ai-sdlc not initialized. Run `ai-sdlc init` first.'));
-    return;
+    return { success: false };
   }
 
   // Validate flag combinations
@@ -1073,7 +1080,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     validateAutoStoryOptions(options);
   } catch (error) {
     console.log(c.error(`Error: ${error instanceof Error ? error.message : String(error)}`));
-    return;
+    return { success: false };
   }
 
   // Detect full SDLC mode: --auto combined with --story
@@ -1100,7 +1107,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     if (!existingState) {
       console.log(c.error('Error: No checkpoint found.'));
       console.log(c.dim('Remove --continue flag to start a new workflow.'));
-      return;
+      return { success: false };
     }
 
     workflowId = existingState.workflowId;
@@ -1156,7 +1163,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
           'Invalid story ID format. Only letters, numbers, hyphens, and underscores are allowed.'
         )
       );
-      return;
+      return { success: false };
     }
 
     // Check if there's an existing state and suggest --continue
@@ -1190,7 +1197,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
           'Invalid story ID format. Only letters, numbers, hyphens, and underscores are allowed.'
         )
       );
-      return;
+      return { success: false };
     }
 
     // Try to find story by ID first, then by slug (case-insensitive)
@@ -1211,7 +1218,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       console.log(c.dim(`  Slug: ${normalizedInput}`));
       console.log();
       console.log(c.info('Tip: Use `ai-sdlc status` to see all available stories.'));
-      return;
+      return { success: false };
     }
 
     // Full SDLC mode: Generate complete phase sequence for the story
@@ -1231,7 +1238,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       if (fullSDLCActions.length === 0) {
         console.log(c.success('✓ All SDLC phases already completed!'));
         console.log(c.dim('Story has completed: refine, research, plan, implement, and review.'));
-        return;
+        return { success: true };
       }
 
       // Replace assessment actions with full SDLC sequence
@@ -1285,7 +1292,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       console.log(c.dim('Checkpoint cleared.'));
     }
 
-    return;
+    return { success: true };
   }
 
   if (options.dryRun) {
@@ -1294,7 +1301,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       console.log(`  ${formatAction(action)}`);
       if (!options.auto) break;
     }
-    return;
+    return { success: true };
   }
 
   // Filter out completed actions if resuming
@@ -1334,7 +1341,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       // Using options.story - action not yet created in early exit path
       await clearWorkflowState(sdlcRoot, options.story);
       console.log(c.dim('Checkpoint cleared.'));
-      return;
+      return { success: true };
     }
   }
 
@@ -1357,7 +1364,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
   if (shouldUseWorktree && !options.story) {
     if (options.worktree === true) {
       console.log(c.error('Error: --worktree requires --story flag'));
-      return;
+      return { success: false };
     }
   }
 
@@ -1367,7 +1374,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
     if (!preFlightResult.proceed) {
       console.log(c.error('❌ Aborting. Complete active stories first or use --force.'));
-      return;
+      return { success: false };
     }
 
     // Log warnings if user proceeded despite conflicts (skip internal flag messages)
@@ -1393,7 +1400,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
         console.log(c.error('Security Error: worktree_path is outside configured base directory'));
         console.log(c.dim(`  Worktree path: ${absoluteWorktreePath}`));
         console.log(c.dim(`  Expected base: ${absoluteBasePath}`));
-        return;
+        return { success: false };
       }
 
       // Warn if story is marked as done but has an existing worktree
@@ -1417,7 +1424,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
         if (answer !== 'y' && answer !== 'yes') {
           console.log(c.dim('Aborted. Consider removing the worktree_path from the story frontmatter.'));
-          return;
+          return { success: false };
         }
 
         console.log();
@@ -1479,14 +1486,14 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
             } catch (error) {
               console.log(c.error(`Failed to recreate worktree: ${error instanceof Error ? error.message : String(error)}`));
               console.log(c.dim('Please manually remove the worktree_path from the story frontmatter and try again.'));
-              return;
+              return { success: false };
             }
           } else {
             console.log(c.dim('\nWorktree needs manual intervention. Please remove the worktree_path from the story frontmatter and try again.'));
-            return;
+            return { success: false };
           }
         } else {
-          return;
+          return { success: false };
         }
       }
 
@@ -1562,7 +1569,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       } catch (error) {
         console.log(c.error(`Configuration Error: ${error instanceof Error ? error.message : String(error)}`));
         console.log(c.dim('Fix worktree.basePath in .ai-sdlc.json or remove it to use default location'));
-        return;
+        return { success: false };
       }
 
       const worktreeService = new GitWorktreeService(workingDir, resolvedBasePath);
@@ -1616,7 +1623,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
             if (!confirmed) {
               console.log(c.info('Cleanup cancelled.'));
-              return;
+              return { success: false };
             }
           }
 
@@ -1670,7 +1677,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
           } catch (error) {
             cleanupSpinner.fail(c.error('Cleanup failed'));
             console.log(c.error(`Error: ${error instanceof Error ? error.message : String(error)}`));
-            return;
+            return { success: false };
           }
 
           // After cleanup, create a fresh worktree
@@ -1735,15 +1742,15 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
                 console.log(c.error(`Failed to recreate worktree: ${error instanceof Error ? error.message : String(error)}`));
                 console.log(c.dim('Please manually remove it with:'));
                 console.log(c.dim(`  git worktree remove ${existingWorktree.path}`));
-                return;
+                return { success: false };
               }
             } else {
               console.log(c.dim('\nWorktree needs manual intervention. Please remove it manually with:'));
               console.log(c.dim(`  git worktree remove ${existingWorktree.path}`));
-              return;
+              return { success: false };
             }
           } else {
-            return;
+            return { success: false };
           }
         }
 
@@ -1812,7 +1819,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
         const validation = worktreeService.validateCanCreateWorktree();
         if (!validation.valid) {
           console.log(c.error(`Error: ${validation.error}`));
-          return;
+          return { success: false };
         }
 
         try {
@@ -1855,7 +1862,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
             process.chdir(originalCwd);
           }
           console.log(c.error(`Failed to create worktree: ${error instanceof Error ? error.message : String(error)}`));
-          return;
+          return { success: false };
         }
       }
     }
@@ -1880,7 +1887,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       if (worktreeCreated && originalCwd) {
         process.chdir(originalCwd);
       }
-      return;
+      return { success: false };
     }
 
     if (gitValidation.warnings.length > 0) {
@@ -1914,7 +1921,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       console.log(c.error(`✗ Phase ${action.type} failed`));
       console.log(c.dim(`Completed ${currentActionIndex} of ${totalActions} phases`));
       console.log(c.info('Fix the error above and use --continue to resume.'));
-      return;
+      return { success: false };
     }
 
     // Handle review rejection in Full SDLC mode - trigger retry loop
@@ -1940,7 +1947,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
           console.log(c.dim('  2. Reset retry count in the story frontmatter'));
           // Using action.storyId - available from action loop context
           await clearWorkflowState(sdlcRoot, action.storyId);
-          return;
+          return { success: false };
         }
 
         // We can retry - reset RPIV cycle and loop back
@@ -1982,7 +1989,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
         } else {
           // No actions to retry (shouldn't happen but handle gracefully)
           console.log(c.error('Error: No actions generated for retry. Manual intervention required.'));
-          return;
+          return { success: false };
         }
       } else if (reviewResult.decision === ReviewDecision.RECOVERY) {
         // Implementation recovery: reset implementation_complete and increment implementation retry count
@@ -2122,6 +2129,8 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
       process.chdir(originalCwd);
     }
   }
+
+  return { success: true };
 }
 
 // resolveStoryPath() has been removed - use getStory() instead (centralized lookup)

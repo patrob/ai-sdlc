@@ -144,16 +144,22 @@ async function main(): Promise<void> {
 
     // Execute the story with auto mode and no-worktree flag
     // (since we're already in an isolated worktree)
-    await run({
+    const result = await run({
       story: storyId,
       auto: true,
       worktree: false, // --no-worktree: already in a worktree
     });
 
-    // Execution succeeded
-    console.log(`[${storyId}] Story execution completed successfully`);
-    sendComplete(storyId, true, 0);
-    process.exit(0);
+    // Check execution result
+    if (result.success) {
+      console.log(`[${storyId}] Story execution completed successfully`);
+      sendComplete(storyId, true, 0);
+      process.exit(0);
+    } else {
+      console.log(`[${storyId}] Story execution failed`);
+      sendComplete(storyId, false, 1);
+      process.exit(1);
+    }
   } catch (error) {
     // Execution failed
     const errorMsg = error instanceof Error ? error.message : String(error);

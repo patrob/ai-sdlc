@@ -210,7 +210,8 @@ program
       }
     }
 
-    return run(options);
+    // Run returns a result object but CLI doesn't need it - just await for completion
+    return run(options).then(() => {});
   });
 
 program

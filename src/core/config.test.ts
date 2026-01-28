@@ -682,3 +682,158 @@ describe('config - Worktree configuration', () => {
     });
   });
 });
+
+describe('config - GitHub Projects priority validation', () => {
+  const tempDir = '.test-github-priority-config';
+
+  beforeEach(() => {
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir);
+    }
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(tempDir)) {
+      const configFile = path.join(tempDir, '.ai-sdlc.json');
+      if (fs.existsSync(configFile)) {
+        fs.unlinkSync(configFile);
+      }
+      fs.rmdirSync(tempDir);
+    }
+  });
+
+  describe('priorityField validation', () => {
+    it('should accept valid priorityField string', () => {
+      const configJson = {
+        ticketing: {
+          provider: 'github',
+          github: {
+            priorityField: 'Priority',
+          },
+        },
+      };
+
+      fs.writeFileSync(
+        path.join(tempDir, '.ai-sdlc.json'),
+        JSON.stringify(configJson)
+      );
+
+      const config = loadConfig(tempDir);
+      expect(config.ticketing?.github?.priorityField).toBe('Priority');
+    });
+
+    it('should reject non-string priorityField', () => {
+      const configJson = {
+        ticketing: {
+          provider: 'github',
+          github: {
+            priorityField: 123,
+          },
+        },
+      };
+
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      fs.writeFileSync(
+        path.join(tempDir, '.ai-sdlc.json'),
+        JSON.stringify(configJson)
+      );
+
+      const config = loadConfig(tempDir);
+      expect(config.ticketing?.github?.priorityField).toBeUndefined();
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid ticketing.github.priorityField')
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+  });
+
+  describe('priorityMapping validation', () => {
+    it('should accept valid priorityMapping object', () => {
+      const configJson = {
+        ticketing: {
+          provider: 'github',
+          github: {
+            priorityMapping: {
+              P0: 10,
+              P1: 20,
+              P2: 30,
+            },
+          },
+        },
+      };
+
+      fs.writeFileSync(
+        path.join(tempDir, '.ai-sdlc.json'),
+        JSON.stringify(configJson)
+      );
+
+      const config = loadConfig(tempDir);
+      expect(config.ticketing?.github?.priorityMapping).toEqual({
+        P0: 10,
+        P1: 20,
+        P2: 30,
+      });
+    });
+
+    it('should reject non-object priorityMapping', () => {
+      const configJson = {
+        ticketing: {
+          provider: 'github',
+          github: {
+            priorityMapping: 'invalid',
+          },
+        },
+      };
+
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      fs.writeFileSync(
+        path.join(tempDir, '.ai-sdlc.json'),
+        JSON.stringify(configJson)
+      );
+
+      const config = loadConfig(tempDir);
+      expect(config.ticketing?.github?.priorityMapping).toBeUndefined();
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid ticketing.github.priorityMapping')
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should remove invalid entries from priorityMapping', () => {
+      const configJson = {
+        ticketing: {
+          provider: 'github',
+          github: {
+            priorityMapping: {
+              P0: 10,
+              P1: 'invalid',
+              P2: 30,
+            },
+          },
+        },
+      };
+
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      fs.writeFileSync(
+        path.join(tempDir, '.ai-sdlc.json'),
+        JSON.stringify(configJson)
+      );
+
+      const config = loadConfig(tempDir);
+      expect(config.ticketing?.github?.priorityMapping).toEqual({
+        P0: 10,
+        P2: 30,
+      });
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid ticketing.github.priorityMapping entry "P1"')
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+  });
+});

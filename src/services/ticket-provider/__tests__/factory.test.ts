@@ -1,12 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createTicketProvider, NullTicketProvider } from '../index.js';
+import { createTicketProvider, NullTicketProvider, GitHubTicketProvider } from '../index.js';
 import { Config } from '../../../types/index.js';
+import { execSync } from 'child_process';
+
+// Mock child_process to prevent actual git commands from running
+vi.mock('child_process', () => ({
+  execSync: vi.fn(),
+}));
 
 describe('createTicketProvider', () => {
   let consoleWarnSpy: any;
 
   beforeEach(() => {
     consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -51,12 +58,33 @@ describe('createTicketProvider', () => {
   });
 
   describe('when provider is "github"', () => {
-    it('should throw "not yet implemented" error', () => {
+    it('should return GitHubTicketProvider', () => {
+      const config = {
+        ticketing: {
+          provider: 'github' as const,
+          github: {
+            repo: 'owner/repo',
+          },
+        },
+      } as Config;
+
+      const provider = createTicketProvider(config);
+
+      expect(provider.name).toBe('github');
+    });
+
+    it('should throw error if repo cannot be determined', () => {
       const config = {
         ticketing: { provider: 'github' as const },
       } as Config;
 
-      expect(() => createTicketProvider(config)).toThrow('GitHub provider not yet implemented');
+      // Mock git command to throw error (no git remote configured)
+      vi.mocked(execSync).mockImplementation(() => {
+        throw new Error('fatal: No remote configured to list refs from');
+      });
+
+      // This will fail in the constructor when trying to get repo info
+      expect(() => createTicketProvider(config)).toThrow('Could not determine GitHub repository');
     });
   });
 

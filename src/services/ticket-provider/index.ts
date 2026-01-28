@@ -1,10 +1,12 @@
 import { Config } from '../../types/index.js';
 import { NullTicketProvider } from './null-provider.js';
+import { GitHubTicketProvider } from './github-provider.js';
 import { TicketProvider } from './types.js';
 
 // Re-export types
 export * from './types.js';
 export { NullTicketProvider } from './null-provider.js';
+export { GitHubTicketProvider } from './github-provider.js';
 
 /**
  * Create a ticket provider based on configuration.
@@ -29,8 +31,7 @@ export function createTicketProvider(config: Config): TicketProvider {
       return new NullTicketProvider();
 
     case 'github':
-      // Placeholder for S-0074 (GitHub provider implementation)
-      throw new Error('GitHub provider not yet implemented');
+      return new GitHubTicketProvider(config);
 
     case 'jira':
       // Placeholder for future Jira provider implementation

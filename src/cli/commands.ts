@@ -27,6 +27,8 @@ import { validateGitState, GitValidationResult } from '../core/git-utils.js';
 import { StoryLogger } from '../core/story-logger.js';
 import { detectConflicts } from '../core/conflict-detector.js';
 import { getLogger } from '../core/logger.js';
+import { createTicketProvider } from '../services/ticket-provider/index.js';
+import { syncAllStoriesPriority } from '../services/priority-sync.js';
 
 /**
  * Branch divergence threshold for warnings
@@ -1178,6 +1180,27 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
 
     // Start new workflow
     workflowId = generateWorkflowId();
+  }
+
+  // Sync priorities from GitHub Projects before assessing state (if configured)
+  if (config.ticketing?.syncOnRun && config.ticketing?.github?.projectNumber) {
+    const provider = createTicketProvider(config);
+    if (provider.syncPriority) {
+      try {
+        const allStories = [
+          ...findStoriesByStatus(sdlcRoot, 'backlog'),
+          ...findStoriesByStatus(sdlcRoot, 'ready'),
+          ...findStoriesByStatus(sdlcRoot, 'in-progress'),
+        ];
+        const syncedCount = await syncAllStoriesPriority(allStories, provider);
+        if (syncedCount > 0) {
+          logger.debug('priority-sync', `Synced ${syncedCount} story priorities from GitHub Projects`);
+        }
+      } catch (error) {
+        // Log warning but don't fail - continue with local priorities
+        logger.debug('priority-sync', `Failed to sync priorities: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
   }
 
   let assessment = await assessState(sdlcRoot);

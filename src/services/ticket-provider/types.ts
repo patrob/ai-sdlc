@@ -129,4 +129,16 @@ export interface TicketProvider {
    * @returns Internal StoryStatus value
    */
   mapStatusFromExternal(externalStatus: string): StoryStatus;
+
+  // Priority sync (optional)
+
+  /**
+   * Sync priority from external ticketing system (e.g., GitHub Projects).
+   * Returns the normalized priority value from the project board, or null
+   * if the ticket is not in a project or projects are not configured.
+   *
+   * @param ticketId Ticket identifier
+   * @returns Normalized priority value (10, 20, 30, etc.) or null if not in project
+   */
+  syncPriority?(ticketId: string): Promise<number | null>;
 }

@@ -247,6 +247,8 @@ export interface StoryFrontmatter {
   ticket_id?: string;
   ticket_url?: string;
   ticket_synced_at?: string;
+  /** Source of the priority value: 'github-project' if synced from GitHub Projects, 'local' if set manually */
+  priority_source?: 'github-project' | 'local';
 }
 
 export interface Story {
@@ -669,6 +671,10 @@ export interface TicketingConfig {
     projectNumber?: number;
     /** Map story statuses to GitHub labels. */
     statusLabels?: Record<string, string>;
+    /** Name of the priority field in GitHub Projects (e.g., 'Priority'). If not set, uses position-based priority. */
+    priorityField?: string;
+    /** Map priority field values to numeric priorities (e.g., {'P0': 10, 'P1': 20, 'P2': 30}). */
+    priorityMapping?: Record<string, number>;
   };
 }
 

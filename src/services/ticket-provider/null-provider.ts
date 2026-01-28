@@ -80,4 +80,11 @@ export class NullTicketProvider implements TicketProvider {
   mapStatusFromExternal(externalStatus: string): StoryStatus {
     return externalStatus as StoryStatus;
   }
+
+  /**
+   * Returns null since there's no external priority to sync in local-only mode.
+   */
+  async syncPriority(_ticketId: string): Promise<number | null> {
+    return null;
+  }
 }

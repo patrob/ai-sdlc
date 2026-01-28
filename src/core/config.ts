@@ -518,6 +518,28 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
               delete userConfig.ticketing.github.statusLabels;
             }
           }
+
+          // Validate github.priorityField (must be string)
+          if (userConfig.ticketing.github.priorityField !== undefined && typeof userConfig.ticketing.github.priorityField !== 'string') {
+            console.warn('Invalid ticketing.github.priorityField in config (must be string), ignoring');
+            delete userConfig.ticketing.github.priorityField;
+          }
+
+          // Validate github.priorityMapping (must be object with string keys and number values)
+          if (userConfig.ticketing.github.priorityMapping !== undefined) {
+            if (typeof userConfig.ticketing.github.priorityMapping !== 'object' || userConfig.ticketing.github.priorityMapping === null) {
+              console.warn('Invalid ticketing.github.priorityMapping in config (must be object), ignoring');
+              delete userConfig.ticketing.github.priorityMapping;
+            } else {
+              // Validate each key-value pair
+              for (const [key, value] of Object.entries(userConfig.ticketing.github.priorityMapping)) {
+                if (typeof key !== 'string' || typeof value !== 'number' || !Number.isFinite(value)) {
+                  console.warn(`Invalid ticketing.github.priorityMapping entry "${key}": ${value} (must be string: number), removing entry`);
+                  delete userConfig.ticketing.github.priorityMapping[key];
+                }
+              }
+            }
+          }
         }
       }
     }

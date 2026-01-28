@@ -112,4 +112,17 @@ describe('NullTicketProvider', () => {
       expect(provider.mapStatusFromExternal('open')).toBe('open');
     });
   });
+
+  describe('syncPriority()', () => {
+    it('should return null (no external priority to sync)', async () => {
+      const result = await provider.syncPriority('123');
+      expect(result).toBeNull();
+    });
+
+    it('should not throw for any ticket ID', async () => {
+      await expect(provider.syncPriority('')).resolves.toBeNull();
+      await expect(provider.syncPriority('any-id')).resolves.toBeNull();
+      await expect(provider.syncPriority('999')).resolves.toBeNull();
+    });
+  });
 });

@@ -1996,8 +1996,7 @@ EOF
  */
 export interface CheckStatus {
   name: string;
-  state: 'PENDING' | 'SUCCESS' | 'FAILURE' | 'ERROR' | 'SKIPPED';
-  conclusion: string | null;
+  state: 'PENDING' | 'SUCCESS' | 'FAILURE' | 'ERROR' | 'SKIPPED' | null;
 }
 
 /**
@@ -2057,8 +2056,8 @@ export async function waitForChecks(
 
   while (Date.now() - startTime < timeout) {
     try {
-      // Use gh pr checks to get check status
-      const result = spawnSync('gh', ['pr', 'checks', prIdentifier, '--json', 'name,state,conclusion'], {
+      // Use gh pr checks to get check status (state contains SUCCESS/FAILURE/PENDING/SKIPPED)
+      const result = spawnSync('gh', ['pr', 'checks', prIdentifier, '--json', 'name,state'], {
         cwd: workingDir,
         encoding: 'utf-8',
         timeout: 30000, // 30 second timeout for the command

@@ -385,11 +385,16 @@ Controls integration with external ticketing systems (GitHub Issues, Jira, etc.)
 **Notes:**
 - **Default behavior**: When `provider` is `'none'` (default) or ticketing configuration is absent, ai-sdlc operates in local-only mode. The `NullTicketProvider` is used, which performs no external synchronization.
 - **Provider implementations**:
-  - `'none'`: NullProvider (no-op, local-only mode) - **available now**
-  - `'github'`: GitHub Issues integration - **coming in future stories**
+  - `'none'`: NullProvider (no-op, local-only mode) - **available**
+  - `'github'`: GitHub Issues integration (read operations: import, link, list, get) - **available** (write operations coming in S-0075)
   - `'jira'`: Jira integration - **planned for future**
-- **Graceful degradation**: Write operations (status updates, comments, PR links) are no-ops when using NullProvider. This ensures existing workflows continue to work without modification.
+- **GitHub CLI requirement**: The GitHub provider requires the `gh` CLI to be installed and authenticated. Install from https://cli.github.com/
+- **Available commands**:
+  - `ai-sdlc import <issue-url>` - Import a GitHub Issue as a new story
+  - `ai-sdlc link <story-id> <issue-url>` - Link an existing story to a GitHub Issue
+- **Graceful degradation**: Write operations (status updates, comments, PR links) are no-ops in the current implementation. Full synchronization will be available in S-0075.
 - See [Story Frontmatter: External Ticket Integration](#story-frontmatter-external-ticket-integration) for details on ticket fields in story files.
+- See [GitHub Integration](#github-integration-commands) section below for detailed command usage.
 
 ---
 
@@ -689,6 +694,180 @@ Full control with manual approvals and extended timeouts for production deployme
 ```
 
 **Use case:** Production environments requiring strict human oversight, extended timeouts, and comprehensive logging.
+
+---
+
+## GitHub Integration Commands
+
+### Prerequisites
+
+Before using GitHub integration commands, ensure:
+
+1. **gh CLI is installed**: Download from https://cli.github.com/
+2. **gh CLI is authenticated**: Run `gh auth login` and follow the prompts
+3. **GitHub provider is configured**: Set `ticketing.provider` to `"github"` in `.ai-sdlc.json`
+
+```json
+{
+  "ticketing": {
+    "provider": "github",
+    "github": {
+      "repo": "owner/repo"  // Optional, uses git remote if not set
+    }
+  }
+}
+```
+
+### Import Command
+
+Import a GitHub Issue as a new story in ai-sdlc.
+
+**Syntax:**
+```bash
+ai-sdlc import <issue-url>
+```
+
+**Supported URL formats:**
+- `https://github.com/owner/repo/issues/123`
+- `https://github.com/owner/repo/issues/123#issuecomment-456`
+- `github.com/owner/repo/issues/123`
+- `owner/repo#123`
+
+**Example:**
+```bash
+# Import issue #123 from owner/repo
+ai-sdlc import https://github.com/owner/repo/issues/123
+
+# Output:
+# ✓ Created story: S-0042 - Add user authentication
+#   Linked to: https://github.com/owner/repo/issues/123
+#
+# Next steps:
+#   ai-sdlc details S-0042
+#   ai-sdlc run --story S-0042
+```
+
+**Behavior:**
+- Creates a new story with the issue title and description
+- Sets `ticket_provider`, `ticket_id`, `ticket_url`, and `ticket_synced_at` fields
+- Checks for duplicate imports (warns if issue is already linked to a story)
+- Validates gh CLI availability before fetching issue details
+
+**Error handling:**
+- `GitHub provider not configured` - Set `ticketing.provider = "github"` in config
+- `GitHub CLI (gh) is not installed or not authenticated` - Install gh CLI and run `gh auth login`
+- `Invalid GitHub issue URL` - Use one of the supported URL formats
+- `Issue #123 is already imported` - The issue is already linked to a story
+
+### Link Command
+
+Link an existing story to a GitHub Issue.
+
+**Syntax:**
+```bash
+ai-sdlc link <story-id> <issue-url> [--no-sync]
+```
+
+**Parameters:**
+- `<story-id>` - Story ID (e.g., `S-0042`) or slug (e.g., `add-user-authentication`)
+- `<issue-url>` - GitHub issue URL in any supported format
+- `--no-sync` - Skip prompt to sync title and description from the issue
+
+**Example:**
+```bash
+# Link story S-0042 to issue #123
+ai-sdlc link S-0042 https://github.com/owner/repo/issues/123
+
+# Output:
+# Issue details:
+#   Title: Add user authentication
+#   Status: open
+#
+# Current story:
+#   Title: Add auth feature
+#
+# Do you want to sync the story title and description from the issue? (y/N): y
+#
+# ✓ Linked S-0042 to GitHub Issue #123
+#   Issue URL: https://github.com/owner/repo/issues/123
+#   Synced: title and description
+```
+
+**Example with --no-sync:**
+```bash
+# Link without syncing title/description
+ai-sdlc link S-0042 owner/repo#123 --no-sync
+
+# Output:
+# ✓ Linked S-0042 to GitHub Issue #123
+#   Issue URL: https://github.com/owner/repo/issues/123
+```
+
+**Behavior:**
+- Updates story frontmatter with `ticket_provider`, `ticket_id`, `ticket_url`, and `ticket_synced_at`
+- Optionally syncs title and description from the issue (requires user confirmation unless `--no-sync` is used)
+- Warns if story is already linked to a different issue (requires confirmation to overwrite)
+- Only updates story content if it's empty or very short (< 50 characters)
+
+**Error handling:**
+- `Story not found: S-0042` - Invalid story ID or slug
+- `Story is already linked to issue #456` - Requires confirmation to overwrite existing link
+
+### Common Troubleshooting
+
+**Problem: "GitHub CLI (gh) is not installed"**
+
+**Solution:**
+```bash
+# macOS
+brew install gh
+
+# Linux/WSL
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+sudo apt update
+sudo apt install gh
+
+# Windows
+winget install GitHub.cli
+```
+
+**Problem: "Not authenticated to GitHub"**
+
+**Solution:**
+```bash
+gh auth login
+# Follow the interactive prompts to authenticate
+```
+
+**Problem: "GitHub provider not configured"**
+
+**Solution:**
+Add to `.ai-sdlc.json`:
+```json
+{
+  "ticketing": {
+    "provider": "github",
+    "github": {
+      "repo": "owner/repo"
+    }
+  }
+}
+```
+
+**Problem: "Issue #123 not found in owner/repo"**
+
+**Possible causes:**
+- Issue doesn't exist
+- Repository name is incorrect
+- You don't have access to the repository
+- Issue is in a private repository and you're not authenticated
+
+**Solution:**
+1. Verify the issue exists: Open the URL in a browser
+2. Check repository configuration in `.ai-sdlc.json`
+3. Ensure you have access: `gh repo view owner/repo`
+4. Re-authenticate if needed: `gh auth login`
 
 ---
 

@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1769570212947-657231dd",
+  "timestamp": "2026-01-28T03:21:27.496Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "research",
+      "storyId": "S-0074",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0074-github-read-operations/.ai-sdlc/stories/S-0074/story.md",
+      "completedAt": "2026-01-28T03:20:29.303Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0074",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0074-github-read-operations/.ai-sdlc/stories/S-0074/story.md",
+      "completedAt": "2026-01-28T03:21:27.496Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0074-github-read-operations/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0074",
+      "fullSDLC": true
+    },
+    "storyContentHash": "c26bb94ad1acee4d1d7da9963d0dae1e2bcd0c7258a0f493142242f1bb415eb5"
+  }
+}

@@ -23,10 +23,10 @@ branch: ai-sdlc/github-read-operations
 last_test_run:
   passed: true
   failures: 0
-  timestamp: '2026-01-28T03:38:52.663Z'
+  timestamp: '2026-01-28T03:42:34.390Z'
 error_history: []
 max_retries: 3
-last_restart_reason: "\n#### \U0001F6D1 BLOCKER (1)\n\n**test_alignment** [code, security, po]: Tests use incorrect StoryStatus literal 'in_progress' (underscore) but the actual TypeScript type is 'in-progress' (hyphen). This is a critical test-implementation misalignment. The tests pass because they mock the implementation, but they verify outdated behavior that doesn't match the actual type system. This means the tests are not actually validating correct behavior - they would accept invalid status values in production code.\n  - File: `src/services/ticket-provider/__tests__/github-provider.test.ts`:83\n  - Suggested fix: Replace all 6 instances of 'in_progress' with 'in-progress' in the test file:\n- Line 83: Change filter status from ['ready', 'in_progress'] to ['ready', 'in-progress']\n- Line 243: Change mapStatusToExternal test from 'in_progress' to 'in-progress'\n- Line 254: Change statusLabels key from 'in_progress' to 'in-progress'\n- Line 262: Change expectation from 'in_progress' to 'in-progress'\n- Line 282: Change statusLabels key from 'in_progress' to 'in-progress'\n- Line 289: Change mapStatusFromExternal expectation from 'in_progress' to 'in-progress'\n\nThe correct StoryStatus type is defined in src/types/index.ts line 2 as: 'backlog' | 'ready' | 'in-progress' | 'done' | 'blocked'\n\n\n#### ⚠️ CRITICAL (1)\n\n**testing** [code, po]: No integration tests exist for the import and link commands. The story's acceptance criteria explicitly requires 'Integration test: import command creates story with correct fields' and 'Integration test: link command updates story with ticket fields', but no integration test files were created. Only unit tests with mocked dependencies exist, which don't verify end-to-end functionality.\n  - Suggested fix: Create integration tests in tests/integration/ directory for both commands:\n1. tests/integration/import-issue.test.ts - Test actual story creation with gh CLI mocked at subprocess level\n2. tests/integration/link-issue.test.ts - Test actual story updates with gh CLI mocked at subprocess level\nThese should verify the complete flow including file system operations, not just mocked function calls.\n\n\n#### \U0001F4CB MAJOR (4)\n\n**security** [security]: The gh-cli.ts uses shell: false which is good, but the spawnSync calls don't validate that the 'gh' command path is safe. An attacker who can place a malicious 'gh' binary earlier in PATH could intercept all GitHub operations. The code should validate the gh binary location or use an absolute path.\n  - File: `src/services/gh-cli.ts`:129\n  - Suggested fix: Add validation to check that 'gh' resolves to an expected location:\n1. Use 'which gh' or 'where gh' to get the absolute path\n2. Verify it's in a trusted location (e.g., /usr/local/bin, /opt/homebrew/bin, etc.)\n3. Store and reuse the validated path\n4. Alternatively, allow users to configure the gh binary path in config\n\n**code_quality** [code]: The import-issue.ts contains a helper function findStoriesByTicketId() that performs synchronous file system operations (fs.readdirSync, fs.existsSync) inside an async function. This blocks the event loop unnecessarily. The function should use async fs operations (fs.promises) for consistency with the rest of the codebase.\n  - File: `src/cli/commands/import-issue.ts`:108\n  - Suggested fix: Refactor findStoriesByTicketId to use fs.promises:\n```typescript\nimport { promises as fsPromises } from 'fs';\n\nasync function findStoriesByTicketId(sdlcRoot: string, ticketId: string): Promise<Story[]> {\n  const storiesDir = path.join(sdlcRoot, 'stories');\n  const result: Story[] = [];\n\n  if (!(await fsPromises.stat(storiesDir).catch(() => false))) {\n    return result;\n  }\n\n  const entries = await fsPromises.readdir(storiesDir, { withFileTypes: true });\n  // ... rest of function using async operations\n}\n```\n\n**requirements** [po]: The story acceptance criteria requires documenting the gh CLI requirements in docs/configuration.md with a 'troubleshooting section for common GitHub errors'. While the GitHub Integration Commands section was added, there is no dedicated troubleshooting section. The documentation shows command examples but doesn't provide a troubleshooting guide for common scenarios like network issues, rate limiting, or authentication problems.\n  - File: `docs/configuration.md`\n  - Suggested fix: Add a '### Troubleshooting' subsection under the GitHub Integration Commands section that covers:\n1. Common gh CLI authentication issues and how to resolve them\n2. Network connectivity problems\n3. GitHub API rate limiting\n4. Repository access permission errors\n5. How to verify gh CLI installation and authentication status\n6. What to do when 'gh issue view' returns unexpected data\n\n**code_quality** [code]: The link-issue.ts command has poor error handling for readline cleanup. If an error occurs during the askYesNo prompt, the readline interface is not closed, potentially leaving the process hanging. The readline.close() call is only in the success path of the promise.\n  - File: `src/cli/commands/link-issue.ts`:161\n  - Suggested fix: Wrap the readline question in a try-finally block to ensure cleanup:\n```typescript\nasync function askYesNo(question: string, defaultValue: boolean): Promise<boolean> {\n  const rl = readline.createInterface({\n    input: process.stdin,\n    output: process.stdout,\n  });\n\n  try {\n    return await new Promise((resolve) => {\n      const defaultText = defaultValue ? 'Y/n' : 'y/N';\n      rl.question(`${question} (${defaultText}): `, (answer) => {\n        const normalized = answer.trim().toLowerCase();\n        if (normalized === '') {\n          resolve(defaultValue);\n        } else {\n          resolve(normalized === 'y' || normalized === 'yes');\n        }\n      });\n    });\n  } finally {\n    rl.close();\n  }\n}\n```\n\n\n#### ℹ️ MINOR (3)\n\n**code_quality** [code]: The GitHubTicketProvider.mapIssueToTicket method has a complex nested loop for extracting priority from projectItems. This logic could be extracted into a separate helper method for better readability and testability.\n  - File: `src/services/ticket-provider/github-provider.ts`:65\n  - Suggested fix: Extract priority extraction logic:\n```typescript\nprivate extractPriorityFromProject(issue: GitHubIssue): number {\n  if (!issue.projectItems?.length) {\n    return 3; // Default priority\n  }\n\n  for (const item of issue.projectItems) {\n    if (!item.fieldValueByName) continue;\n    \n    const priorityField = item.fieldValueByName.find(\n      (f) => f.field.name.toLowerCase() === 'priority'\n    );\n    \n    if (priorityField) {\n      const priorityValue = parseInt(priorityField.name, 10);\n      if (!isNaN(priorityValue)) {\n        return priorityValue;\n      }\n    }\n  }\n  \n  return 3; // Default priority\n}\n\n// Then in mapIssueToTicket:\nconst priority = this.extractPriorityFromProject(issue);\n```\n\n**security** [security]: The gh-cli.ts sets maxBuffer to 10MB for issue bodies, but there's no validation that the parsed JSON doesn't contain excessively large data structures. A malicious or corrupted response could still cause memory issues through deeply nested objects or arrays.\n  - File: `src/services/gh-cli.ts`:199\n  - Suggested fix: Add JSON structure validation after parsing:\n1. Check the depth of nested objects (limit to reasonable depth like 10)\n2. Check array lengths (limit to reasonable size like 1000 items)\n3. Validate that required fields exist and have expected types\n4. Consider using a JSON schema validator like ajv\n\n**requirements** [po]: The README.md mentions that issues can be imported with various URL formats including 'owner/repo#123' shorthand, but doesn't clarify that this requires the GitHub provider to be configured with a default repository. Users might expect this format to work without configuration and be confused when it fails.\n  - File: `README.md`:162\n  - Suggested fix: Add a note in the README under the URL formats section:\n```markdown\n# Supported URL formats:\n# - https://github.com/owner/repo/issues/123\n# - github.com/owner/repo/issues/123\n# - owner/repo#123 (requires ticketing.github.repo configured)\n```\n\n"
+last_restart_reason: "\n#### \U0001F6D1 BLOCKER (1)\n\n**unified_review**: Perfect! Now I have a comprehensive understanding of the implementation. Let me compile my review findings:\n\n```json\n{\n  \"passed\": false,\n  \"issues\": [\n    {\n      \"severity\": \"blocker\",\n      \"category\": \"test_alignment\",\n      \"description\": \"Tests use underscore format 'in_progress' but StoryStatus type uses hyphen format 'in-progress'. The type is defined as 'backlog' | 'ready' | 'in-progress' | 'done' | 'blocked' in src/types/index.ts line 2. Test assertions on lines 83, 243, 254, 262, 289 \n\n"
 implementation_retry_count: 4
 total_recovery_attempts: 2
 review_history:
@@ -68,8 +68,30 @@ review_history:
     codeReviewPassed: false
     securityReviewPassed: false
     poReviewPassed: false
-last_restart_timestamp: '2026-01-28T03:37:11.251Z'
-retry_count: 2
+  - timestamp: '2026-01-28T03:40:46.897Z'
+    decision: REJECTED
+    severity: CRITICAL
+    feedback: "\n#### \U0001F6D1 BLOCKER (1)\n\n**unified_review**: Perfect! Now I have a comprehensive understanding of the implementation. Let me compile my review findings:\n\n```json\n{\n  \"passed\": false,\n  \"issues\": [\n    {\n      \"severity\": \"blocker\",\n      \"category\": \"test_alignment\",\n      \"description\": \"Tests use underscore format 'in_progress' but StoryStatus type uses hyphen format 'in-progress'. The type is defined as 'backlog' | 'ready' | 'in-progress' | 'done' | 'blocked' in src/types/index.ts line 2. Test assertions on lines 83, 243, 254, 262, 289 \n\n"
+    blockers:
+      - >-
+        Perfect! Now I have a comprehensive understanding of the implementation.
+        Let me compile my review findings:
+
+
+        ```json
+
+        {
+          "passed": false,
+          "issues": [
+            {
+              "severity": "blocker",
+              "category": "test_alignment",
+              "description": "Tests use underscore format 'in_progress' but StoryStatus type uses hyphen format 'in-progress'. The type is defined as 'backlog' | 'ready' | 'in-progress' | 'done' | 'blocked' in src/types/index.ts line 2. Test assertions on lines 83, 243, 254, 262, 289 
+    codeReviewPassed: true
+    securityReviewPassed: true
+    poReviewPassed: true
+last_restart_timestamp: '2026-01-28T03:40:46.911Z'
+retry_count: 3
 ---
 # Implement GitHub read operations (import/link)
 
@@ -590,3 +612,17 @@ The implementation is complete and ready for testing! 🎉
 ### Implementation Notes (2026-01-28)
 
 I need permissions to read the codebase files. Let me wait for you to grant read access to the repository so I can understand the existing patterns and implement the GitHub integration correctly.
+
+
+### Implementation Notes (2026-01-28)
+
+I need read permissions to access the codebase files. Once you grant access, I'll be able to:
+
+1. Read the existing patterns in the codebase
+2. Implement the GitHub CLI wrapper (`src/services/gh-cli.ts`)
+3. Create the GitHubTicketProvider
+4. Build the import and link CLI commands
+5. Write comprehensive tests
+6. Update documentation
+
+Please grant read permissions so I can proceed with the implementation following the plan.

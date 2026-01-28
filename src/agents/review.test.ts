@@ -3844,8 +3844,8 @@ describe('waitForChecks', () => {
     vi.mocked(spawnSync).mockReturnValue({
       status: 0,
       stdout: JSON.stringify([
-        { name: 'build', state: 'SUCCESS', conclusion: 'success' },
-        { name: 'test', state: 'SUCCESS', conclusion: 'success' },
+        { name: 'build', state: 'SUCCESS' },
+        { name: 'test', state: 'SUCCESS' },
       ]),
       stderr: '',
       output: [],
@@ -3864,8 +3864,8 @@ describe('waitForChecks', () => {
     vi.mocked(spawnSync).mockReturnValue({
       status: 0,
       stdout: JSON.stringify([
-        { name: 'build', state: 'SUCCESS', conclusion: 'success' },
-        { name: 'test', state: 'FAILURE', conclusion: 'failure' },
+        { name: 'build', state: 'SUCCESS' },
+        { name: 'test', state: 'FAILURE' },
       ]),
       stderr: '',
       output: [],
@@ -3909,7 +3909,7 @@ describe('waitForChecks', () => {
 
     expect(spawnSync).toHaveBeenCalledWith(
       'gh',
-      ['pr', 'checks', '123', '--json', 'name,state,conclusion'],
+      ['pr', 'checks', '123', '--json', 'name,state'],
       expect.any(Object)
     );
   });

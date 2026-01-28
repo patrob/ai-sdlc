@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1769568947514-daa26383",
+  "timestamp": "2026-01-28T02:59:53.693Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "research",
+      "storyId": "S-0073",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0073-create-ticketprovider-abstraction/.ai-sdlc/stories/S-0073/story.md",
+      "completedAt": "2026-01-28T02:58:51.550Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0073",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0073-create-ticketprovider-abstraction/.ai-sdlc/stories/S-0073/story.md",
+      "completedAt": "2026-01-28T02:59:53.693Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0073-create-ticketprovider-abstraction/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0073",
+      "fullSDLC": true
+    },
+    "storyContentHash": "2b3da1ded5594b8e67318649520caf196e7f445c347c353f18db23c8d405148c"
+  }
+}

@@ -142,8 +142,25 @@ export async function writeStory(story: Story, options?: LockOptions): Promise<v
 /**
  * Update story status in frontmatter without moving files
  * This is the preferred method in the new folder-per-story architecture
+ *
+ * FIX: Validates status transitions to prevent inconsistent state.
+ * Status 'done' requires both implementation_complete and reviews_complete to be true.
+ *
+ * @param story - Story to update
+ * @param newStatus - New status to set
+ * @throws Error if transitioning to 'done' without required completion flags
  */
 export async function updateStoryStatus(story: Story, newStatus: StoryStatus): Promise<Story> {
+  // FIX: Validate transition to 'done' requires completion flags
+  if (newStatus === 'done') {
+    if (!story.frontmatter.implementation_complete || !story.frontmatter.reviews_complete) {
+      throw new Error(
+        `Cannot set status to 'done': implementation_complete (${story.frontmatter.implementation_complete}) ` +
+        `and reviews_complete (${story.frontmatter.reviews_complete}) must both be true`
+      );
+    }
+  }
+
   story.frontmatter.status = newStatus;
   story.frontmatter.updated = new Date().toISOString().split('T')[0];
   await writeStory(story);

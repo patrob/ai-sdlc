@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { createStory, getStory, updateStoryStatus } from '../../src/core/story.js';
+import { createStory, getStory, updateStoryStatus, markStoryComplete } from '../../src/core/story.js';
 import { STORIES_FOLDER } from '../../src/types/index.js';
 
 // Use describe.sequential to prevent race conditions with shared testDir variable
@@ -48,7 +48,8 @@ describe.sequential('Story Lookup After Move Integration', () => {
     expect(story2.frontmatter.status).toBe('in-progress');
     expect(story2.path).toBe(story.path); // Still same path (no file move)
 
-    // Change status to done
+    // Change status to done (must set completion flags first due to validation)
+    await markStoryComplete(story2);
     await updateStoryStatus(story2, 'done');
 
     // Act 3: Lookup after status change to done
@@ -66,6 +67,7 @@ describe.sequential('Story Lookup After Move Integration', () => {
 
     await updateStoryStatus(story1, 'ready');
     await updateStoryStatus(story2, 'in-progress');
+    await markStoryComplete(story3); // Must set completion flags before 'done'
     await updateStoryStatus(story3, 'done');
 
     // All stories should be findable by ID

@@ -256,6 +256,31 @@ async function processStoryInWorktree(
       });
     });
 
+    // FIX: Post-subprocess state verification
+    // Re-read story file and verify actual state matches expected completion state
+    if (result.success) {
+      try {
+        const worktreeSdlcRoot = path.join(worktreePath, '.ai-sdlc');
+        const storyPath = path.join(worktreeSdlcRoot, 'stories', storyId, 'story.md');
+        if (fs.existsSync(storyPath)) {
+          const verifiedStory = parseStory(storyPath);
+          const storyStatus = verifiedStory.frontmatter.status;
+          const reviewsComplete = verifiedStory.frontmatter.reviews_complete;
+          const prUrl = verifiedStory.frontmatter.pr_url;
+
+          // Story must be done with reviews_complete for success
+          if (storyStatus !== 'done' || !reviewsComplete) {
+            result.success = false;
+            result.error = `Story not fully completed: status=${storyStatus}, reviews_complete=${reviewsComplete}, pr_url=${prUrl || 'missing'}`;
+            logger.log('ERROR', `Post-verification failed: ${result.error}`);
+          }
+        }
+      } catch (verifyError) {
+        logger.log('WARN', `Failed to verify story state: ${verifyError}`);
+        // Don't fail the story for verification errors - the subprocess exit code is still valid
+      }
+    }
+
     // If execution succeeded, attempt PR merge (if enabled)
     if (result.success && config.merge?.enabled) {
       const mergeResult = await mergeStoryPR(storyId, worktreePath, config, logger);

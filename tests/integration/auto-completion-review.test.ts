@@ -209,7 +209,9 @@ This is a test story for integration testing.
       expect(story.frontmatter.status).toBe('in-progress');
 
       // Manually transition to done (simulating move_to_done action)
-      const { updateStoryStatus } = await import('../../src/core/story.js');
+      // Note: Must set completion flags first due to status transition validation
+      const { updateStoryStatus, markStoryComplete } = await import('../../src/core/story.js');
+      story = await markStoryComplete(story);
       story = await updateStoryStatus(story, 'done');
 
       // Should successfully transition

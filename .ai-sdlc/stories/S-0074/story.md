@@ -2,7 +2,7 @@
 id: S-0074
 title: Implement GitHub read operations (import/link)
 priority: 40
-status: in-progress
+status: done
 type: feature
 created: '2026-01-19'
 labels:
@@ -13,8 +13,9 @@ labels:
 epic: ticketing-integration
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
+pr_url: https://github.com/patrob/ai-sdlc/pull/25
 slug: github-read-operations
 dependencies:
   - S-0073

@@ -1863,9 +1863,13 @@ export async function createPullRequest(
     } catch {
       changesMade.push('GitHub CLI not available - PR creation skipped');
 
-      // Still update to done for MVP
-      story = await updateStoryStatus(story, 'done');
-      changesMade.push('Updated status to done');
+      // FIX: Only set to done if completion flags are set (consistent with validation)
+      if (story.frontmatter.implementation_complete && story.frontmatter.reviews_complete) {
+        story = await updateStoryStatus(story, 'done');
+        changesMade.push('Updated status to done');
+      } else {
+        changesMade.push('Status not updated: completion flags not set and gh CLI unavailable');
+      }
 
       return {
         success: true,
@@ -1966,11 +1970,24 @@ EOF
       }
 
       changesMade.push(errorMessage);
+
+      // FIX: Return failure when PR creation fails instead of continuing to set done
+      return {
+        success: false,
+        story,
+        changesMade,
+        error: errorMessage,
+      };
     }
 
-    // Update status to done
-    story = await updateStoryStatus(story, 'done');
-    changesMade.push('Updated status to done');
+    // FIX: Only update status to done if reviews_complete AND pr_url exist
+    // This prevents marking stories done when PR creation hasn't actually succeeded
+    if (story.frontmatter.reviews_complete && story.frontmatter.pr_url) {
+      story = await updateStoryStatus(story, 'done');
+      changesMade.push('Updated status to done');
+    } else {
+      changesMade.push('Status not updated to done: reviews_complete or pr_url missing');
+    }
 
     return {
       success: true,

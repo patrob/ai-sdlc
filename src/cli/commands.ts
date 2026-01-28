@@ -2362,13 +2362,16 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
 
       case 'move_to_done':
         // Update story status to done (no file move in new architecture)
-        const { updateStoryStatus } = await import('../core/story.js');
+        const { updateStoryStatus, markStoryComplete } = await import('../core/story.js');
         const storyToMove = parseStory(action.storyPath);
-        const updatedStory = await updateStoryStatus(storyToMove, 'done');
+        // FIX: For manual move to done, ensure completion flags are set first
+        // This is a user-initiated action so we trust they want to mark it complete
+        const completedStory = await markStoryComplete(storyToMove);
+        const updatedStory = await updateStoryStatus(completedStory, 'done');
         result = {
           success: true,
           story: updatedStory,
-          changesMade: ['Updated story status to done'],
+          changesMade: ['Marked story complete and updated status to done'],
         };
 
         // Worktree cleanup prompt (if story has a worktree)

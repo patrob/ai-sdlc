@@ -651,6 +651,28 @@ export interface GithubConfig {
 }
 
 /**
+ * Ticketing integration configuration.
+ * Controls external ticket provider integration (GitHub Issues, Jira, etc.)
+ */
+export interface TicketingConfig {
+  /** Ticket provider type. @default 'none' */
+  provider: 'none' | 'github' | 'jira';
+  /** Sync ticket status on story status changes. @default true */
+  syncOnRun?: boolean;
+  /** Post progress comments to tickets. @default true */
+  postProgressComments?: boolean;
+  /** GitHub-specific configuration (when provider is 'github') */
+  github?: {
+    /** Repository in format 'owner/repo'. If not set, uses git remote. */
+    repo?: string;
+    /** GitHub Projects v2 project number for status sync. */
+    projectNumber?: number;
+    /** Map story statuses to GitHub labels. */
+    statusLabels?: Record<string, string>;
+  };
+}
+
+/**
  * Grouping dimension type for story organization.
  * - 'thematic': Epic-based grouping (e.g., epic-ticketing-integration)
  * - 'temporal': Time-based grouping (e.g., sprint-2024-q1)
@@ -814,6 +836,12 @@ export interface Config {
    * Controls whether PRs are merged after CI passes.
    */
   merge?: MergeConfig;
+  /**
+   * Ticketing integration configuration.
+   * Controls external ticket provider (GitHub Issues, Jira, etc.)
+   * @default { provider: 'none', syncOnRun: true, postProgressComments: true }
+   */
+  ticketing?: TicketingConfig;
   /**
    * Enable sequential task orchestrator for implementation.
    * When true, implementation runs as separate agents orchestrated sequentially.

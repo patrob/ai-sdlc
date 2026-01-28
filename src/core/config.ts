@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig, EpicConfig, MergeConfig } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig, EpicConfig, MergeConfig, TicketingConfig } from '../types/index.js';
 
 const CONFIG_FILENAME = '.ai-sdlc.json';
 
@@ -127,6 +127,15 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxTotalDuration: 60000,
 };
 
+/**
+ * Default ticketing configuration
+ */
+export const DEFAULT_TICKETING_CONFIG: TicketingConfig = {
+  provider: 'none',
+  syncOnRun: true,
+  postProgressComments: true,
+};
+
 export const DEFAULT_CONFIG: Config = {
   sdlcFolder: '.ai-sdlc',
   stageGates: {
@@ -174,6 +183,8 @@ export const DEFAULT_CONFIG: Config = {
   epic: { ...DEFAULT_EPIC_CONFIG },
   // Merge configuration
   merge: { ...DEFAULT_MERGE_CONFIG },
+  // Ticketing configuration
+  ticketing: { ...DEFAULT_TICKETING_CONFIG },
   // Orchestrator configuration
   useOrchestrator: false,
 };
@@ -449,6 +460,69 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
     }
   }
 
+  // Validate ticketing configuration if present
+  if (userConfig.ticketing !== undefined) {
+    if (typeof userConfig.ticketing !== 'object' || userConfig.ticketing === null) {
+      console.warn('Invalid ticketing in config (must be object), ignoring');
+      delete userConfig.ticketing;
+    } else {
+      // Validate ticketing.provider (must be one of allowed values)
+      const validProviders = ['none', 'github', 'jira'];
+      if (userConfig.ticketing.provider !== undefined) {
+        if (typeof userConfig.ticketing.provider !== 'string' || !validProviders.includes(userConfig.ticketing.provider)) {
+          console.warn(`Invalid ticketing.provider "${userConfig.ticketing.provider}". Valid values: ${validProviders.join(', ')}`);
+          userConfig.ticketing.provider = 'none';
+        }
+      }
+
+      // Validate ticketing.syncOnRun (must be boolean)
+      if (userConfig.ticketing.syncOnRun !== undefined) {
+        if (typeof userConfig.ticketing.syncOnRun !== 'boolean') {
+          console.warn('Invalid ticketing.syncOnRun in config (must be boolean), using default');
+          delete userConfig.ticketing.syncOnRun;
+        }
+      }
+
+      // Validate ticketing.postProgressComments (must be boolean)
+      if (userConfig.ticketing.postProgressComments !== undefined) {
+        if (typeof userConfig.ticketing.postProgressComments !== 'boolean') {
+          console.warn('Invalid ticketing.postProgressComments in config (must be boolean), using default');
+          delete userConfig.ticketing.postProgressComments;
+        }
+      }
+
+      // Validate ticketing.github if present
+      if (userConfig.ticketing.github !== undefined) {
+        if (typeof userConfig.ticketing.github !== 'object' || userConfig.ticketing.github === null) {
+          console.warn('Invalid ticketing.github in config (must be object), ignoring');
+          delete userConfig.ticketing.github;
+        } else {
+          // Validate github.repo (must be string)
+          if (userConfig.ticketing.github.repo !== undefined && typeof userConfig.ticketing.github.repo !== 'string') {
+            console.warn('Invalid ticketing.github.repo in config (must be string), ignoring');
+            delete userConfig.ticketing.github.repo;
+          }
+
+          // Validate github.projectNumber (must be number)
+          if (userConfig.ticketing.github.projectNumber !== undefined) {
+            if (typeof userConfig.ticketing.github.projectNumber !== 'number' || !Number.isFinite(userConfig.ticketing.github.projectNumber)) {
+              console.warn('Invalid ticketing.github.projectNumber in config (must be number), ignoring');
+              delete userConfig.ticketing.github.projectNumber;
+            }
+          }
+
+          // Validate github.statusLabels (must be object/record)
+          if (userConfig.ticketing.github.statusLabels !== undefined) {
+            if (typeof userConfig.ticketing.github.statusLabels !== 'object' || userConfig.ticketing.github.statusLabels === null) {
+              console.warn('Invalid ticketing.github.statusLabels in config (must be object), ignoring');
+              delete userConfig.ticketing.github.statusLabels;
+            }
+          }
+        }
+      }
+    }
+  }
+
   return userConfig;
 }
 
@@ -518,6 +592,10 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
         merge: userConfig.merge
           ? validateMergeConfig(userConfig.merge)
           : { ...DEFAULT_MERGE_CONFIG },
+        ticketing: {
+          ...DEFAULT_TICKETING_CONFIG,
+          ...userConfig.ticketing,
+        },
       };
     } catch (error) {
       // Re-throw security-related errors (prototype pollution, etc.)

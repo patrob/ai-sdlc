@@ -336,6 +336,63 @@ Controls GitHub PR creation behavior and integration settings.
 
 ---
 
+### Ticketing Integration (`ticketing`)
+
+Controls integration with external ticketing systems (GitHub Issues, Jira, etc.). The ticketing system provides a foundational abstraction layer for synchronizing ai-sdlc stories with external ticket tracking tools.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `ticketing.provider` | `'none' \| 'github' \| 'jira'` | `'none'` | Ticket provider type. `'none'` means local-only mode with no external synchronization |
+| `ticketing.syncOnRun` | `boolean` | `true` | Automatically sync ticket status when story status changes |
+| `ticketing.postProgressComments` | `boolean` | `true` | Post progress updates as comments to external tickets |
+| `ticketing.github.repo` | `string \| undefined` | `undefined` | GitHub repository in format `'owner/repo'`. If not set, uses git remote |
+| `ticketing.github.projectNumber` | `number \| undefined` | `undefined` | GitHub Projects v2 project number for status synchronization |
+| `ticketing.github.statusLabels` | `Record<string, string> \| undefined` | `undefined` | Map story statuses to GitHub labels (e.g., `{ "in-progress": "status:in-progress" }`) |
+
+**Example:**
+```json
+{
+  "ticketing": {
+    "provider": "none",
+    "syncOnRun": true,
+    "postProgressComments": true
+  }
+}
+```
+
+**Example with GitHub provider:**
+```json
+{
+  "ticketing": {
+    "provider": "github",
+    "syncOnRun": true,
+    "postProgressComments": true,
+    "github": {
+      "repo": "owner/repo",
+      "projectNumber": 1,
+      "statusLabels": {
+        "backlog": "status:backlog",
+        "ready": "status:ready",
+        "in-progress": "status:in-progress",
+        "done": "status:done",
+        "blocked": "status:blocked"
+      }
+    }
+  }
+}
+```
+
+**Notes:**
+- **Default behavior**: When `provider` is `'none'` (default) or ticketing configuration is absent, ai-sdlc operates in local-only mode. The `NullTicketProvider` is used, which performs no external synchronization.
+- **Provider implementations**:
+  - `'none'`: NullProvider (no-op, local-only mode) - **available now**
+  - `'github'`: GitHub Issues integration - **coming in future stories**
+  - `'jira'`: Jira integration - **planned for future**
+- **Graceful degradation**: Write operations (status updates, comments, PR links) are no-ops when using NullProvider. This ensures existing workflows continue to work without modification.
+- See [Story Frontmatter: External Ticket Integration](#story-frontmatter-external-ticket-integration) for details on ticket fields in story files.
+
+---
+
 ## Environment Variable Overrides
 
 The ai-sdlc CLI supports overriding specific configuration options via environment variables. This is useful for:

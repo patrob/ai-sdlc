@@ -2,7 +2,7 @@
 id: S-0072
 title: Add ticket fields to story schema
 priority: 20
-status: in-progress
+status: done
 type: feature
 created: '2026-01-19'
 labels:
@@ -13,8 +13,8 @@ labels:
 epic: ticketing-integration
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 slug: add-ticket-fields-to-story-schema
 dependencies:
   - S-0071
@@ -25,6 +25,16 @@ last_test_run:
   failures: 0
   timestamp: '2026-01-28T02:49:34.742Z'
 error_history: []
+max_retries: 3
+review_history:
+  - timestamp: '2026-01-28T02:50:38.593Z'
+    decision: APPROVED
+    feedback: All reviews passed
+    blockers: []
+    codeReviewPassed: true
+    securityReviewPassed: true
+    poReviewPassed: true
+implementation_retry_count: 0
 ---
 # Add ticket fields to story schema
 

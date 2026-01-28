@@ -78,3 +78,169 @@
 
 ---
 *Review completed: 2026-01-28*
+
+
+---
+
+## Rework 2
+*Generated: 2026-01-28*
+
+
+### Unified Collaborative Review
+
+
+#### 🛑 BLOCKER (1)
+
+**test_alignment** [code, security, po]: Tests use incorrect StoryStatus literal 'in_progress' (underscore) but the actual TypeScript type is 'in-progress' (hyphen). This is a critical test-implementation misalignment. The tests pass because they mock the implementation, but they verify outdated behavior that doesn't match the actual type system. This means the tests are not actually validating correct behavior - they would accept invalid status values in production code.
+  - File: `src/services/ticket-provider/__tests__/github-provider.test.ts`:83
+  - Suggested fix: Replace all 6 instances of 'in_progress' with 'in-progress' in the test file:
+- Line 83: Change filter status from ['ready', 'in_progress'] to ['ready', 'in-progress']
+- Line 243: Change mapStatusToExternal test from 'in_progress' to 'in-progress'
+- Line 254: Change statusLabels key from 'in_progress' to 'in-progress'
+- Line 262: Change expectation from 'in_progress' to 'in-progress'
+- Line 282: Change statusLabels key from 'in_progress' to 'in-progress'
+- Line 289: Change mapStatusFromExternal expectation from 'in_progress' to 'in-progress'
+
+The correct StoryStatus type is defined in src/types/index.ts line 2 as: 'backlog' | 'ready' | 'in-progress' | 'done' | 'blocked'
+
+
+#### ⚠️ CRITICAL (1)
+
+**testing** [code, po]: No integration tests exist for the import and link commands. The story's acceptance criteria explicitly requires 'Integration test: import command creates story with correct fields' and 'Integration test: link command updates story with ticket fields', but no integration test files were created. Only unit tests with mocked dependencies exist, which don't verify end-to-end functionality.
+  - Suggested fix: Create integration tests in tests/integration/ directory for both commands:
+1. tests/integration/import-issue.test.ts - Test actual story creation with gh CLI mocked at subprocess level
+2. tests/integration/link-issue.test.ts - Test actual story updates with gh CLI mocked at subprocess level
+These should verify the complete flow including file system operations, not just mocked function calls.
+
+
+#### 📋 MAJOR (4)
+
+**security** [security]: The gh-cli.ts uses shell: false which is good, but the spawnSync calls don't validate that the 'gh' command path is safe. An attacker who can place a malicious 'gh' binary earlier in PATH could intercept all GitHub operations. The code should validate the gh binary location or use an absolute path.
+  - File: `src/services/gh-cli.ts`:129
+  - Suggested fix: Add validation to check that 'gh' resolves to an expected location:
+1. Use 'which gh' or 'where gh' to get the absolute path
+2. Verify it's in a trusted location (e.g., /usr/local/bin, /opt/homebrew/bin, etc.)
+3. Store and reuse the validated path
+4. Alternatively, allow users to configure the gh binary path in config
+
+**code_quality** [code]: The import-issue.ts contains a helper function findStoriesByTicketId() that performs synchronous file system operations (fs.readdirSync, fs.existsSync) inside an async function. This blocks the event loop unnecessarily. The function should use async fs operations (fs.promises) for consistency with the rest of the codebase.
+  - File: `src/cli/commands/import-issue.ts`:108
+  - Suggested fix: Refactor findStoriesByTicketId to use fs.promises:
+```typescript
+import { promises as fsPromises } from 'fs';
+
+async function findStoriesByTicketId(sdlcRoot: string, ticketId: string): Promise<Story[]> {
+  const storiesDir = path.join(sdlcRoot, 'stories');
+  const result: Story[] = [];
+
+  if (!(await fsPromises.stat(storiesDir).catch(() => false))) {
+    return result;
+  }
+
+  const entries = await fsPromises.readdir(storiesDir, { withFileTypes: true });
+  // ... rest of function using async operations
+}
+```
+
+**requirements** [po]: The story acceptance criteria requires documenting the gh CLI requirements in docs/configuration.md with a 'troubleshooting section for common GitHub errors'. While the GitHub Integration Commands section was added, there is no dedicated troubleshooting section. The documentation shows command examples but doesn't provide a troubleshooting guide for common scenarios like network issues, rate limiting, or authentication problems.
+  - File: `docs/configuration.md`
+  - Suggested fix: Add a '### Troubleshooting' subsection under the GitHub Integration Commands section that covers:
+1. Common gh CLI authentication issues and how to resolve them
+2. Network connectivity problems
+3. GitHub API rate limiting
+4. Repository access permission errors
+5. How to verify gh CLI installation and authentication status
+6. What to do when 'gh issue view' returns unexpected data
+
+**code_quality** [code]: The link-issue.ts command has poor error handling for readline cleanup. If an error occurs during the askYesNo prompt, the readline interface is not closed, potentially leaving the process hanging. The readline.close() call is only in the success path of the promise.
+  - File: `src/cli/commands/link-issue.ts`:161
+  - Suggested fix: Wrap the readline question in a try-finally block to ensure cleanup:
+```typescript
+async function askYesNo(question: string, defaultValue: boolean): Promise<boolean> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  try {
+    return await new Promise((resolve) => {
+      const defaultText = defaultValue ? 'Y/n' : 'y/N';
+      rl.question(`${question} (${defaultText}): `, (answer) => {
+        const normalized = answer.trim().toLowerCase();
+        if (normalized === '') {
+          resolve(defaultValue);
+        } else {
+          resolve(normalized === 'y' || normalized === 'yes');
+        }
+      });
+    });
+  } finally {
+    rl.close();
+  }
+}
+```
+
+
+#### ℹ️ MINOR (3)
+
+**code_quality** [code]: The GitHubTicketProvider.mapIssueToTicket method has a complex nested loop for extracting priority from projectItems. This logic could be extracted into a separate helper method for better readability and testability.
+  - File: `src/services/ticket-provider/github-provider.ts`:65
+  - Suggested fix: Extract priority extraction logic:
+```typescript
+private extractPriorityFromProject(issue: GitHubIssue): number {
+  if (!issue.projectItems?.length) {
+    return 3; // Default priority
+  }
+
+  for (const item of issue.projectItems) {
+    if (!item.fieldValueByName) continue;
+    
+    const priorityField = item.fieldValueByName.find(
+      (f) => f.field.name.toLowerCase() === 'priority'
+    );
+    
+    if (priorityField) {
+      const priorityValue = parseInt(priorityField.name, 10);
+      if (!isNaN(priorityValue)) {
+        return priorityValue;
+      }
+    }
+  }
+  
+  return 3; // Default priority
+}
+
+// Then in mapIssueToTicket:
+const priority = this.extractPriorityFromProject(issue);
+```
+
+**security** [security]: The gh-cli.ts sets maxBuffer to 10MB for issue bodies, but there's no validation that the parsed JSON doesn't contain excessively large data structures. A malicious or corrupted response could still cause memory issues through deeply nested objects or arrays.
+  - File: `src/services/gh-cli.ts`:199
+  - Suggested fix: Add JSON structure validation after parsing:
+1. Check the depth of nested objects (limit to reasonable depth like 10)
+2. Check array lengths (limit to reasonable size like 1000 items)
+3. Validate that required fields exist and have expected types
+4. Consider using a JSON schema validator like ajv
+
+**requirements** [po]: The README.md mentions that issues can be imported with various URL formats including 'owner/repo#123' shorthand, but doesn't clarify that this requires the GitHub provider to be configured with a default repository. Users might expect this format to work without configuration and be confused when it fails.
+  - File: `README.md`:162
+  - Suggested fix: Add a note in the README under the URL formats section:
+```markdown
+# Supported URL formats:
+# - https://github.com/owner/repo/issues/123
+# - github.com/owner/repo/issues/123
+# - owner/repo#123 (requires ticketing.github.repo configured)
+```
+
+
+
+### Perspective Summary
+- Code Quality: ❌ Failed
+- Security: ❌ Failed
+- Requirements (PO): ❌ Failed
+
+### Overall Result
+❌ **FAILED** - Issues must be addressed
+
+---
+*Review completed: 2026-01-28*

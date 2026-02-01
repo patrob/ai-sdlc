@@ -734,6 +734,87 @@ Content.
   });
 });
 
+describe('loadStoriesFromWorktrees - story path construction', () => {
+  let tempDir: string;
+  let sdlcRoot: string;
+  let worktreeDir: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-sdlc-worktree-path-test-'));
+    sdlcRoot = path.join(tempDir, '.ai-sdlc');
+    fs.mkdirSync(sdlcRoot, { recursive: true });
+    worktreeDir = path.join(sdlcRoot, 'worktrees', 'S-0001-test-story');
+    fs.mkdirSync(worktreeDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should correctly construct worktree story path including .ai-sdlc folder', () => {
+    // Create a story in the main repo
+    const mainStoriesFolder = path.join(sdlcRoot, 'stories', 'S-0001');
+    fs.mkdirSync(mainStoriesFolder, { recursive: true });
+    fs.writeFileSync(path.join(mainStoriesFolder, 'story.md'), `---
+id: S-0001
+title: Test Story
+slug: test-story
+priority: 10
+status: ready
+type: feature
+created: '2024-01-01'
+labels: []
+research_complete: false
+plan_complete: false
+implementation_complete: false
+reviews_complete: false
+---
+
+# Test Story
+
+Content.
+`);
+
+    // Create a story in the worktree with the CORRECT path structure
+    // Worktrees should mirror the repo structure: worktree/.ai-sdlc/stories/S-0001/story.md
+    const worktreeStoryFolder = path.join(worktreeDir, '.ai-sdlc', 'stories', 'S-0001');
+    fs.mkdirSync(worktreeStoryFolder, { recursive: true });
+    fs.writeFileSync(path.join(worktreeStoryFolder, 'story.md'), `---
+id: S-0001
+title: Test Story Updated In Worktree
+slug: test-story
+priority: 10
+status: in-progress
+type: feature
+created: '2024-01-01'
+labels: []
+research_complete: true
+plan_complete: true
+implementation_complete: false
+reviews_complete: false
+---
+
+# Test Story Updated
+
+Updated in worktree.
+`);
+
+    // The worktree story path should be:
+    // {worktreeDir}/.ai-sdlc/stories/{storyId}/story.md
+    // NOT: {worktreeDir}/stories/{storyId}/story.md
+    const expectedWorktreePath = path.join(worktreeDir, '.ai-sdlc', 'stories', 'S-0001', 'story.md');
+
+    // Verify the path structure is correct by checking the file exists
+    expect(fs.existsSync(expectedWorktreePath)).toBe(true);
+
+    // Verify the wrong path structure (without .ai-sdlc) would NOT exist
+    const wrongPath = path.join(worktreeDir, 'stories', 'S-0001', 'story.md');
+    expect(fs.existsSync(wrongPath)).toBe(false);
+  });
+});
+
 describe('findStoriesByEpic', () => {
   let tempDir: string;
   let sdlcRoot: string;

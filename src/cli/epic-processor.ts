@@ -180,18 +180,30 @@ async function processStoryInWorktree(
   dashboard: DashboardState,
   worktreeService: GitWorktreeService,
   keepWorktrees: boolean,
-  config: Config
+  config: Config,
+  failedDeps: Set<string>
 ): Promise<{ success: boolean; error?: string }> {
   const storyId = story.frontmatter.id;
   const slug = story.frontmatter.slug;
 
+  // Defensive check: verify no dependencies have failed before starting
+  // This catches race conditions where a dependency fails during parallel execution
+  const deps = story.frontmatter.dependencies || [];
+  const blockedByDep = deps.find(dep => failedDeps.has(dep));
+  if (blockedByDep) {
+    const reason = `Dependency failed: ${blockedByDep}`;
+    markStorySkipped(dashboard, storyId, reason);
+    return { success: false, error: reason };
+  }
+
   updateStoryStatus(dashboard, storyId, 'in-progress');
 
   try {
-    // Create worktree
+    // Create worktree (or resume existing one)
     const worktreePath = worktreeService.create({
       storyId,
       slug,
+      resumeIfExists: true,
     });
 
     // Verify worktree was created
@@ -328,7 +340,8 @@ async function executePhase(
   dashboard: DashboardState,
   worktreeService: GitWorktreeService,
   keepWorktrees: boolean,
-  config: Config
+  config: Config,
+  failedDeps: Set<string>
 ): Promise<PhaseExecutionResult> {
   const result: PhaseExecutionResult = {
     phase: phaseNumber,
@@ -344,7 +357,7 @@ async function executePhase(
     // Fill up to maxConcurrent
     while (active.size < maxConcurrent && queue.length > 0) {
       const story = queue.shift()!;
-      const promise = processStoryInWorktree(story, dashboard, worktreeService, keepWorktrees, config)
+      const promise = processStoryInWorktree(story, dashboard, worktreeService, keepWorktrees, config, failedDeps)
         .then(result => ({
           storyId: story.frontmatter.id,
           ...result,
@@ -600,6 +613,10 @@ export async function processEpic(options: EpicProcessingOptions): Promise<numbe
         continue;
       }
 
+      // Create set of failed dependencies for defensive checks
+      // Include both failed and skipped stories as they both block downstream
+      const failedDeps = new Set([...failedStories.keys(), ...skippedStories.keys()]);
+
       // Execute phase
       const result = await executePhase(
         phaseToExecute,
@@ -608,7 +625,8 @@ export async function processEpic(options: EpicProcessingOptions): Promise<numbe
         dashboard,
         worktreeService,
         keepWorktrees,
-        config
+        config,
+        failedDeps
       );
 
       phaseResults.push(result);

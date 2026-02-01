@@ -13,6 +13,8 @@ import {
   formatCompactStoryCompletion,
   getKanbanColumnWidth,
   padColumnToHeight,
+  getCelebrationMessage,
+  formatSuccessMessage,
 } from './formatting.js';
 
 describe('formatting utilities', () => {
@@ -652,6 +654,53 @@ describe('formatting utilities', () => {
         const result = padColumnToHeight(items, 1);
         expect(result).toEqual(['']);
       });
+    });
+  });
+});
+
+describe('celebration messages', () => {
+  describe('getCelebrationMessage', () => {
+    it('should return a non-empty string', () => {
+      const message = getCelebrationMessage();
+      expect(message).toBeTruthy();
+      expect(typeof message).toBe('string');
+      expect(message.length).toBeGreaterThan(0);
+    });
+
+    it('should return one of the predefined celebration messages', () => {
+      const validMessages = [
+        'Great work!',
+        'Excellent!',
+        'Well done!',
+        'Nicely done!',
+        'Fantastic!',
+        'Success!',
+        'Perfect!',
+        'Awesome!',
+      ];
+
+      // Call multiple times to increase probability of hitting different messages
+      for (let i = 0; i < 20; i++) {
+        const message = getCelebrationMessage();
+        expect(validMessages).toContain(message);
+      }
+    });
+  });
+
+  describe('formatSuccessMessage', () => {
+    it('should combine celebration with achievement', () => {
+      const result = formatSuccessMessage('Story completed');
+
+      expect(result).toContain('Story completed');
+      // Should start with a celebration word
+      expect(result).toMatch(/^(Great work!|Excellent!|Well done!|Nicely done!|Fantastic!|Success!|Perfect!|Awesome!) /);
+    });
+
+    it('should handle empty achievement', () => {
+      const result = formatSuccessMessage('');
+
+      // Should still have the celebration message
+      expect(result.length).toBeGreaterThan(0);
     });
   });
 });

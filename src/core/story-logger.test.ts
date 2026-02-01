@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { StoryLogger, getLatestLogPath, readLastLines } from './story-logger.js';
+import {
+  StoryLogger,
+  getLatestLogPath,
+  readLastLines,
+  generateCorrelationId,
+  getOrCreateCorrelationId,
+  setCorrelationIdEnv
+} from './story-logger.js';
 
 // Mock fs module with promises
 vi.mock('fs', async (importOriginal) => {
@@ -167,12 +174,12 @@ describe('StoryLogger', () => {
       consoleWarnSpy.mockRestore();
     });
 
-    it('should write to file with formatted timestamp and level', () => {
+    it('should write to file with formatted timestamp, correlation ID, and level', () => {
       logger.log('INFO', 'Test message');
 
-      expect(mockStream.write).toHaveBeenCalledWith(
-        '[2026-01-15T10:30:00.000Z] [INFO] Test message\n'
-      );
+      const writtenContent = mockStream.write.mock.calls[0][0];
+      // Format: [timestamp] [correlationId] [level] message
+      expect(writtenContent).toMatch(/^\[2026-01-15T10:30:00\.000Z\] \[[a-z0-9]+-[a-f0-9]+\] \[INFO\] Test message\n$/);
     });
 
     it('should write to console for INFO level', () => {
@@ -247,7 +254,9 @@ describe('StoryLogger', () => {
     it('should handle empty messages', () => {
       logger.log('INFO', '');
 
-      expect(mockStream.write).toHaveBeenCalledWith('[2026-01-15T10:30:00.000Z] [INFO] \n');
+      const writtenContent = mockStream.write.mock.calls[0][0];
+      // Format: [timestamp] [correlationId] [level] <empty message>
+      expect(writtenContent).toMatch(/^\[2026-01-15T10:30:00\.000Z\] \[[a-z0-9]+-[a-f0-9]+\] \[INFO\] \n$/);
     });
 
     it('should gracefully degrade to console-only if file write fails', () => {
@@ -429,5 +438,113 @@ describe('readLastLines', () => {
     const lines = result.split('\n');
 
     expect(lines).toHaveLength(3); // Only non-empty lines
+  });
+});
+
+describe('Correlation ID functions', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    delete process.env.AI_SDLC_CORRELATION_ID;
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  describe('generateCorrelationId', () => {
+    it('should generate a unique ID in expected format', () => {
+      const id = generateCorrelationId();
+
+      // Format: <timestamp-base36>-<random-hex>
+      expect(id).toMatch(/^[a-z0-9]+-[a-f0-9]{4}$/);
+    });
+
+    it('should generate different IDs on each call', () => {
+      const id1 = generateCorrelationId();
+      const id2 = generateCorrelationId();
+
+      expect(id1).not.toBe(id2);
+    });
+  });
+
+  describe('getOrCreateCorrelationId', () => {
+    it('should return env variable if set', () => {
+      process.env.AI_SDLC_CORRELATION_ID = 'existing-id-1234';
+
+      const id = getOrCreateCorrelationId();
+
+      expect(id).toBe('existing-id-1234');
+    });
+
+    it('should generate new ID if env variable not set', () => {
+      const id = getOrCreateCorrelationId();
+
+      expect(id).toMatch(/^[a-z0-9]+-[a-f0-9]{4}$/);
+    });
+  });
+
+  describe('setCorrelationIdEnv', () => {
+    it('should set the environment variable', () => {
+      setCorrelationIdEnv('test-correlation-id');
+
+      expect(process.env.AI_SDLC_CORRELATION_ID).toBe('test-correlation-id');
+    });
+  });
+
+  describe('StoryLogger correlation ID', () => {
+    let mockStream: any;
+
+    beforeEach(() => {
+      mockStream = {
+        write: vi.fn(),
+        end: vi.fn((cb: () => void) => cb()),
+        on: vi.fn(),
+      };
+
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readdirSync).mockReturnValue([]);
+      vi.mocked(fs.createWriteStream).mockReturnValue(mockStream as any);
+    });
+
+    it('should use provided correlation ID', () => {
+      const logger = new StoryLogger('S-001', '/test/.ai-sdlc', 5, 'custom-id-9999');
+
+      expect(logger.getCorrelationId()).toBe('custom-id-9999');
+    });
+
+    it('should use env variable if no correlation ID provided', () => {
+      process.env.AI_SDLC_CORRELATION_ID = 'env-id-5678';
+
+      const logger = new StoryLogger('S-001', '/test/.ai-sdlc');
+
+      expect(logger.getCorrelationId()).toBe('env-id-5678');
+    });
+
+    it('should generate correlation ID if neither param nor env provided', () => {
+      const logger = new StoryLogger('S-001', '/test/.ai-sdlc');
+
+      expect(logger.getCorrelationId()).toMatch(/^[a-z0-9]+-[a-f0-9]{4}$/);
+    });
+
+    it('should set correlation ID in environment', () => {
+      const logger = new StoryLogger('S-001', '/test/.ai-sdlc', 5, 'my-id-1234');
+
+      expect(process.env.AI_SDLC_CORRELATION_ID).toBe('my-id-1234');
+    });
+
+    it('should include correlation ID in log entries', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-01-15T10:30:00.000Z'));
+
+      const logger = new StoryLogger('S-001', '/test/.ai-sdlc', 5, 'trace-id-abc');
+      logger.log('INFO', 'Test message');
+
+      const writtenContent = mockStream.write.mock.calls[0][0];
+      expect(writtenContent).toContain('[trace-id-abc]');
+
+      vi.useRealTimers();
+    });
   });
 });

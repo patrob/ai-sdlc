@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GitHubTicketProvider } from '../github-provider.js';
 import * as ghCli from '../../gh-cli.js';
 import type { GitHubIssue } from '../../gh-cli.js';
-import type { StoryStatus } from '../../../types/index.js';
 
 vi.mock('../../gh-cli.js');
 
@@ -209,28 +208,127 @@ describe('GitHubTicketProvider', () => {
   });
 
   describe('create', () => {
-    it('should throw error - not yet implemented', async () => {
+    const mockCreatedIssue: GitHubIssue = {
+      number: 456,
+      title: 'New Issue',
+      body: 'Issue description',
+      state: 'open',
+      labels: [{ name: 'bug' }],
+      assignees: [],
+    };
+
+    it('should create a new ticket', async () => {
+      vi.mocked(ghCli.ghIssueCreate).mockResolvedValueOnce(mockCreatedIssue);
+
       const provider = new GitHubTicketProvider(mockConfig);
-      await expect(provider.create({ title: 'Test', description: 'Test' })).rejects.toThrow(
-        'not yet implemented'
+      const ticket = await provider.create({
+        title: 'New Issue',
+        description: 'Issue description',
+        labels: ['bug'],
+      });
+
+      expect(ticket).toMatchObject({
+        id: '456',
+        title: 'New Issue',
+        description: 'Issue description',
+        labels: ['bug'],
+      });
+      expect(ghCli.ghIssueCreate).toHaveBeenCalledWith(
+        'owner',
+        'repo',
+        'New Issue',
+        'Issue description',
+        ['bug']
+      );
+    });
+
+    it('should create ticket with empty description', async () => {
+      const issueNoBody = { ...mockCreatedIssue, body: '' };
+      vi.mocked(ghCli.ghIssueCreate).mockResolvedValueOnce(issueNoBody);
+
+      const provider = new GitHubTicketProvider(mockConfig);
+      await provider.create({ title: 'Minimal Issue' });
+
+      expect(ghCli.ghIssueCreate).toHaveBeenCalledWith(
+        'owner',
+        'repo',
+        'Minimal Issue',
+        '',
+        undefined
       );
     });
   });
 
-  describe('write operations', () => {
-    it('should be no-ops for updateStatus', async () => {
+  describe('updateStatus', () => {
+    it('should close issue when status is done', async () => {
+      vi.mocked(ghCli.ghIssueStateChange).mockResolvedValueOnce();
+
       const provider = new GitHubTicketProvider(mockConfig);
-      await expect(provider.updateStatus('123', 'done')).resolves.not.toThrow();
+      await provider.updateStatus('123', 'done');
+
+      expect(ghCli.ghIssueStateChange).toHaveBeenCalledWith('owner', 'repo', 123, 'closed');
     });
 
-    it('should be no-ops for addComment', async () => {
+    it('should reopen issue when status is not done', async () => {
+      vi.mocked(ghCli.ghIssueStateChange).mockResolvedValueOnce();
+
       const provider = new GitHubTicketProvider(mockConfig);
-      await expect(provider.addComment('123', 'comment')).resolves.not.toThrow();
+      await provider.updateStatus('123', 'in-progress');
+
+      expect(ghCli.ghIssueStateChange).toHaveBeenCalledWith('owner', 'repo', 123, 'open');
     });
 
-    it('should be no-ops for linkPR', async () => {
+    it('should throw error for invalid issue number', async () => {
       const provider = new GitHubTicketProvider(mockConfig);
-      await expect(provider.linkPR('123', 'https://github.com/owner/repo/pull/1')).resolves.not.toThrow();
+      await expect(provider.updateStatus('invalid', 'done')).rejects.toThrow(
+        'Invalid GitHub issue number'
+      );
+    });
+  });
+
+  describe('addComment', () => {
+    it('should add comment to issue', async () => {
+      vi.mocked(ghCli.ghIssueComment).mockResolvedValueOnce();
+
+      const provider = new GitHubTicketProvider(mockConfig);
+      await provider.addComment('123', 'This is a comment');
+
+      expect(ghCli.ghIssueComment).toHaveBeenCalledWith(
+        'owner',
+        'repo',
+        123,
+        'This is a comment'
+      );
+    });
+
+    it('should throw error for invalid issue number', async () => {
+      const provider = new GitHubTicketProvider(mockConfig);
+      await expect(provider.addComment('invalid', 'comment')).rejects.toThrow(
+        'Invalid GitHub issue number'
+      );
+    });
+  });
+
+  describe('linkPR', () => {
+    it('should link PR to issue via comment', async () => {
+      vi.mocked(ghCli.ghLinkIssueToPR).mockResolvedValueOnce();
+
+      const provider = new GitHubTicketProvider(mockConfig);
+      await provider.linkPR('123', 'https://github.com/owner/repo/pull/456');
+
+      expect(ghCli.ghLinkIssueToPR).toHaveBeenCalledWith(
+        'owner',
+        'repo',
+        123,
+        'https://github.com/owner/repo/pull/456'
+      );
+    });
+
+    it('should throw error for invalid issue number', async () => {
+      const provider = new GitHubTicketProvider(mockConfig);
+      await expect(
+        provider.linkPR('invalid', 'https://github.com/owner/repo/pull/1')
+      ).rejects.toThrow('Invalid GitHub issue number');
     });
   });
 

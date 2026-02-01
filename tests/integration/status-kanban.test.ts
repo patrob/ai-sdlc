@@ -568,8 +568,10 @@ reviews_complete: false
       fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), mainStory);
 
       // Create worktree directory structure
+      // Worktrees contain a full repo copy, so story path is: worktree/.ai-sdlc/stories/S-XXXX/
       const worktreeRoot = path.join(sdlcRoot, 'worktrees', 'S-0001-worktree-test-story');
-      const worktreeStoryPath = path.join(worktreeRoot, STORIES_FOLDER, storyId);
+      const sdlcFolderName = path.basename(sdlcRoot); // .ai-sdlc
+      const worktreeStoryPath = path.join(worktreeRoot, sdlcFolderName, STORIES_FOLDER, storyId);
       fs.mkdirSync(worktreeStoryPath, { recursive: true });
 
       // Create story in worktree with in-progress status
@@ -713,8 +715,10 @@ reviews_complete: false
       fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), mainStory);
 
       // Create worktree with malformed YAML
+      // Worktrees contain a full repo copy, so story path is: worktree/.ai-sdlc/stories/S-XXXX/
       const worktreeRoot = path.join(sdlcRoot, 'worktrees', 'S-0003-corrupt-worktree-story');
-      const worktreeStoryPath = path.join(worktreeRoot, STORIES_FOLDER, storyId);
+      const sdlcFolderName = path.basename(sdlcRoot); // .ai-sdlc
+      const worktreeStoryPath = path.join(worktreeRoot, sdlcFolderName, STORIES_FOLDER, storyId);
       fs.mkdirSync(worktreeStoryPath, { recursive: true });
 
       // Write corrupt YAML (invalid frontmatter)

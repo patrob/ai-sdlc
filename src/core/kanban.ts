@@ -39,8 +39,10 @@ function loadStoriesFromWorktrees(sdlcRoot: string): Map<string, Story> {
       }
 
       // Construct expected story path in worktree
-      // Pattern: {worktreePath}/stories/{storyId}/story.md
-      const storyPath = path.join(worktree.path, STORIES_FOLDER, worktree.storyId, STORY_FILENAME);
+      // Pattern: {worktreePath}/{sdlcFolderName}/stories/{storyId}/story.md
+      // The worktree contains a full copy of the repo, so we need to include the .ai-sdlc folder
+      const sdlcFolderName = path.basename(sdlcRoot);
+      const storyPath = path.join(worktree.path, sdlcFolderName, STORIES_FOLDER, worktree.storyId, STORY_FILENAME);
 
       // Check if story file exists
       if (!fs.existsSync(storyPath)) {

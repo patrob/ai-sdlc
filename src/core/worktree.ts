@@ -14,6 +14,11 @@ export interface WorktreeOptions {
   storyId: string;
   slug: string;
   baseBranch?: string;
+  /**
+   * If true, return existing worktree path instead of throwing when worktree exists
+   * and can be resumed (directory exists, branch exists, story files accessible)
+   */
+  resumeIfExists?: boolean;
 }
 
 /**
@@ -187,6 +192,16 @@ export class GitWorktreeService {
 
     // Check if worktree path already exists
     if (this.exists(worktreePath)) {
+      // If resumeIfExists is enabled, validate and return existing worktree
+      if (options.resumeIfExists) {
+        const validation = this.validateWorktreeForResume(worktreePath, branchName);
+        if (validation.canResume) {
+          // Worktree exists and is valid - return existing path
+          return worktreePath;
+        }
+        // Worktree exists but cannot be resumed - throw with details
+        throw new Error(`${ERROR_MESSAGES.PATH_EXISTS}: ${worktreePath} (cannot resume: ${validation.issues.join(', ')})`);
+      }
       throw new Error(`${ERROR_MESSAGES.PATH_EXISTS}: ${worktreePath}`);
     }
 

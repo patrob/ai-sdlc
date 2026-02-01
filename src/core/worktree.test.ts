@@ -246,6 +246,76 @@ describe('GitWorktreeService', () => {
         })
       ).toThrow('Worktree path already exists');
     });
+
+    it('returns existing path when resumeIfExists is true and worktree is valid', () => {
+      // Mock worktree exists
+      vi.spyOn(fs, 'existsSync').mockImplementation((p: any) => {
+        // Worktree path exists
+        if (p.includes('S-0029-test')) return true;
+        // Story directory exists
+        if (p.includes('.ai-sdlc/stories')) return true;
+        return false;
+      });
+      // Mock branch exists (for validateWorktreeForResume)
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      const result = service.create({
+        storyId: 'S-0029',
+        slug: 'test',
+        baseBranch: 'main',
+        resumeIfExists: true,
+      });
+
+      expect(result).toBe(path.join(worktreeBasePath, 'S-0029-test'));
+    });
+
+    it('throws error when resumeIfExists is true but worktree cannot be resumed', () => {
+      // Mock worktree path exists but is invalid
+      vi.spyOn(fs, 'existsSync').mockImplementation((p: any) => {
+        // Worktree path exists
+        if (p === path.join(worktreeBasePath, 'S-0029-test')) return true;
+        // But story directory doesn't exist
+        return false;
+      });
+      // Mock branch doesn't exist
+      vi.spyOn(cp, 'spawnSync').mockReturnValue({
+        status: 1,
+        stdout: '',
+        stderr: 'fatal: Needed a single revision',
+        output: [],
+        pid: 0,
+        signal: null,
+      });
+
+      expect(() =>
+        service.create({
+          storyId: 'S-0029',
+          slug: 'test',
+          baseBranch: 'main',
+          resumeIfExists: true,
+        })
+      ).toThrow('cannot resume');
+    });
+
+    it('still throws when worktree exists and resumeIfExists is false', () => {
+      vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+      expect(() =>
+        service.create({
+          storyId: 'S-0029',
+          slug: 'test',
+          baseBranch: 'main',
+          resumeIfExists: false,
+        })
+      ).toThrow('Worktree path already exists');
+    });
   });
 
   describe('edge cases', () => {

@@ -6,6 +6,11 @@ import {
   isGhAuthenticated,
   ghIssueView,
   ghIssueList,
+  ghIssueCreate,
+  ghIssueComment,
+  ghIssueStateChange,
+  ghPRCreate,
+  ghLinkIssueToPR,
   GhNotInstalledError,
   GhNotAuthenticatedError,
   GhIssueNotFoundError,
@@ -399,5 +404,290 @@ describe('ghIssueList', () => {
     } as any);
 
     await expect(ghIssueList('owner', 'repo')).rejects.toThrow(GhNoAccessError);
+  });
+});
+
+describe('ghIssueCreate', () => {
+  const mockIssue: GitHubIssue = {
+    number: 456,
+    title: 'New Issue',
+    body: 'Issue description',
+    state: 'open',
+    labels: [{ name: 'bug' }],
+    assignees: [],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should create issue successfully', async () => {
+    // First call: gh issue create
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 0,
+      stdout: 'https://github.com/owner/repo/issues/456\n',
+      stderr: '',
+      error: undefined,
+    } as any);
+
+    // Second call: gh issue view to fetch created issue
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 0,
+      stdout: JSON.stringify(mockIssue),
+      stderr: '',
+      error: undefined,
+    } as any);
+
+    const result = await ghIssueCreate('owner', 'repo', 'New Issue', 'Issue description', ['bug']);
+    expect(result).toEqual(mockIssue);
+    expect(spawnSync).toHaveBeenNthCalledWith(
+      1,
+      'gh',
+      expect.arrayContaining(['issue', 'create', '--title', 'New Issue', '--body', 'Issue description', '--label', 'bug']),
+      expect.any(Object)
+    );
+  });
+
+  it('should create issue without labels', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 0,
+      stdout: 'https://github.com/owner/repo/issues/456\n',
+      stderr: '',
+      error: undefined,
+    } as any);
+
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 0,
+      stdout: JSON.stringify(mockIssue),
+      stderr: '',
+      error: undefined,
+    } as any);
+
+    await ghIssueCreate('owner', 'repo', 'New Issue', 'Issue description');
+    expect(spawnSync).toHaveBeenNthCalledWith(
+      1,
+      'gh',
+      expect.not.arrayContaining(['--label']),
+      expect.any(Object)
+    );
+  });
+
+  it('should throw GhNotInstalledError when gh is not installed', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 1,
+      stdout: '',
+      stderr: '',
+      error: { code: 'ENOENT' } as any,
+    } as any);
+
+    await expect(ghIssueCreate('owner', 'repo', 'Title', 'Body')).rejects.toThrow(GhNotInstalledError);
+  });
+
+  it('should throw GhNotAuthenticatedError when not authenticated', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 1,
+      stdout: '',
+      stderr: 'gh auth login required',
+      error: undefined,
+    } as any);
+
+    await expect(ghIssueCreate('owner', 'repo', 'Title', 'Body')).rejects.toThrow(GhNotAuthenticatedError);
+  });
+
+  it('should throw GhNoAccessError when access denied', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 1,
+      stdout: '',
+      stderr: 'HTTP 403 permission denied',
+      error: undefined,
+    } as any);
+
+    await expect(ghIssueCreate('owner', 'repo', 'Title', 'Body')).rejects.toThrow(GhNoAccessError);
+  });
+});
+
+describe('ghIssueComment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should add comment successfully', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 0,
+      stdout: 'https://github.com/owner/repo/issues/123#issuecomment-456\n',
+      stderr: '',
+      error: undefined,
+    } as any);
+
+    await ghIssueComment('owner', 'repo', 123, 'This is a comment');
+    expect(spawnSync).toHaveBeenCalledWith(
+      'gh',
+      ['issue', 'comment', '123', '-R', 'owner/repo', '--body', 'This is a comment'],
+      expect.any(Object)
+    );
+  });
+
+  it('should throw GhIssueNotFoundError when issue not found', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 1,
+      stdout: '',
+      stderr: 'Issue not found',
+      error: undefined,
+    } as any);
+
+    await expect(ghIssueComment('owner', 'repo', 999, 'Comment')).rejects.toThrow(GhIssueNotFoundError);
+  });
+
+  it('should throw GhNotAuthenticatedError when not authenticated', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 1,
+      stdout: '',
+      stderr: 'gh auth login required',
+      error: undefined,
+    } as any);
+
+    await expect(ghIssueComment('owner', 'repo', 123, 'Comment')).rejects.toThrow(GhNotAuthenticatedError);
+  });
+});
+
+describe('ghIssueStateChange', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should close issue successfully', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 0,
+      stdout: 'Closed issue #123\n',
+      stderr: '',
+      error: undefined,
+    } as any);
+
+    await ghIssueStateChange('owner', 'repo', 123, 'closed');
+    expect(spawnSync).toHaveBeenCalledWith(
+      'gh',
+      ['issue', 'close', '123', '-R', 'owner/repo'],
+      expect.any(Object)
+    );
+  });
+
+  it('should reopen issue successfully', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 0,
+      stdout: 'Reopened issue #123\n',
+      stderr: '',
+      error: undefined,
+    } as any);
+
+    await ghIssueStateChange('owner', 'repo', 123, 'open');
+    expect(spawnSync).toHaveBeenCalledWith(
+      'gh',
+      ['issue', 'reopen', '123', '-R', 'owner/repo'],
+      expect.any(Object)
+    );
+  });
+
+  it('should throw GhIssueNotFoundError when issue not found', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 1,
+      stdout: '',
+      stderr: 'could not resolve issue',
+      error: undefined,
+    } as any);
+
+    await expect(ghIssueStateChange('owner', 'repo', 999, 'closed')).rejects.toThrow(GhIssueNotFoundError);
+  });
+});
+
+describe('ghPRCreate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should create PR successfully', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 0,
+      stdout: 'https://github.com/owner/repo/pull/42\n',
+      stderr: '',
+      error: undefined,
+    } as any);
+
+    const result = await ghPRCreate('owner', 'repo', 'PR Title', 'PR Body', 'feature-branch', 'main');
+    expect(result).toEqual({
+      number: 42,
+      title: 'PR Title',
+      body: 'PR Body',
+      state: 'open',
+      url: 'https://github.com/owner/repo/pull/42',
+      headRefName: 'feature-branch',
+      baseRefName: 'main',
+    });
+    expect(spawnSync).toHaveBeenCalledWith(
+      'gh',
+      expect.arrayContaining(['pr', 'create', '--title', 'PR Title', '--body', 'PR Body', '--head', 'feature-branch', '--base', 'main']),
+      expect.any(Object)
+    );
+  });
+
+  it('should create draft PR when draft option is true', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 0,
+      stdout: 'https://github.com/owner/repo/pull/42\n',
+      stderr: '',
+      error: undefined,
+    } as any);
+
+    await ghPRCreate('owner', 'repo', 'Draft PR', 'Body', 'feature-branch', 'main', true);
+    expect(spawnSync).toHaveBeenCalledWith(
+      'gh',
+      expect.arrayContaining(['--draft']),
+      expect.any(Object)
+    );
+  });
+
+  it('should throw error when PR already exists', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 1,
+      stdout: '',
+      stderr: 'a pull request already exists for feature-branch',
+      error: undefined,
+    } as any);
+
+    await expect(ghPRCreate('owner', 'repo', 'Title', 'Body', 'feature-branch')).rejects.toThrow(
+      "A pull request for branch 'feature-branch' already exists"
+    );
+  });
+
+  it('should throw GhNotAuthenticatedError when not authenticated', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 1,
+      stdout: '',
+      stderr: 'authentication required',
+      error: undefined,
+    } as any);
+
+    await expect(ghPRCreate('owner', 'repo', 'Title', 'Body', 'branch')).rejects.toThrow(GhNotAuthenticatedError);
+  });
+});
+
+describe('ghLinkIssueToPR', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should link issue to PR via comment', async () => {
+    vi.mocked(spawnSync).mockReturnValueOnce({
+      status: 0,
+      stdout: 'https://github.com/owner/repo/issues/123#issuecomment-789\n',
+      stderr: '',
+      error: undefined,
+    } as any);
+
+    await ghLinkIssueToPR('owner', 'repo', 123, 'https://github.com/owner/repo/pull/456');
+    expect(spawnSync).toHaveBeenCalledWith(
+      'gh',
+      ['issue', 'comment', '123', '-R', 'owner/repo', '--body', '🔗 Linked to PR: https://github.com/owner/repo/pull/456'],
+      expect.any(Object)
+    );
   });
 });

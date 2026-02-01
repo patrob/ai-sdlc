@@ -3,14 +3,61 @@
  *
  * Each story execution creates a new timestamped log file with dual output
  * (console + file) for debugging and audit trail.
+ *
+ * Features correlation IDs for cross-process tracing:
+ * - Generate unique trace IDs for each execution
+ * - Propagate IDs via environment variables between processes
+ * - Include IDs in all log entries for easy filtering
  */
 
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { sanitizeStoryId } from './story.js';
 import { STORIES_FOLDER, LogLevel } from '../types/index.js';
 
 const MAX_MESSAGE_LENGTH = 10 * 1024; // 10KB per log entry
+const CORRELATION_ID_ENV_VAR = 'AI_SDLC_CORRELATION_ID';
+
+/**
+ * Generate a short, unique correlation ID for tracing
+ *
+ * Format: <timestamp-base36>-<random-hex>
+ * Example: "lxyz12-a3f9"
+ *
+ * This ID can be passed between processes via environment variables
+ * and included in log entries for cross-process debugging.
+ *
+ * @returns A unique correlation ID string
+ */
+export function generateCorrelationId(): string {
+  const timestamp = Date.now().toString(36);
+  const random = crypto.randomBytes(2).toString('hex');
+  return `${timestamp}-${random}`;
+}
+
+/**
+ * Get the correlation ID from environment or generate a new one
+ *
+ * Checks AI_SDLC_CORRELATION_ID environment variable first.
+ * If not set, generates a new ID.
+ *
+ * @returns Correlation ID string
+ */
+export function getOrCreateCorrelationId(): string {
+  return process.env[CORRELATION_ID_ENV_VAR] || generateCorrelationId();
+}
+
+/**
+ * Set correlation ID in environment for child processes
+ *
+ * Call this before spawning child processes to propagate the trace ID.
+ *
+ * @param correlationId - The correlation ID to set
+ */
+export function setCorrelationIdEnv(correlationId: string): void {
+  process.env[CORRELATION_ID_ENV_VAR] = correlationId;
+}
 
 /**
  * Per-story logger that writes to timestamped files
@@ -19,6 +66,7 @@ const MAX_MESSAGE_LENGTH = 10 * 1024; // 10KB per log entry
  * - Dual output: console + timestamped file per execution
  * - Automatic log rotation (keeps last N logs per story)
  * - Crash-safe synchronous writes
+ * - Correlation IDs for cross-process tracing
  * - Location: stories/{id}/logs/{timestamp}.log
  */
 export class StoryLogger {
@@ -26,6 +74,7 @@ export class StoryLogger {
   private storyId: string;
   private logPath: string;
   private closed: boolean = false;
+  private correlationId: string;
 
   /**
    * Initialize a per-story logger
@@ -33,8 +82,13 @@ export class StoryLogger {
    * @param storyId - Story ID (sanitized automatically)
    * @param sdlcRoot - Path to .ai-sdlc directory
    * @param maxLogs - Maximum number of log files to retain per story (default: 5)
+   * @param correlationId - Optional correlation ID for tracing (auto-generated if not provided)
    */
-  constructor(storyId: string, sdlcRoot: string, maxLogs: number = 5) {
+  constructor(storyId: string, sdlcRoot: string, maxLogs: number = 5, correlationId?: string) {
+    // Initialize correlation ID (from param, env, or generate new)
+    this.correlationId = correlationId || getOrCreateCorrelationId();
+    // Set in env for child processes
+    setCorrelationIdEnv(this.correlationId);
     // SECURITY: Sanitize story ID to prevent path traversal
     this.storyId = sanitizeStoryId(storyId);
 
@@ -80,6 +134,9 @@ export class StoryLogger {
    * Writes to both console and file. Sanitizes message to prevent issues
    * with very long lines or non-printable characters.
    *
+   * Log entry format includes correlation ID for cross-process tracing:
+   * [timestamp] [correlationId] [level] message
+   *
    * @param level - Log level (INFO, AGENT, ERROR, WARN, DEBUG)
    * @param message - Message to log
    */
@@ -92,9 +149,9 @@ export class StoryLogger {
     // Sanitize and truncate message
     const sanitized = this.sanitizeMessage(message);
 
-    // Format log entry with ISO 8601 timestamp
+    // Format log entry with ISO 8601 timestamp and correlation ID
     const timestamp = new Date().toISOString();
-    const entry = `[${timestamp}] [${level}] ${sanitized}\n`;
+    const entry = `[${timestamp}] [${this.correlationId}] [${level}] ${sanitized}\n`;
 
     // Write to file synchronously (crash-safe)
     try {
@@ -151,6 +208,19 @@ export class StoryLogger {
    */
   getLogPath(): string {
     return this.logPath;
+  }
+
+  /**
+   * Get the correlation ID for this logger session
+   *
+   * Use this ID to correlate logs across multiple processes.
+   * Pass it to child processes via environment or log it for
+   * later cross-referencing.
+   *
+   * @returns The correlation ID string
+   */
+  getCorrelationId(): string {
+    return this.correlationId;
   }
 
   /**

@@ -3,6 +3,10 @@ import { Ticket, TicketFilter, NewTicket, TicketProvider } from './types.js';
 import {
   ghIssueView,
   ghIssueList,
+  ghIssueCreate,
+  ghIssueComment,
+  ghIssueStateChange,
+  ghLinkIssueToPR,
   type GitHubIssue,
   type IssueFilter,
 } from '../gh-cli.js';
@@ -25,10 +29,11 @@ export interface GitHubConfig {
  * Integrates with GitHub Issues via the gh CLI. Supports:
  * - Listing issues with filters
  * - Fetching individual issues
+ * - Creating new issues
+ * - Adding comments to issues
+ * - Updating issue status (open/closed)
+ * - Linking PRs to issues
  * - Status mapping between GitHub and ai-sdlc
- *
- * Write operations (create, updateStatus, addComment, linkPR) will be
- * implemented in story S-0075.
  */
 export class GitHubTicketProvider implements TicketProvider {
   readonly name = 'github';
@@ -150,35 +155,82 @@ export class GitHubTicketProvider implements TicketProvider {
   }
 
   /**
-   * Create a new ticket.
-   * @throws Error - Not yet implemented (S-0075)
+   * Create a new ticket (GitHub Issue).
+   *
+   * @param ticket New ticket data
+   * @returns Created ticket
    */
-  async create(_ticket: NewTicket): Promise<Ticket> {
-    throw new Error('GitHub ticket creation not yet implemented (S-0075)');
+  async create(ticket: NewTicket): Promise<Ticket> {
+    const { owner, repo } = this.getOwnerRepo();
+
+    const issue = await ghIssueCreate(
+      owner,
+      repo,
+      ticket.title,
+      ticket.description || '',
+      ticket.labels
+    );
+
+    return this.mapIssueToTicket(issue);
   }
 
   /**
    * Update the status of a ticket.
-   * No-op: Write operations will be implemented in S-0075.
+   *
+   * Maps internal status to GitHub issue state:
+   * - 'done' status closes the issue
+   * - Other statuses reopen the issue if closed
+   *
+   * @param id Issue number
+   * @param status Target status
    */
-  async updateStatus(_id: string, _status: string): Promise<void> {
-    // No-op: Write operations not yet implemented
+  async updateStatus(id: string, status: string): Promise<void> {
+    const { owner, repo } = this.getOwnerRepo();
+    const issueNumber = parseInt(id, 10);
+
+    if (isNaN(issueNumber)) {
+      throw new Error(`Invalid GitHub issue number: "${id}"`);
+    }
+
+    // Map internal status to GitHub state
+    const targetState = status === 'done' ? 'closed' : 'open';
+    await ghIssueStateChange(owner, repo, issueNumber, targetState);
   }
 
   /**
    * Add a comment to a ticket.
-   * No-op: Write operations will be implemented in S-0075.
+   *
+   * @param id Issue number
+   * @param body Comment body (markdown)
    */
-  async addComment(_id: string, _body: string): Promise<void> {
-    // No-op: Write operations not yet implemented
+  async addComment(id: string, body: string): Promise<void> {
+    const { owner, repo } = this.getOwnerRepo();
+    const issueNumber = parseInt(id, 10);
+
+    if (isNaN(issueNumber)) {
+      throw new Error(`Invalid GitHub issue number: "${id}"`);
+    }
+
+    await ghIssueComment(owner, repo, issueNumber, body);
   }
 
   /**
    * Link a pull request to a ticket.
-   * No-op: Write operations will be implemented in S-0075.
+   *
+   * Adds a comment to the issue with the PR URL.
+   *
+   * @param id Issue number
+   * @param prUrl URL of the pull request
    */
-  async linkPR(_id: string, _prUrl: string): Promise<void> {
-    // No-op: Write operations not yet implemented
+  async linkPR(id: string, prUrl: string): Promise<void> {
+    const { owner, repo } = this.getOwnerRepo();
+    const issueNumber = parseInt(id, 10);
+
+    if (isNaN(issueNumber)) {
+      throw new Error(`Invalid GitHub issue number: "${id}"`);
+    }
+
+    await ghLinkIssueToPR(owner, repo, issueNumber, prUrl);
   }
 
   /**

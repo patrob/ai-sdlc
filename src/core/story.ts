@@ -97,18 +97,22 @@ export async function writeStory(story: Story, options?: LockOptions): Promise<v
   }
 
   // For existing files, use locking to prevent concurrent write corruption
-  const timeout = options?.lockTimeout ?? 5000;
-  const retries = options?.retries ?? 3;
+  const timeout = options?.lockTimeout ?? 10000;  // Increased from 5s to 10s
+  const retries = options?.retries ?? 5;          // Increased from 3 to 5
   const stale = options?.stale ?? timeout;
 
-  // Acquire lock with retry logic and exponential backoff
+  // Acquire lock with exponential backoff and jitter to prevent thundering herd
+  // Backoff pattern: 100ms → 200ms → 400ms → 800ms → 1000ms (capped)
+  // Jitter adds random delay up to 50% of the calculated backoff
   let release;
   try {
     release = await properLockfile.lock(story.path, {
       retries: {
         retries,
         minTimeout: 100,
-        maxTimeout: 1000,
+        maxTimeout: 2000,   // Increased max for longer contention scenarios
+        factor: 2,          // Exponential factor
+        randomize: true,    // Add jitter (randomizes between 1x and 2x the delay)
       },
       stale,
     });

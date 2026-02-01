@@ -11,7 +11,7 @@ import { runImplementationAgent } from '../agents/implementation.js';
 import { runReviewAgent, createPullRequest, generateReviewSummary } from '../agents/review.js';
 import { runReworkAgent, packageReworkContext } from '../agents/rework.js';
 import { getThemedChalk } from '../core/theme.js';
-import { getTerminalWidth } from './formatting.js';
+import { getTerminalWidth, formatSuccessMessage } from './formatting.js';
 
 export interface RunOptions {
   auto?: boolean;
@@ -122,7 +122,8 @@ export class WorkflowRunner {
     if (actionsProcessed >= maxActions) {
       console.log(c.warning(`\nReached maximum actions limit (${maxActions}). Stopping.`));
     } else if (assessment.recommendedActions.length === 0) {
-      console.log(c.success('\nAll actions completed!'));
+      const celebration = formatSuccessMessage('All actions completed!');
+      console.log(c.success(`\n✅ ${celebration}`));
     }
 
     console.log(c.dim(`\nProcessed ${actionsProcessed} action(s).`));
@@ -268,9 +269,10 @@ export class WorkflowRunner {
     if (reviewResult.decision === ReviewDecision.APPROVED) {
       // Auto-complete on approval using shared helper
       if (config.reviewConfig.autoCompleteOnApproval) {
-        console.log(c.success(`\n✅ Review approved! Auto-completing story "${story.frontmatter.title}"`));
+        const celebration = formatSuccessMessage(`Story "${story.frontmatter.title}" complete!`);
+        console.log(c.success(`\n✅ ${celebration}`));
         story = await autoCompleteStoryAfterReview(story, config, reviewResult);
-        console.log(c.success(`Updated story status to done`));
+        console.log(c.success(`Story moved to done status.`));
       }
     } else if (reviewResult.decision === ReviewDecision.REJECTED) {
       // Auto-restart RPIV cycle on rejection

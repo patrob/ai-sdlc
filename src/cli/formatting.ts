@@ -342,3 +342,40 @@ export function isWorktreeStory(storyPath: string): boolean {
 export function getWorktreeIndicator(): string {
   return '🌿';
 }
+
+/**
+ * Success celebration messages for positive reinforcement.
+ * Rotates through different messages to keep the experience fresh.
+ */
+const CELEBRATION_MESSAGES = [
+  'Great work!',
+  'Excellent!',
+  'Well done!',
+  'Nicely done!',
+  'Fantastic!',
+  'Success!',
+  'Perfect!',
+  'Awesome!',
+];
+
+/**
+ * Get a random celebration message for success feedback.
+ * Provides positive reinforcement when tasks complete successfully.
+ *
+ * @returns A random celebration message
+ */
+export function getCelebrationMessage(): string {
+  const index = Math.floor(Math.random() * CELEBRATION_MESSAGES.length);
+  return CELEBRATION_MESSAGES[index];
+}
+
+/**
+ * Format a success message with celebration.
+ * Combines a celebration message with the specific achievement.
+ *
+ * @param achievement - What was accomplished (e.g., "Story moved to done")
+ * @returns Formatted success message
+ */
+export function formatSuccessMessage(achievement: string): string {
+  return `${getCelebrationMessage()} ${achievement}`;
+}

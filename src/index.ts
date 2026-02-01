@@ -47,7 +47,8 @@ program
 program
   .command('init')
   .description('Initialize .ai-sdlc folder structure')
-  .action(init);
+  .option('--quick', 'Skip project detection for faster initialization')
+  .action((options) => init(options));
 
 program
   .command('status')

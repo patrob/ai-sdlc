@@ -4,6 +4,37 @@ export type StoryType = 'feature' | 'bug' | 'chore' | 'spike';
 export type EffortEstimate = 'small' | 'medium' | 'large';
 
 /**
+ * Detected technology stack for a project.
+ * Used during init to auto-configure install/build/test commands.
+ */
+export type TechStack =
+  | 'node-npm' | 'node-yarn' | 'node-pnpm' | 'node-bun'
+  | 'python-pip' | 'python-poetry' | 'python-uv'
+  | 'rust-cargo' | 'go-mod' | 'ruby-bundler'
+  | 'java-maven' | 'java-gradle' | 'dotnet'
+  | 'unknown';
+
+/**
+ * Configuration for a single project within a repo.
+ * Supports monorepos with multiple projects in subdirectories.
+ */
+export interface ProjectConfig {
+  /** Human-readable project name (e.g., "Backend API") */
+  name: string;
+  /** Path relative to repo root (e.g., "app/" or ".") */
+  path: string;
+  /** Detected technology stack */
+  stack: TechStack;
+  /** Project-specific commands */
+  commands: {
+    install?: string;
+    build?: string;
+    test?: string;
+    start?: string;
+  };
+}
+
+/**
  * Section types for split story outputs.
  * Each section is stored in a separate file within the story folder.
  */
@@ -574,9 +605,9 @@ export type LogLevel = 'INFO' | 'AGENT' | 'ERROR' | 'WARN' | 'DEBUG';
  * File locking options for atomic story updates
  */
 export interface LockOptions {
-  /** Lock timeout in milliseconds. @default 5000 */
+  /** Lock timeout in milliseconds. @default 10000 */
   lockTimeout?: number;
-  /** Number of retry attempts. @default 3 */
+  /** Number of retry attempts with exponential backoff and jitter. @default 5 */
   retries?: number;
   /** Stale lock threshold in milliseconds. @default matches lockTimeout */
   stale?: number;
@@ -784,6 +815,16 @@ export interface Config {
   testCommand?: string;
   /** Command to build/compile (e.g., 'npm run build'). If set, runs before review. */
   buildCommand?: string;
+  /** Command to install dependencies (e.g., 'npm install'). Auto-detected during init. */
+  installCommand?: string;
+  /** Command to start the application (e.g., 'npm start'). Auto-detected during init. */
+  startCommand?: string;
+  /**
+   * Detected projects within the repository.
+   * Supports monorepos with multiple projects in subdirectories.
+   * Auto-populated during init if projects are detected in subdirectories.
+   */
+  projects?: ProjectConfig[];
   /**
    * Control which filesystem settings to load for the Agent SDK.
    * - `'user'` - Global user settings (`~/.claude/settings.json`)

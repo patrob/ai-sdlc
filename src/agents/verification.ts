@@ -1,9 +1,10 @@
-import { Story } from '../types/index.js';
+import { Story, ProjectConfig } from '../types/index.js';
 import { loadConfig } from '../core/config.js';
 import { spawn, spawnSync } from 'child_process';
 import { ProcessManager } from '../core/process-manager.js';
 import { existsSync, readdirSync } from 'fs';
 import path from 'path';
+import { detectProjects, getPrimaryProject } from '../core/stack-detector.js';
 
 export interface VerificationResult {
   passed: boolean;
@@ -27,23 +28,86 @@ const LOCK_FILE_TO_PM: Record<string, string> = {
   'package-lock.json': 'npm',
   'yarn.lock': 'yarn',
   'pnpm-lock.yaml': 'pnpm',
+  'bun.lockb': 'bun',
 };
+
+/**
+ * Resolves the effective project directory for dependency installation.
+ * If a project config specifies a subdirectory, use that; otherwise use workingDir.
+ *
+ * @param workingDir - The base working directory
+ * @param project - Optional project configuration with path
+ * @returns The resolved directory for running commands
+ */
+export function resolveProjectDir(workingDir: string, project?: ProjectConfig): string {
+  if (!project || project.path === '.') {
+    return workingDir;
+  }
+  return path.join(workingDir, project.path);
+}
+
+/**
+ * Finds the first project with a detectable stack in the working directory.
+ * Checks config first, then falls back to auto-detection.
+ *
+ * @param workingDir - The working directory to search
+ * @returns The primary project config, or undefined if none found
+ */
+export function findPrimaryProject(workingDir: string): ProjectConfig | undefined {
+  try {
+    const config = loadConfig(workingDir);
+
+    // First check if projects are configured
+    if (config?.projects && config.projects.length > 0) {
+      return getPrimaryProject(config.projects);
+    }
+  } catch {
+    // Config loading failed, fall through to auto-detection
+  }
+
+  // Fall back to auto-detection
+  try {
+    const detected = detectProjects(workingDir);
+    return getPrimaryProject(detected);
+  } catch {
+    // Detection failed, return undefined
+    return undefined;
+  }
+}
 
 /**
  * Ensures dependencies are installed before running tests/build.
  * Checks if node_modules exists and has packages. If not, runs the appropriate install command.
- * @param workingDir - The directory to check for dependencies
+ * Now supports subdirectory projects and non-Node.js stacks.
+ *
+ * @param workingDir - The base working directory
+ * @param project - Optional project configuration (if not provided, will auto-detect)
  * @returns Result indicating if install was needed and any error that occurred
  */
-export function ensureDependenciesInstalled(workingDir: string): { installed: boolean; error?: string } {
-  const packageJsonPath = path.join(workingDir, 'package.json');
+export function ensureDependenciesInstalled(
+  workingDir: string,
+  project?: ProjectConfig
+): { installed: boolean; error?: string } {
+  // Resolve the actual project directory
+  const projectDir = resolveProjectDir(workingDir, project);
+
+  // If no project provided, try to find one
+  const effectiveProject = project ?? findPrimaryProject(workingDir);
+
+  // If we have a configured install command from project, use it
+  if (effectiveProject?.commands.install) {
+    return runInstallCommand(effectiveProject.commands.install, projectDir);
+  }
+
+  // Fall back to Node.js detection for backward compatibility
+  const packageJsonPath = path.join(projectDir, 'package.json');
 
   // Skip if not a Node.js project
   if (!existsSync(packageJsonPath)) {
     return { installed: false };
   }
 
-  const nodeModulesPath = path.join(workingDir, 'node_modules');
+  const nodeModulesPath = path.join(projectDir, 'node_modules');
 
   // Check if node_modules exists and has contents
   let hasNodeModules = false;
@@ -64,7 +128,7 @@ export function ensureDependenciesInstalled(workingDir: string): { installed: bo
   // Detect package manager from lock file
   let packageManager = 'npm';
   for (const [lockFile, pm] of Object.entries(LOCK_FILE_TO_PM)) {
-    if (existsSync(path.join(workingDir, lockFile))) {
+    if (existsSync(path.join(projectDir, lockFile))) {
       packageManager = pm;
       break;
     }
@@ -72,7 +136,31 @@ export function ensureDependenciesInstalled(workingDir: string): { installed: bo
 
   // Run install command
   const result = spawnSync(packageManager, ['install'], {
-    cwd: workingDir,
+    cwd: projectDir,
+    encoding: 'utf-8',
+    shell: false,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 120000, // 2 minute timeout
+  });
+
+  if (result.status !== 0) {
+    const stderr = result.stderr?.toString() || '';
+    return { installed: false, error: `Failed to install dependencies: ${stderr}` };
+  }
+
+  return { installed: true };
+}
+
+/**
+ * Runs a custom install command in the specified directory.
+ */
+function runInstallCommand(command: string, cwd: string): { installed: boolean; error?: string } {
+  const parts = command.match(/(?:[^\s"]+|"[^"]*")+/g) || [command];
+  const executable = parts[0];
+  const args = parts.slice(1).map(arg => arg.replace(/^"|"$/g, ''));
+
+  const result = spawnSync(executable, args, {
+    cwd,
     encoding: 'utf-8',
     shell: false,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -174,6 +262,10 @@ export async function verifyImplementation(
   const buildTimeout = config.timeouts?.buildTimeout || 120000;
   const requirePassingTests = options.requirePassingTests ?? config.tdd?.requirePassingTestsForComplete ?? true;
 
+  // Resolve project directory for subdirectory projects
+  const primaryProject = findPrimaryProject(workingDir);
+  const projectDir = resolveProjectDir(workingDir, primaryProject);
+
   const timestamp = new Date().toISOString();
   let testsPassed = true;
   let testsOutput = '';
@@ -184,7 +276,7 @@ export async function verifyImplementation(
 
   // Ensure dependencies are installed before running tests/build
   if (!options.skipDependencyCheck) {
-    const depResult = ensureDependenciesInstalled(workingDir);
+    const depResult = ensureDependenciesInstalled(workingDir, primaryProject);
     if (depResult.error) {
       return {
         passed: false,
@@ -196,15 +288,19 @@ export async function verifyImplementation(
     }
   }
 
+  // Determine the correct directory for running commands
+  // For subdirectory projects, commands should run in the project directory
+  const commandDir = projectDir;
+
   // Run build first - tests require successful compilation
   if (options.runBuild) {
     buildRan = true;
-    const buildResult = await options.runBuild(workingDir, buildTimeout);
+    const buildResult = await options.runBuild(commandDir, buildTimeout);
     buildPassed = buildResult.success;
     buildOutput = buildResult.output;
   } else if (config.buildCommand) {
     buildRan = true;
-    const buildResult = await runCommandAsync(config.buildCommand, workingDir, buildTimeout);
+    const buildResult = await runCommandAsync(config.buildCommand, commandDir, buildTimeout);
     buildPassed = buildResult.success;
     buildOutput = buildResult.output;
   }
@@ -223,12 +319,12 @@ export async function verifyImplementation(
   // Run tests only after successful build (or when no build command exists)
   if (options.runTests) {
     testsRan = true;
-    const testResult = await options.runTests(workingDir, testTimeout);
+    const testResult = await options.runTests(commandDir, testTimeout);
     testsPassed = testResult.success;
     testsOutput = testResult.output;
   } else if (config.testCommand) {
     testsRan = true;
-    const testResult = await runCommandAsync(config.testCommand, workingDir, testTimeout);
+    const testResult = await runCommandAsync(config.testCommand, commandDir, testTimeout);
     testsPassed = testResult.success;
     testsOutput = testResult.output;
   }

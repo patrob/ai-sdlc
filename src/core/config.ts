@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig, EpicConfig, MergeConfig, TicketingConfig } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig, EpicConfig, MergeConfig, TicketingConfig, ProjectConfig, TechStack } from '../types/index.js';
 
 const CONFIG_FILENAME = '.ai-sdlc.json';
 
@@ -212,7 +212,22 @@ function validateCommand(command: string, fieldName: string): boolean {
   }
 
   // Whitelist of allowed executables
-  const allowedExecutables = ['npm', 'yarn', 'pnpm', 'node', 'npx', 'bun', 'make', 'mvn', 'gradle'];
+  const allowedExecutables = [
+    // JavaScript/Node.js
+    'npm', 'yarn', 'pnpm', 'node', 'npx', 'bun',
+    // Build tools
+    'make', 'mvn', 'gradle', './gradlew', 'gradlew',
+    // Python
+    'pip', 'pip3', 'python', 'python3', 'poetry', 'uv', 'pytest',
+    // Rust
+    'cargo', 'rustc',
+    // Go
+    'go',
+    // Ruby
+    'bundle', 'bundler', 'gem', 'ruby', 'rake', 'rspec',
+    // .NET
+    'dotnet',
+  ];
 
   // Extract first word (executable name)
   const parts = command.trim().split(/\s+/);
@@ -304,6 +319,74 @@ function validateGroupingsConfig(groupings: any): boolean {
 }
 
 /**
+ * Valid tech stack values for project configuration
+ */
+const VALID_TECH_STACKS: TechStack[] = [
+  'node-npm', 'node-yarn', 'node-pnpm', 'node-bun',
+  'python-pip', 'python-poetry', 'python-uv',
+  'rust-cargo', 'go-mod', 'ruby-bundler',
+  'java-maven', 'java-gradle', 'dotnet',
+  'unknown',
+];
+
+/**
+ * Validate projects configuration
+ */
+function validateProjectsConfig(projects: any): boolean {
+  if (!Array.isArray(projects)) {
+    console.warn('Invalid projects in config (must be array), ignoring');
+    return false;
+  }
+
+  for (const project of projects) {
+    if (typeof project !== 'object' || project === null) {
+      console.warn('Invalid project entry in config (must be object), ignoring projects');
+      return false;
+    }
+
+    // Validate name
+    if (typeof project.name !== 'string' || project.name === '') {
+      console.warn('Invalid project name (must be non-empty string)');
+      return false;
+    }
+
+    // Validate path
+    if (typeof project.path !== 'string' || project.path === '') {
+      console.warn('Invalid project path (must be non-empty string)');
+      return false;
+    }
+
+    // Validate stack
+    if (!VALID_TECH_STACKS.includes(project.stack)) {
+      console.warn(
+        `Invalid project stack "${project.stack}". Valid values: ${VALID_TECH_STACKS.join(', ')}`
+      );
+      return false;
+    }
+
+    // Validate commands object
+    if (project.commands !== undefined) {
+      if (typeof project.commands !== 'object' || project.commands === null) {
+        console.warn('Invalid project commands (must be object)');
+        return false;
+      }
+
+      // Validate each command in the project
+      const commandFields = ['install', 'build', 'test', 'start'];
+      for (const field of commandFields) {
+        if (project.commands[field] !== undefined) {
+          if (!validateCommand(project.commands[field], `projects[].commands.${field}`)) {
+            return false;
+          }
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+/**
  * Validate and sanitize user configuration to prevent prototype pollution
  */
 function sanitizeUserConfig(userConfig: any): Partial<Config> {
@@ -328,6 +411,28 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
     if (!validateCommand(userConfig.buildCommand, 'buildCommand')) {
       console.warn('Invalid or unsafe buildCommand in config, removing');
       delete userConfig.buildCommand;
+    }
+  }
+
+  if (userConfig.installCommand !== undefined) {
+    if (!validateCommand(userConfig.installCommand, 'installCommand')) {
+      console.warn('Invalid or unsafe installCommand in config, removing');
+      delete userConfig.installCommand;
+    }
+  }
+
+  if (userConfig.startCommand !== undefined) {
+    if (!validateCommand(userConfig.startCommand, 'startCommand')) {
+      console.warn('Invalid or unsafe startCommand in config, removing');
+      delete userConfig.startCommand;
+    }
+  }
+
+  // Validate projects configuration if present
+  if (userConfig.projects !== undefined) {
+    if (!validateProjectsConfig(userConfig.projects)) {
+      console.warn('Invalid projects configuration, removing');
+      delete userConfig.projects;
     }
   }
 

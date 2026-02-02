@@ -831,24 +831,38 @@ ${story.content}`;
 ${researchContent}`;
     }
 
-    // Include implementation plan if available
-    if (planContent.trim()) {
-      prompt += `
-
-## Implementation Plan
-${planContent}`;
-    }
-
+    // Include rework context BEFORE plan so agent sees feedback first
     if (reworkContext) {
       prompt += `
+
+## REWORK REQUIRED - READ FIRST
 
 ---
 ${reworkContext}
 ---
 
+**CRITICAL:** Fix ALL issues above BEFORE following the plan.`;
+    }
+
+    // Include implementation plan if available
+    if (planContent.trim()) {
+      const planHeader = reworkContext
+        ? '## Implementation Plan (Review for conflicts with feedback above)'
+        : '## Implementation Plan';
+      prompt += `
+
+${planHeader}
+${planContent}`;
+    }
+
+    // Add rework-specific instructions after the plan
+    if (reworkContext) {
+      prompt += `
+
 IMPORTANT: This is a refinement iteration. The previous implementation did not pass review.
-You MUST fix all the issues listed above. Pay special attention to blocker and critical
-severity issues - these must be resolved. Review the specific feedback and make targeted fixes.`;
+You MUST fix all the issues listed in the REWORK REQUIRED section. Pay special attention to
+blocker and critical severity issues - these must be resolved. Review the specific feedback
+and make targeted fixes.`;
     }
 
     // Add retry context if this is a retry attempt

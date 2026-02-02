@@ -10,7 +10,7 @@ import {
 } from '../core/story.js';
 import { loadConfig } from '../core/config.js';
 import { getLogger } from '../core/logger.js';
-import { AgentResult, ReviewResult, ReworkContext } from '../types/index.js';
+import { AgentResult, ReviewIssue, ReviewResult, ReworkContext } from '../types/index.js';
 
 /**
  * Rework Agent
@@ -129,15 +129,24 @@ export function determineTargetPhase(reviewResult: ReviewResult): 'research' | '
     return 'research';
   }
 
-  // If architecture, design, or approach issues, go back to planning
+  // If architecture, design, approach, or scope issues, go back to planning
   if (
     categories.some(c =>
       c.includes('plan') ||
       c.includes('architecture') ||
       c.includes('design') ||
-      c.includes('approach')
+      c.includes('approach') ||
+      c.includes('story_type') ||
+      c.includes('content_type') ||
+      c.includes('scope')
     )
   ) {
+    return 'plan';
+  }
+
+  // If multiple blockers, the approach itself is likely wrong - go back to planning
+  const blockerCount = issues.filter(i => i.severity === 'blocker').length;
+  if (blockerCount >= 2) {
     return 'plan';
   }
 
@@ -185,6 +194,32 @@ function formatRefinementNote(
 }
 
 /**
+ * Format structured issues with severity, location, and suggested fixes
+ */
+function formatStructuredIssues(issues: ReviewIssue[]): string {
+  if (!issues || issues.length === 0) return '';
+
+  const severityOrder: Record<string, number> = { blocker: 0, critical: 1, major: 2, minor: 3 };
+  const sortedIssues = [...issues].sort(
+    (a, b) => (severityOrder[a.severity] ?? 4) - (severityOrder[b.severity] ?? 4)
+  );
+
+  let formatted = '';
+  for (const issue of sortedIssues) {
+    formatted += `#### [${issue.severity.toUpperCase()}] ${issue.category}\n`;
+    if (issue.file) {
+      formatted += `**Location:** \`${issue.file}${issue.line ? `:${issue.line}` : ''}\`\n`;
+    }
+    formatted += `**Problem:** ${issue.description}\n`;
+    if (issue.suggestedFix) {
+      formatted += `**Fix:** ${issue.suggestedFix}\n`;
+    }
+    formatted += '\n';
+  }
+  return formatted;
+}
+
+/**
  * Package rework context for the target agent
  */
 export function packageReworkContext(
@@ -205,7 +240,15 @@ export function packageReworkContext(
     context += '\n';
   }
 
-  context += `### Latest Review Feedback\n\n`;
+  // Include structured issues BEFORE prose summary
+  const issues = reviewFeedback.issues || [];
+  if (issues.length > 0) {
+    context += `### Issues to Fix (${issues.length} total)\n\n`;
+    context += `**Priority:** Fix blockers and critical issues FIRST.\n\n`;
+    context += formatStructuredIssues(issues);
+  }
+
+  context += `### Review Summary\n\n`;
   context += reviewFeedback.feedback;
   context += `\n\n### Instructions\n\n`;
   context += `Please address ALL of the issues identified above. `;

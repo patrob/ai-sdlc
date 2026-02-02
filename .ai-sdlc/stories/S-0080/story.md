@@ -2,18 +2,17 @@
 id: S-0080
 title: Extract ClaudeProvider from client.ts
 priority: 3
-status: in-progress
+status: done
 type: refactor
 created: '2026-01-19'
 labels:
   - architecture
   - provider-abstraction
   - epic-modular-architecture
-  - s
 research_complete: true
 plan_complete: true
-implementation_complete: false
-reviews_complete: false
+implementation_complete: true
+reviews_complete: true
 slug: extract-claude-provider
 dependencies:
   - S-0078

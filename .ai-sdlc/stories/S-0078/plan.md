@@ -4,237 +4,205 @@
 # Implementation Plan: Create IProvider Interface and Provider Types
 
 ## Overview
-This implementation creates the foundational provider abstraction layer for ai-sdlc. We'll use a TDD approach where possible, creating type compilation tests before implementation to validate our interfaces.
+This plan creates a provider-agnostic interface system to support multiple AI backends (Claude, Copilot, OpenAI) without changing agent code. The implementation is **non-breaking** and focuses on establishing type-safe abstractions.
 
 ---
 
-## Phase 1: Setup and Preparation
+## Phase 1: Project Setup and Validation
 
-- [ ] **T1**: Create provider module directory structure
-  - Files: `src/providers/` (directory)
+- [ ] **T1**: Verify current project state and dependencies
+  - Files: `package.json`, `tsconfig.json`
   - Dependencies: none
-  - Action: Create `src/providers/` directory if it doesn't exist
+  - Run `npm run build` and `npm test` to establish baseline
+  - Confirm `src/core/client.ts` exists with Claude SDK imports
 
-- [ ] **T2**: Create type compilation test file
-  - Files: `src/providers/__tests__/types.test.ts`
+- [ ] **T2**: Review existing type definitions in client.ts
+  - Files: `src/core/client.ts`
   - Dependencies: T1
-  - Action: Create test file with placeholder for type compilation tests
+  - Identify current `AgentProgressEvent` and `AgentQueryOptions` definitions (around lines 250-259)
+  - Document exact structure for backward compatibility
 
 ---
 
 ## Phase 2: Core Type Definitions
 
-### Basic Types and Enums
+- [ ] **T3**: Create providers directory structure
+  - Files: `src/providers/` (directory)
+  - Dependencies: none
+  - Create `src/providers/` directory
+  - Create `src/providers/__tests__/` directory for tests
 
-- [ ] **T3**: Define `ProviderCapabilities` interface
-  - Files: `src/providers/types.ts`
-  - Dependencies: T1
-  - Action: Create interface with boolean capability flags, `maxContextTokens`, and `supportedModels` array
-  - Include JSDoc documentation explaining each capability
-
-- [ ] **T4**: Define `ProviderProgressEvent` discriminated union
+- [ ] **T4**: Define ProviderCapabilities interface
   - Files: `src/providers/types.ts`
   - Dependencies: T3
-  - Action: Create union type with all event variants (`session_start`, `tool_start`, `tool_end`, `message`, `completion`, `error`, `retry`)
-  - Each variant has `type` discriminator field and specific payload
-  - Include JSDoc with examples of each event type
+  - Add boolean capability flags: `supportsStreaming`, `supportsTools`, `supportsSystemPrompt`, `supportsMultiTurn`
+  - Add metadata fields: `maxContextTokens: number`, `supportedModels: string[]`
+  - Use `readonly` modifiers on all fields
+  - Add JSDoc documentation with examples
 
-- [ ] **T5**: Define `ProviderProgressCallback` type alias
+- [ ] **T5**: Define ProviderProgressEvent discriminated union
   - Files: `src/providers/types.ts`
   - Dependencies: T4
-  - Action: Create type alias for `(event: ProviderProgressEvent) => void`
+  - Create base event type with `type` discriminant field
+  - Define all 7 event types: `session_start`, `tool_start`, `tool_end`, `message`, `completion`, `error`, `retry`
+  - Add type-specific payloads (sessionId, toolName, content, etc.)
+  - Add JSDoc for each event variant
 
-- [ ] **T6**: Define `ProviderQueryOptions` interface
+- [ ] **T6**: Define ProviderProgressCallback type alias
   - Files: `src/providers/types.ts`
   - Dependencies: T5
-  - Action: Create interface with required `prompt` and optional fields
-  - Include JSDoc explaining each option
+  - Create type alias: `(event: ProviderProgressEvent) => void`
+  - Add JSDoc with usage example
 
-### Authentication Interface
-
-- [ ] **T7**: Define `IAuthenticator` interface
+- [ ] **T7**: Define ProviderQueryOptions interface
   - Files: `src/providers/types.ts`
   - Dependencies: T6
-  - Action: Create interface with methods: `isConfigured()`, `getCredentialType()`, `configure()`, `validateCredentials()`, optional `getTokenExpirationInfo()`
-  - Include JSDoc with usage examples
+  - Add required field: `prompt: string`
+  - Add optional fields: `systemPrompt?`, `workingDirectory?`, `model?`, `timeout?`, `onProgress?: ProviderProgressCallback`
+  - Add JSDoc documentation
 
-### Provider Interface
+---
 
-- [ ] **T8**: Define `IProvider` interface
+## Phase 3: Provider and Authenticator Interfaces
+
+- [ ] **T8**: Define IAuthenticator interface
   - Files: `src/providers/types.ts`
   - Dependencies: T7
-  - Action: Create interface with readonly properties (`name`, `capabilities`) and methods (`query()`, `validateConfiguration()`, `getAuthenticator()`)
-  - Include comprehensive JSDoc with `@example` block showing typical provider implementation
+  - Add methods: `isConfigured()`, `getCredentialType()`, `configure()`, `validateCredentials()`
+  - Add optional method: `getTokenExpirationInfo?()`
+  - Add JSDoc with `@example` block showing implementation
 
----
-
-## Phase 3: Barrel Exports and Aliases
-
-- [ ] **T9**: Create barrel export file
-  - Files: `src/providers/index.ts`
+- [ ] **T9**: Define IProvider interface
+  - Files: `src/providers/types.ts`
   - Dependencies: T8
-  - Action: Export all types from `types.ts`: `IProvider`, `IAuthenticator`, `ProviderCapabilities`, `ProviderQueryOptions`, `ProviderProgressEvent`, `ProviderProgressCallback`
-
-- [ ] **T10**: Check for existing type alias locations
-  - Files: `src/types/index.ts`, `src/core/types.ts`
-  - Dependencies: T9
-  - Action: Use Glob/Read to determine if there's a central types file where backward-compatible aliases should live
-
-- [ ] **T11**: Add backward-compatible type aliases (if applicable)
-  - Files: TBD based on T10 (likely `src/types/index.ts` or skip if no existing pattern)
-  - Dependencies: T10
-  - Action: Create deprecated aliases for `AgentProgressEvent` → `ProviderProgressEvent` and `AgentQueryOptions` → `ProviderQueryOptions`
-  - Add `@deprecated` JSDoc tags with migration instructions
+  - Add readonly properties: `name: string`, `capabilities: ProviderCapabilities`
+  - Add methods: `query(options: ProviderQueryOptions): Promise<string>`, `validateConfiguration(): Promise<boolean>`, `getAuthenticator(): IAuthenticator`
+  - Add comprehensive JSDoc with `@example` block showing usage
 
 ---
 
-## Phase 4: Testing
+## Phase 4: Barrel Exports and Backward Compatibility
 
-### Type Compilation Tests
-
-- [ ] **T12**: Write type compilation test for all exports
-  - Files: `src/providers/__tests__/types.test.ts`
+- [ ] **T10**: Create barrel export file
+  - Files: `src/providers/index.ts`
   - Dependencies: T9
-  - Action: Create test verifying all types can be imported from `src/providers`
-  - Verify no TypeScript errors when using the interfaces
+  - Export all types from `./types.js` using `export *`
+  - Add module-level JSDoc with usage examples
 
-- [ ] **T13**: Write discriminated union type narrowing test
+- [ ] **T11**: Add backward-compatible type aliases in client.ts
+  - Files: `src/core/client.ts`
+  - Dependencies: T10
+  - Import new provider types
+  - Create `@deprecated` type aliases: `AgentProgressEvent`, `AgentQueryOptions`
+  - Point aliases to new provider types
+  - Verify existing code still compiles
+
+---
+
+## Phase 5: Testing
+
+- [ ] **T12**: Create type compilation test suite
+  - Files: `src/providers/__tests__/types.test.ts`
+  - Dependencies: T11
+  - Test all types export correctly from `src/providers/index.ts`
+  - Test interfaces are valid TypeScript (compile-time checks)
+  - Verify discriminated union type narrowing works
+
+- [ ] **T13**: Test ProviderProgressEvent variants
   - Files: `src/providers/__tests__/types.test.ts`
   - Dependencies: T12
-  - Action: Create test demonstrating type narrowing works correctly for `ProviderProgressEvent`
-  - Example: After checking `event.type === 'tool_start'`, TypeScript knows `event.toolName` exists
+  - Create test objects for each event type (session_start, tool_start, etc.)
+  - Verify type discrimination with switch/if statements
+  - Test optional fields (input, result)
 
-- [ ] **T14**: Write interface implementation validation test
+- [ ] **T14**: Test IProvider and IAuthenticator implementations
   - Files: `src/providers/__tests__/types.test.ts`
   - Dependencies: T13
-  - Action: Create mock implementations of `IProvider` and `IAuthenticator` to verify interfaces are implementable
-  - Use type assertions to ensure compiler accepts valid implementations
+  - Create mock implementations of both interfaces
+  - Verify all required methods and properties compile
+  - Test optional methods (getTokenExpirationInfo)
 
-- [ ] **T15**: Test backward-compatible aliases (if created)
+- [ ] **T15**: Test backward compatibility aliases
   - Files: `src/providers/__tests__/types.test.ts`
-  - Dependencies: T11, T14
-  - Action: Verify deprecated aliases resolve to correct types
-  - Test that code using old names still compiles
+  - Dependencies: T14
+  - Import deprecated aliases from `src/core/client.ts`
+  - Verify they resolve to correct provider types
+  - Ensure type equivalence
 
 ---
 
-## Phase 5: Documentation and Code Quality
+## Phase 6: Documentation and Verification
 
-- [ ] **T16**: Review all JSDoc comments for completeness
-  - Files: `src/providers/types.ts`
-  - Dependencies: T8
-  - Action: Ensure every exported type has JSDoc with description, `@example` blocks for main interfaces, and parameter documentation
+- [ ] **T16**: Review all JSDoc documentation
+  - Files: `src/providers/types.ts`, `src/providers/index.ts`
+  - Dependencies: T15
+  - Verify all exported types have JSDoc comments
+  - Confirm `@example` blocks on `IProvider` and `IAuthenticator`
+  - Check `@deprecated` tags on aliases
 
-- [ ] **T17**: Add readonly modifiers where appropriate
-  - Files: `src/providers/types.ts`
+- [ ] **T17**: Run build verification
+  - Files: N/A (verification step)
   - Dependencies: T16
-  - Action: Review all interface properties and mark immutable ones as `readonly` (e.g., `name`, `capabilities` in `IProvider`)
+  - Run `npm run build` - must succeed with no type errors
+  - Check for any new TypeScript warnings
 
-- [ ] **T18**: Verify no `any` types used
-  - Files: `src/providers/types.ts`
+- [ ] **T18**: Run test suite
+  - Files: N/A (verification step)
   - Dependencies: T17
-  - Action: Search for `any` keyword and replace with proper types
-  - Use `unknown` if truly dynamic type needed
+  - Run `npm test` - all tests must pass
+  - Verify new type tests execute successfully
+  - Confirm no existing tests broken
 
----
-
-## Phase 6: Verification and Integration
-
-- [ ] **T19**: Run type checker
+- [ ] **T19**: Run lint checks
+  - Files: N/A (verification step)
   - Dependencies: T18
-  - Action: Execute `npm run build` or `tsc --noEmit` to verify no type errors
+  - Run `npm run lint` - must pass
+  - Fix any style violations
 
-- [ ] **T20**: Run linter
+- [ ] **T20**: Run make verify
+  - Files: N/A (verification step)
   - Dependencies: T19
-  - Action: Execute `npm run lint` and fix any violations
-
-- [ ] **T21**: Run all tests
-  - Dependencies: T20
-  - Action: Execute `npm test` and ensure all tests pass (including new type tests)
-
-- [ ] **T22**: Run full verification suite
-  - Dependencies: T21
-  - Action: Execute `make verify` to run complete verification
-  - Fix any issues that arise
-
-- [ ] **T23**: Manual verification of exports
-  - Dependencies: T22
-  - Action: In IDE or scratch file, test importing all types from `src/providers`
-  - Verify autocomplete and type hints work correctly
+  - Run `make verify` - must pass all checks
+  - This is the pre-commit requirement per CLAUDE.md
 
 ---
 
 ## Phase 7: Final Review
 
-- [ ] **T24**: Cross-reference story acceptance criteria
-  - Dependencies: T23
-  - Action: Go through each acceptance criterion in story and verify completion
-  - Check off all items in story's checklist
+- [ ] **T21**: Review implementation against acceptance criteria
+  - Files: N/A (review step)
+  - Dependencies: T20
+  - Check off each acceptance criterion in story
+  - Verify all edge cases documented in JSDoc
+  - Confirm no breaking changes introduced
 
-- [ ] **T25**: Review implementation notes and design decisions
-  - Dependencies: T24
-  - Action: Verify discriminated unions use `type` field, interfaces are minimal, readonly properties are used
-
-- [ ] **T26**: Verify backward compatibility
-  - Dependencies: T25
-  - Action: Confirm this is truly a non-breaking change—no modifications to existing code outside provider module
-
----
-
-## Expected Files After Implementation
-
-### New Files
-- `src/providers/types.ts` - All interface and type definitions
-- `src/providers/index.ts` - Barrel export
-- `src/providers/__tests__/types.test.ts` - Type compilation tests
-
-### Modified Files (Conditional)
-- `src/types/index.ts` - Backward-compatible aliases (only if this file exists and follows project pattern)
+- [ ] **T22**: Verify file hygiene
+  - Files: Project root
+  - Dependencies: T21
+  - Ensure no temporary/scratch files created
+  - Confirm only specified files modified/created
+  - Check no new root-level markdown files added
 
 ---
 
-## Testing Strategy
+## Summary
 
-### Type Compilation Tests
-- Import test: Verify all exports accessible
-- Type narrowing test: Validate discriminated union behavior
-- Implementation test: Mock provider implementing interfaces
-- Alias test: Verify deprecated types resolve correctly
+**Total Tasks**: 22  
+**Estimated Effort**: Small (as per story label)  
+**Breaking Changes**: None (backward-compatible aliases provided)
 
-### Manual Testing
-- IDE autocomplete verification
-- Type error detection in invalid implementations
-- JSDoc tooltip content review
+### Files to Create:
+- `src/providers/types.ts` - Core interface definitions (~280 lines)
+- `src/providers/index.ts` - Barrel export (~20 lines)
+- `src/providers/__tests__/types.test.ts` - Type compilation tests (~450 lines)
 
----
+### Files to Modify:
+- `src/core/client.ts` - Add backward-compatible type aliases
 
-## Verification Checklist
-
-Before marking complete:
-- [ ] `make verify` passes without errors
-- [ ] All new files have proper exports
-- [ ] JSDoc examples provided for `IProvider` and `IAuthenticator`
-- [ ] All event types in `ProviderProgressEvent` properly discriminated
-- [ ] No breaking changes to existing code
-- [ ] TypeScript strict mode compatibility verified
-
----
-
-## Risk Mitigation
-
-**Risk**: Interfaces may not cover all real-world provider needs  
-**Mitigation**: Keep interfaces minimal; extend in future stories based on actual implementation experience
-
-**Risk**: Backward-compatible aliases may be missed  
-**Mitigation**: T10 explicitly checks for existing type locations before creating aliases
-
-**Risk**: Type tests may not catch runtime issues  
-**Mitigation**: This story is types-only; runtime behavior tested in provider implementation stories
-
----
-
-## Estimated Effort
-
-**Story Size**: Small  
-**Estimated Time**: 2-3 hours  
-**Complexity**: Low (pure TypeScript definitions, no runtime logic)
+### Critical Success Factors:
+1. **Type Safety**: No `any` types - all strictly typed
+2. **Documentation**: Comprehensive JSDoc on all exports
+3. **Backward Compatibility**: Deprecated aliases prevent breakage
+4. **Discriminated Unions**: Use `type` field for event discrimination
+5. **Immutability**: `readonly` on all immutable properties
+6. **Pre-Commit**: `make verify` must pass before completion

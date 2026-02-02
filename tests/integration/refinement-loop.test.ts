@@ -88,12 +88,13 @@ describe.sequential('Refinement Loop Integration', () => {
     story.frontmatter.implementation_complete = true;
 
     // Step 2: Add failed review
+    // Note: Single blocker stays in 'implement' phase; 2+ blockers triggers 'plan' phase
     await appendReviewHistory(story, {
       timestamp: new Date().toISOString(),
       decision: ReviewDecision.REJECTED,
       severity: ReviewSeverity.HIGH,
-      feedback: 'Missing error handling and input validation',
-      blockers: ['No error handling', 'No input validation'],
+      feedback: 'Missing error handling',
+      blockers: ['No error handling'],
       codeReviewPassed: false,
       securityReviewPassed: false,
       poReviewPassed: true,
@@ -116,16 +117,11 @@ describe.sequential('Refinement Loop Integration', () => {
       issues: [
         {
           severity: 'blocker',
-          category: 'security',
-          description: 'No input validation',
-        },
-        {
-          severity: 'critical',
           category: 'code_quality',
           description: 'No error handling',
         },
       ],
-      feedback: 'Missing error handling and input validation',
+      feedback: 'Missing error handling',
       story,
       changesMade: [],
     };

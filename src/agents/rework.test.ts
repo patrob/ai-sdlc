@@ -288,6 +288,126 @@ describe('determineTargetPhase', () => {
     expect(phase).toBe('plan');
   });
 
+  it('should target plan phase for scope issues', () => {
+    const reviewResult: ReviewResult = {
+      success: true,
+      passed: false,
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      reviewType: 'combined',
+      issues: [
+        {
+          severity: 'critical',
+          category: 'scope',
+          description: 'Implementation exceeds story scope',
+        },
+      ],
+      feedback: '',
+      story: {} as any,
+      changesMade: [],
+    };
+
+    const phase = determineTargetPhase(reviewResult);
+    expect(phase).toBe('plan');
+  });
+
+  it('should target plan phase for story_type issues', () => {
+    const reviewResult: ReviewResult = {
+      success: true,
+      passed: false,
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      reviewType: 'combined',
+      issues: [
+        {
+          severity: 'blocker',
+          category: 'story_type',
+          description: 'Wrong story type selected',
+        },
+      ],
+      feedback: '',
+      story: {} as any,
+      changesMade: [],
+    };
+
+    const phase = determineTargetPhase(reviewResult);
+    expect(phase).toBe('plan');
+  });
+
+  it('should target plan phase for content_type issues', () => {
+    const reviewResult: ReviewResult = {
+      success: true,
+      passed: false,
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      reviewType: 'combined',
+      issues: [
+        {
+          severity: 'blocker',
+          category: 'content_type',
+          description: 'Content type does not match implementation',
+        },
+      ],
+      feedback: '',
+      story: {} as any,
+      changesMade: [],
+    };
+
+    const phase = determineTargetPhase(reviewResult);
+    expect(phase).toBe('plan');
+  });
+
+  it('should target plan phase when 2+ blocker issues exist', () => {
+    const reviewResult: ReviewResult = {
+      success: true,
+      passed: false,
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      reviewType: 'combined',
+      issues: [
+        {
+          severity: 'blocker',
+          category: 'code_quality',
+          description: 'First blocker issue',
+        },
+        {
+          severity: 'blocker',
+          category: 'security',
+          description: 'Second blocker issue',
+        },
+      ],
+      feedback: '',
+      story: {} as any,
+      changesMade: [],
+    };
+
+    const phase = determineTargetPhase(reviewResult);
+    expect(phase).toBe('plan');
+  });
+
+  it('should target implement phase for single blocker issue', () => {
+    const reviewResult: ReviewResult = {
+      success: true,
+      passed: false,
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      reviewType: 'combined',
+      issues: [
+        {
+          severity: 'blocker',
+          category: 'code_quality',
+          description: 'Single blocker issue',
+        },
+      ],
+      feedback: '',
+      story: {} as any,
+      changesMade: [],
+    };
+
+    const phase = determineTargetPhase(reviewResult);
+    expect(phase).toBe('implement');
+  });
+
   it('should default to implement phase for code issues', () => {
     const reviewResult: ReviewResult = {
       success: true,
@@ -369,5 +489,138 @@ describe('packageReworkContext', () => {
 
     expect(context).toContain('Iteration 1');
     expect(context).not.toContain('Previous Attempts');
+  });
+
+  it('should include structured issues with severity and location', () => {
+    const story = {
+      frontmatter: {
+        refinement_count: 1,
+        refinement_iterations: [
+          { iteration: 1, agentType: 'implement', result: 'in_progress' as const, startedAt: '' },
+        ],
+      },
+    };
+
+    const reviewFeedback: ReviewResult = {
+      success: true,
+      passed: false,
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      reviewType: 'combined',
+      issues: [
+        {
+          severity: 'blocker',
+          category: 'security',
+          description: 'SQL injection vulnerability',
+          file: 'src/db/query.ts',
+          line: 42,
+          suggestedFix: 'Use parameterized queries',
+        },
+        {
+          severity: 'major',
+          category: 'code_quality',
+          description: 'Missing error handling',
+          file: 'src/api/handler.ts',
+        },
+      ],
+      feedback: 'Summary of issues',
+      story: {} as any,
+      changesMade: [],
+    };
+
+    const context = packageReworkContext(story, reviewFeedback);
+
+    // Should include issues section with count
+    expect(context).toContain('Issues to Fix (2 total)');
+    expect(context).toContain('Fix blockers and critical issues FIRST');
+
+    // Should include structured issue details
+    expect(context).toContain('[BLOCKER]');
+    expect(context).toContain('security');
+    expect(context).toContain('`src/db/query.ts:42`');
+    expect(context).toContain('SQL injection vulnerability');
+    expect(context).toContain('**Fix:** Use parameterized queries');
+
+    expect(context).toContain('[MAJOR]');
+    expect(context).toContain('`src/api/handler.ts`');
+    expect(context).toContain('Missing error handling');
+
+    // Should still include the prose summary after issues
+    expect(context).toContain('Review Summary');
+    expect(context).toContain('Summary of issues');
+  });
+
+  it('should sort issues by severity (blockers first)', () => {
+    const story = {
+      frontmatter: {
+        refinement_count: 1,
+        refinement_iterations: [],
+      },
+    };
+
+    const reviewFeedback: ReviewResult = {
+      success: true,
+      passed: false,
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.HIGH,
+      reviewType: 'combined',
+      issues: [
+        {
+          severity: 'minor',
+          category: 'style',
+          description: 'Minor style issue',
+        },
+        {
+          severity: 'blocker',
+          category: 'security',
+          description: 'Blocker issue',
+        },
+        {
+          severity: 'major',
+          category: 'code_quality',
+          description: 'Major issue',
+        },
+      ],
+      feedback: 'Summary',
+      story: {} as any,
+      changesMade: [],
+    };
+
+    const context = packageReworkContext(story, reviewFeedback);
+
+    // Blocker should appear before Major, which should appear before Minor
+    const blockerIndex = context.indexOf('[BLOCKER]');
+    const majorIndex = context.indexOf('[MAJOR]');
+    const minorIndex = context.indexOf('[MINOR]');
+
+    expect(blockerIndex).toBeLessThan(majorIndex);
+    expect(majorIndex).toBeLessThan(minorIndex);
+  });
+
+  it('should skip issues section when no issues provided', () => {
+    const story = {
+      frontmatter: {
+        refinement_count: 1,
+        refinement_iterations: [],
+      },
+    };
+
+    const reviewFeedback: ReviewResult = {
+      success: true,
+      passed: false,
+      decision: ReviewDecision.REJECTED,
+      severity: ReviewSeverity.MEDIUM,
+      reviewType: 'combined',
+      issues: [],
+      feedback: 'Just prose feedback, no structured issues',
+      story: {} as any,
+      changesMade: [],
+    };
+
+    const context = packageReworkContext(story, reviewFeedback);
+
+    expect(context).not.toContain('Issues to Fix');
+    expect(context).toContain('Review Summary');
+    expect(context).toContain('Just prose feedback');
   });
 });

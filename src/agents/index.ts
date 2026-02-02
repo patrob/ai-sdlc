@@ -2,6 +2,9 @@
 export * from './types.js';
 export { BaseAgent } from './base-agent.js';
 
+// Agent factory
+export { AgentFactory, AgentType, AgentFactoryFn } from './factory.js';
+
 // Agent exports
 export { runRefinementAgent } from './refinement.js';
 export { runResearchAgent, AgentOptions } from './research.js';

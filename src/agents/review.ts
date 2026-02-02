@@ -118,7 +118,18 @@ const ReviewIssueSchema = z.object({
   line: z.number().int().positive().nullish().transform(v => v ?? undefined),
   suggestedFix: z.string().max(5000).nullish().transform(v => v ?? undefined),
   // Perspectives field for unified review (optional for backward compatibility)
-  perspectives: z.array(z.enum(['code', 'security', 'po'])).optional(),
+  // Normalize case and filter invalid values instead of failing validation
+  // This handles LLM responses that return ["Code", "Security"] instead of lowercase
+  perspectives: z.array(z.string())
+    .optional()
+    .transform(arr => {
+      if (!arr) return undefined;
+      const validValues = ['code', 'security', 'po'] as const;
+      const normalized = arr
+        .map(v => v.toLowerCase().trim())
+        .filter((v): v is 'code' | 'security' | 'po' => validValues.includes(v as typeof validValues[number]));
+      return normalized.length > 0 ? normalized : undefined;
+    }),
 });
 
 const ReviewResponseSchema = z.object({

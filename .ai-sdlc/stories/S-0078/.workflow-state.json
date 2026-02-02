@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1770004269860-e5894d3b",
+  "timestamp": "2026-02-02T03:55:30.742Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0078",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0078-create-iprovider-interface/.ai-sdlc/stories/S-0078/story.md",
+      "completedAt": "2026-02-02T03:51:49.027Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0078",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0078-create-iprovider-interface/.ai-sdlc/stories/S-0078/story.md",
+      "completedAt": "2026-02-02T03:54:47.226Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0078",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0078-create-iprovider-interface/.ai-sdlc/stories/S-0078/story.md",
+      "completedAt": "2026-02-02T03:55:30.742Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0078-create-iprovider-interface/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0078",
+      "fullSDLC": true
+    },
+    "storyContentHash": "5c250155d7a6832e18a6b1356012730e3e24171cae043cbf6e3109f9528177bb"
+  }
+}

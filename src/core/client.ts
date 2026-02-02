@@ -4,6 +4,7 @@ import { loadConfig, DEFAULT_TIMEOUTS } from './config.js';
 import { getLogger } from './logger.js';
 import { platform, homedir } from 'os';
 import path from 'path';
+import type { ProviderProgressEvent as NewProviderProgressEvent, ProviderProgressCallback as NewProviderProgressCallback, ProviderQueryOptions as NewProviderQueryOptions } from '../providers/index.js';
 
 /**
  * Error thrown when an agent query times out
@@ -28,31 +29,20 @@ export class AuthenticationError extends Error {
 
 /**
  * Progress event types from the Agent SDK
+ * @deprecated Use ProviderProgressEvent from providers module instead
  */
-export type AgentProgressEvent =
-  | { type: 'session_start'; sessionId: string }
-  | { type: 'tool_start'; toolName: string; input?: Record<string, unknown> }
-  | { type: 'tool_end'; toolName: string; result?: unknown }
-  | { type: 'assistant_message'; content: string }
-  | { type: 'completion' }
-  | { type: 'error'; message: string }
-  | { type: 'retry'; attempt: number; delay: number; error: string; errorType: string };
+export type AgentProgressEvent = NewProviderProgressEvent;
 
 /**
  * Callback for receiving real-time progress from agent execution
+ * @deprecated Use ProviderProgressCallback from providers module instead
  */
-export type AgentProgressCallback = (event: AgentProgressEvent) => void;
+export type AgentProgressCallback = NewProviderProgressCallback;
 
-export interface AgentQueryOptions {
-  prompt: string;
-  systemPrompt?: string;
-  workingDirectory?: string;
-  model?: string;
-  /** Timeout in milliseconds. Defaults to config value or 10 minutes. */
-  timeout?: number;
-  /** Callback for real-time progress updates */
-  onProgress?: AgentProgressCallback;
-}
+/**
+ * @deprecated Use ProviderQueryOptions from providers module instead
+ */
+export type AgentQueryOptions = NewProviderQueryOptions;
 
 export interface AgentMessage {
   type: string;

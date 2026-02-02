@@ -1,13 +1,12 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { runAgentQuery, AuthenticationError, AgentProgressEvent } from '../../src/core/client.js';
 import * as agentSdk from '@anthropic-ai/claude-agent-sdk';
+import { ProviderRegistry, ClaudeProvider } from '../../src/providers/index.js';
 
-// Mock the Agent SDK
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: vi.fn(),
 }));
 
-// Mock auth module
 vi.mock('../../src/core/auth.js', () => ({
   configureAgentSdkAuth: vi.fn(() => ({ configured: true, type: 'api_key' })),
   getApiKey: vi.fn(() => 'test-api-key'),
@@ -15,7 +14,6 @@ vi.mock('../../src/core/auth.js', () => ({
   getTokenExpirationInfo: vi.fn(() => ({ isExpired: false, expiresInMs: null })),
 }));
 
-// Mock config module
 vi.mock('../../src/core/config.js', () => ({
   loadConfig: vi.fn(() => ({
     settingSources: ['project'],
@@ -30,7 +28,6 @@ vi.mock('../../src/core/config.js', () => ({
   DEFAULT_TIMEOUTS: { agentTimeout: 600000, buildTimeout: 120000, testTimeout: 300000 },
 }));
 
-// Mock logger
 vi.mock('../../src/core/logger.js', () => ({
   getLogger: vi.fn(() => ({
     debug: vi.fn(),
@@ -85,11 +82,14 @@ describe('API Retry Integration Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    ProviderRegistry.reset();
+    ProviderRegistry.register('claude', () => new ClaudeProvider());
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
+    ProviderRegistry.reset();
   });
 
   it('should succeed on first attempt without retry', async () => {

@@ -562,8 +562,19 @@ export async function processEpic(options: EpicProcessingOptions): Promise<numbe
     for (let i = 0; i < phases.length; i++) {
       const phase = phases[i];
 
+      // Refresh done story IDs from disk - subprocesses may have marked stories as done
+      const freshAllStories = findStoriesByEpic(sdlcRoot, normalized);
+      const freshDoneIds = new Set(
+        freshAllStories
+          .filter(s => s.frontmatter.status === 'done')
+          .map(s => s.frontmatter.id)
+      );
+
+      // Filter out stories from this phase that are now done (completed in previous phases)
+      const stillActivePhase = phase.filter(s => !freshDoneIds.has(s.frontmatter.id));
+
       // Check if any stories in this phase should be skipped due to failed or unmerged dependencies
-      const phaseToExecute = phase.filter(story => {
+      const phaseToExecute = stillActivePhase.filter(story => {
         const deps = story.frontmatter.dependencies || [];
 
         // Check for failed or skipped dependencies (skipped stories also block downstream)
@@ -580,8 +591,8 @@ export async function processEpic(options: EpicProcessingOptions): Promise<numbe
         // A dependency is unmerged if it has a pr_url but pr_merged !== true
         if (config.merge?.enabled) {
           for (const depId of deps) {
-            // Skip done stories (already validated) and failed stories (handled above)
-            if (doneStoryIds.has(depId) || failedStories.has(depId)) continue;
+            // Skip done stories (fresh from disk) and failed stories (handled above)
+            if (freshDoneIds.has(depId) || failedStories.has(depId)) continue;
 
             // Check if this dependency story has been completed in this run
             const depCompleted = phaseResults.some(pr => pr.succeeded.includes(depId));

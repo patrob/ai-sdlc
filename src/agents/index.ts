@@ -1,3 +1,7 @@
+// Agent types and base class
+export * from './types.js';
+export { BaseAgent } from './base-agent.js';
+
 // Agent exports
 export { runRefinementAgent } from './refinement.js';
 export { runResearchAgent, AgentOptions } from './research.js';

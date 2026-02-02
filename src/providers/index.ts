@@ -23,3 +23,7 @@ export * from './types.js';
 
 // Export ProviderRegistry class
 export { ProviderRegistry } from './registry.js';
+
+// Export Claude provider
+export { ClaudeProvider } from './claude/index.js';
+export { ClaudeAuthenticator } from './claude/authenticator.js';

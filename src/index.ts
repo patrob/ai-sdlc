@@ -11,8 +11,12 @@ import { ThemePreference, LogConfig } from './types/index.js';
 import { initLogger, getLogger } from './core/logger.js';
 import { getLatestLogPath, readLastLines, tailLog } from './core/story-logger.js';
 import { setupGlobalCleanupHandlers } from './core/process-manager.js';
+import { ProviderRegistry, ClaudeProvider } from './providers/index.js';
 import fs from 'fs';
 import path from 'path';
+
+// Register AI providers
+ProviderRegistry.register('claude', () => new ClaudeProvider());
 
 setupGlobalCleanupHandlers();
 

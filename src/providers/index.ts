@@ -12,10 +12,14 @@
  *   ProviderCapabilities,
  *   ProviderQueryOptions,
  *   ProviderProgressEvent,
- *   ProviderProgressCallback
+ *   ProviderProgressCallback,
+ *   ProviderRegistry
  * } from './providers/index.js';
  * ```
  */
 
 // Re-export all types from types.ts
 export * from './types.js';
+
+// Export ProviderRegistry class
+export { ProviderRegistry } from './registry.js';

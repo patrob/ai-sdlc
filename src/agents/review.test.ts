@@ -432,7 +432,16 @@ describe('Review Agent - Pre-check Optimization', () => {
         return mockProcess;
       }) as any);
 
+      // Mock execSync to make gh CLI appear unavailable (skips PR creation)
+      vi.mocked(execSync).mockImplementation((cmd) => {
+        if (typeof cmd === 'string' && cmd.includes('gh')) {
+          throw new Error('gh not installed');
+        }
+        return '' as any;
+      });
+
       // Mock LLM to return JSON with null line values (as observed in real usage)
+      // Note: issues are 'major'/'minor' not 'blocker'/'critical' so review passes
       const llmResponseWithNullLine = JSON.stringify({
         passed: false,
         issues: [

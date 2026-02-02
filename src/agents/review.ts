@@ -1581,6 +1581,28 @@ ${passed ? '✅ **PASSED** - All reviews approved' : '❌ **FAILED** - Issues mu
     if (passed) {
       await updateStoryField(story, 'reviews_complete', true);
       changesMade.push('Marked reviews_complete: true');
+
+      // Auto-create PR after review approval
+      logger.info('review', 'Reviews passed - creating PR', {
+        storyId: story.frontmatter.id,
+      });
+      const prResult = await createPullRequest(storyPath, sdlcRoot);
+      if (prResult.success) {
+        changesMade.push(...prResult.changesMade);
+      } else {
+        changesMade.push(`PR creation failed: ${prResult.error || 'unknown error'}`);
+        // Return failure - PR creation is required for completion
+        return {
+          success: false,
+          story: prResult.story,
+          changesMade,
+          passed: true, // Reviews passed but PR failed
+          decision,
+          reviewType: 'combined',
+          issues: allIssues,
+          feedback: 'Reviews passed but PR creation failed',
+        };
+      }
     } else {
       changesMade.push(`Reviews failed with ${allIssues.length} issue(s) - rework required`);
       // Don't mark reviews_complete, this will trigger rework

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { ProcessManager } from '../core/process-manager.js';
 import { parseStory, writeStory, updateStoryStatus, updateStoryField, isAtMaxRetries, appendReviewHistory, snapshotMaxRetries, getEffectiveMaxRetries, getEffectiveMaxImplementationRetries, writeSectionContent } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
+import type { IProvider } from '../providers/types.js';
 import { getLogger } from '../core/logger.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from '../core/config.js';
 import { extractStructuredResponseSync } from '../core/llm-utils.js';
@@ -1113,7 +1114,8 @@ export interface ReviewAgentOptions {
 export async function runReviewAgent(
   storyPath: string,
   sdlcRoot: string,
-  options?: ReviewAgentOptions
+  options?: ReviewAgentOptions,
+  provider?: IProvider
 ): Promise<ReviewResult> {
   const logger = getLogger();
   const startTime = Date.now();
@@ -1486,7 +1488,8 @@ export async function runReviewAgent(
       UNIFIED_REVIEW_PROMPT,
       'Unified Collaborative Review',
       workingDir,
-      verificationContext
+      verificationContext,
+      provider
     );
 
     // Parse unified review response into structured issues
@@ -1820,7 +1823,8 @@ async function runSubReview(
   systemPrompt: string,
   reviewType: string,
   workingDir: string,
-  verificationContext: string = ''
+  verificationContext: string = '',
+  provider?: IProvider
 ): Promise<string> {
   try {
     const prompt = `Review this story implementation:
@@ -1832,11 +1836,17 @@ ${story.content}
 
 Provide your ${reviewType} feedback. Be specific and actionable.`;
 
-    return await runAgentQuery({
-      prompt,
-      systemPrompt,
-      workingDirectory: workingDir,
-    });
+    return provider
+      ? await runAgentQuery({
+          prompt,
+          systemPrompt,
+          workingDirectory: workingDir,
+        }, provider)
+      : await runAgentQuery({
+          prompt,
+          systemPrompt,
+          workingDirectory: workingDir,
+        });
   } catch (error) {
     return `${reviewType} failed: ${error instanceof Error ? error.message : String(error)}`;
   }

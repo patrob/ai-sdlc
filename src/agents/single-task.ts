@@ -1,6 +1,7 @@
 import { spawnSync } from 'child_process';
 import { createHash } from 'crypto';
 import { runAgentQuery } from '../core/client.js';
+import type { IProvider } from '../providers/types.js';
 import { getLogger } from '../core/logger.js';
 import {
   TaskContext,
@@ -382,7 +383,8 @@ export async function parseTaskResult(
  */
 export async function runSingleTaskAgent(
   context: TaskContext,
-  options?: SingleTaskAgentOptions
+  options?: SingleTaskAgentOptions,
+  provider?: IProvider
 ): Promise<AgentTaskResult> {
   const logger = getLogger();
   const { task, workingDirectory } = context;
@@ -408,13 +410,21 @@ export async function runSingleTaskAgent(
 
   try {
     // Execute agent query
-    const agentOutput = await runAgentQuery({
-      prompt,
-      systemPrompt: TASK_AGENT_SYSTEM_PROMPT,
-      workingDirectory,
-      timeout: options?.timeout,
-      onProgress: options?.onProgress,
-    });
+    const agentOutput = provider
+      ? await runAgentQuery({
+          prompt,
+          systemPrompt: TASK_AGENT_SYSTEM_PROMPT,
+          workingDirectory,
+          timeout: options?.timeout,
+          onProgress: options?.onProgress,
+        }, provider)
+      : await runAgentQuery({
+          prompt,
+          systemPrompt: TASK_AGENT_SYSTEM_PROMPT,
+          workingDirectory,
+          timeout: options?.timeout,
+          onProgress: options?.onProgress,
+        });
 
     // Parse and return structured result
     const result = await parseTaskResult(agentOutput, task, workingDirectory);

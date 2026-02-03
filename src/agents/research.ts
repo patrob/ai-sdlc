@@ -3,6 +3,7 @@ import path from 'path';
 import { glob } from 'glob';
 import { parseStory, writeStory, updateStoryField, writeSectionContent, readSectionContent } from '../core/story.js';
 import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
+import type { IProvider } from '../providers/types.js';
 import { Story, AgentResult, FARScore } from '../types/index.js';
 import { getLogger } from '../core/logger.js';
 
@@ -195,7 +196,8 @@ export interface AgentOptions {
 export async function runResearchAgent(
   storyPath: string,
   sdlcRoot: string,
-  options: AgentOptions = {}
+  options: AgentOptions = {},
+  provider?: IProvider
 ): Promise<AgentResult> {
   const story = parseStory(storyPath);
   const changesMade: string[] = [];
@@ -241,12 +243,19 @@ Provide research findings including:
 
 Format your response as markdown for the Research section of the story.`;
 
-    const researchContent = await runAgentQuery({
-      prompt,
-      systemPrompt: RESEARCH_SYSTEM_PROMPT,
-      workingDirectory: path.dirname(sdlcRoot),
-      onProgress: options.onProgress,
-    });
+    const researchContent = provider
+      ? await runAgentQuery({
+          prompt,
+          systemPrompt: RESEARCH_SYSTEM_PROMPT,
+          workingDirectory: path.dirname(sdlcRoot),
+          onProgress: options.onProgress,
+        }, provider)
+      : await runAgentQuery({
+          prompt,
+          systemPrompt: RESEARCH_SYSTEM_PROMPT,
+          workingDirectory: path.dirname(sdlcRoot),
+          onProgress: options.onProgress,
+        });
 
     // Sanitize research content before storage (prevent ANSI/markdown injection)
     const sanitizedResearch = sanitizeWebResearchContent(researchContent);
@@ -269,7 +278,8 @@ Format your response as markdown for the Research section of the story.`;
         story,
         sanitizedContext,
         path.dirname(sdlcRoot),
-        options.onProgress
+        options.onProgress,
+        provider
       );
 
       if (webResearchContent.trim()) {
@@ -684,7 +694,8 @@ async function performWebResearch(
   story: Story,
   codebaseContext: string,
   workingDir: string,
-  onProgress?: AgentProgressCallback
+  onProgress?: AgentProgressCallback,
+  provider?: IProvider
 ): Promise<string> {
   const logger = getLogger();
   logger.info('web-research', 'Starting web research phase', { storyId: story.frontmatter.id });
@@ -697,12 +708,19 @@ async function performWebResearch(
       sanitizedContext
     );
 
-    const webResearchResult = await runAgentQuery({
-      prompt: webResearchPrompt,
-      systemPrompt: 'You are a web research specialist. Use available tools to find authoritative documentation and best practices.',
-      workingDirectory: workingDir,
-      onProgress,
-    });
+    const webResearchResult = provider
+      ? await runAgentQuery({
+          prompt: webResearchPrompt,
+          systemPrompt: 'You are a web research specialist. Use available tools to find authoritative documentation and best practices.',
+          workingDirectory: workingDir,
+          onProgress,
+        }, provider)
+      : await runAgentQuery({
+          prompt: webResearchPrompt,
+          systemPrompt: 'You are a web research specialist. Use available tools to find authoritative documentation and best practices.',
+          workingDirectory: workingDir,
+          onProgress,
+        });
 
     // Check if web tools were unavailable
     if (webResearchResult.toLowerCase().includes('web research tools unavailable')) {

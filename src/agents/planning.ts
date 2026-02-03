@@ -4,6 +4,7 @@ import { getLogger } from '../core/logger.js';
 import { Story, AgentResult } from '../types/index.js';
 import path from 'path';
 import { AgentOptions } from './research.js';
+import type { IProvider } from '../providers/types.js';
 
 /**
  * System prompt for the planning agent
@@ -152,7 +153,8 @@ Format the plan with markdown checkboxes like:
 export async function runPlanningAgent(
   storyPath: string,
   sdlcRoot: string,
-  options: AgentOptions = {}
+  options: AgentOptions = {},
+  provider?: IProvider
 ): Promise<AgentResult> {
   const logger = getLogger();
   const startTime = Date.now();
@@ -179,12 +181,19 @@ export async function runPlanningAgent(
       logger.debug('planning', 'TDD mode enabled for planning');
     }
 
-    const planContent = await runAgentQuery({
-      prompt,
-      systemPrompt: PLANNING_SYSTEM_PROMPT,
-      workingDirectory: path.dirname(sdlcRoot),
-      onProgress: options.onProgress,
-    });
+    const planContent = provider
+      ? await runAgentQuery({
+          prompt,
+          systemPrompt: PLANNING_SYSTEM_PROMPT,
+          workingDirectory: path.dirname(sdlcRoot),
+          onProgress: options.onProgress,
+        }, provider)
+      : await runAgentQuery({
+          prompt,
+          systemPrompt: PLANNING_SYSTEM_PROMPT,
+          workingDirectory: path.dirname(sdlcRoot),
+          onProgress: options.onProgress,
+        });
 
     // Determine if this is an iteration (rework context implies previous attempt)
     const isIteration = !!options.reworkContext;

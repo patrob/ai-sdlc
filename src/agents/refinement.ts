@@ -1,5 +1,6 @@
 import { parseStory, writeStory, updateStoryStatus } from '../core/story.js';
 import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
+import type { IProvider } from '../providers/types.js';
 import { getLogger } from '../core/logger.js';
 import { Story, AgentResult } from '../types/index.js';
 import path from 'path';
@@ -29,7 +30,8 @@ At the end of your response, include:
 export async function runRefinementAgent(
   storyPath: string,
   sdlcRoot: string,
-  options: AgentOptions = {}
+  options: AgentOptions = {},
+  provider?: IProvider
 ): Promise<AgentResult> {
   const logger = getLogger();
   const startTime = Date.now();
@@ -58,12 +60,19 @@ Provide the refined story content including:
 
 Format your response as markdown that will replace the story content.`;
 
-    const refinedContent = await runAgentQuery({
-      prompt,
-      systemPrompt: REFINEMENT_SYSTEM_PROMPT,
-      workingDirectory: path.dirname(sdlcRoot),
-      onProgress: options.onProgress,
-    });
+    const refinedContent = provider
+      ? await runAgentQuery({
+          prompt,
+          systemPrompt: REFINEMENT_SYSTEM_PROMPT,
+          workingDirectory: path.dirname(sdlcRoot),
+          onProgress: options.onProgress,
+        }, provider)
+      : await runAgentQuery({
+          prompt,
+          systemPrompt: REFINEMENT_SYSTEM_PROMPT,
+          workingDirectory: path.dirname(sdlcRoot),
+          onProgress: options.onProgress,
+        });
 
     // Parse effort estimate from the response
     const effortMatch = refinedContent.match(/effort[:\s]*(small|medium|large)/i);

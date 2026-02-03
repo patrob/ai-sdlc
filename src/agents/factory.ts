@@ -103,7 +103,7 @@ class ResearchAgentAdapter extends FunctionAgentAdapter {
   ];
 
   async execute(context: AgentContext): Promise<AgentResult> {
-    return runResearchAgent(context.storyPath, context.sdlcRoot, context.options);
+    return runResearchAgent(context.storyPath, context.sdlcRoot, context.options, this.provider);
   }
 
   getSystemPrompt(context: AgentContext): string {
@@ -122,7 +122,7 @@ class PlanningAgentAdapter extends FunctionAgentAdapter {
   ];
 
   async execute(context: AgentContext): Promise<AgentResult> {
-    return runPlanningAgent(context.storyPath, context.sdlcRoot, context.options);
+    return runPlanningAgent(context.storyPath, context.sdlcRoot, context.options, this.provider);
   }
 
   getSystemPrompt(context: AgentContext): string {
@@ -141,7 +141,7 @@ class ImplementationAgentAdapter extends FunctionAgentAdapter {
   ];
 
   async execute(context: AgentContext): Promise<AgentResult> {
-    return runImplementationAgent(context.storyPath, context.sdlcRoot, context.options);
+    return runImplementationAgent(context.storyPath, context.sdlcRoot, context.options, this.provider);
   }
 
   getSystemPrompt(context: AgentContext): string {
@@ -161,7 +161,7 @@ class ReviewAgentAdapter extends FunctionAgentAdapter {
 
   async execute(context: AgentContext): Promise<AgentResult> {
     // Review agent has ReviewAgentOptions, cast options as any to avoid type mismatch
-    return runReviewAgent(context.storyPath, context.sdlcRoot, context.options as any);
+    return runReviewAgent(context.storyPath, context.sdlcRoot, context.options as any, this.provider);
   }
 
   getSystemPrompt(context: AgentContext): string {
@@ -186,7 +186,7 @@ class SingleTaskAgentAdapter extends FunctionAgentAdapter {
       storyPath: context.storyPath,
       sdlcRoot: context.sdlcRoot,
     };
-    const taskResult = await runSingleTaskAgent(taskContext as any, context.options as any);
+    const taskResult = await runSingleTaskAgent(taskContext as any, context.options as any, this.provider);
 
     // Convert AgentTaskResult to AgentResult
     const { parseStory } = await import('../core/story.js');
@@ -225,7 +225,8 @@ class OrchestratorAgentAdapter extends FunctionAgentAdapter {
     const result = await runImplementationOrchestrator(
       context.storyPath,
       context.sdlcRoot,
-      context.options as any
+      context.options as any,
+      this.provider
     );
 
     // OrchestratorResult may differ from AgentResult, cast for compatibility
@@ -311,7 +312,7 @@ class RefinementAgentAdapter extends FunctionAgentAdapter {
   ];
 
   async execute(context: AgentContext): Promise<AgentResult> {
-    return runRefinementAgent(context.storyPath, context.sdlcRoot, context.options);
+    return runRefinementAgent(context.storyPath, context.sdlcRoot, context.options, this.provider);
   }
 
   getSystemPrompt(context: AgentContext): string {

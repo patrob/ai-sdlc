@@ -14,6 +14,7 @@ import {
   moveToBlocked,
 } from '../core/story.js';
 import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
+import type { IProvider } from '../providers/types.js';
 import { getLogger } from '../core/logger.js';
 import { Story, AgentResult, TDDTestCycle, TDDConfig, ErrorFingerprint } from '../types/index.js';
 import { AgentOptions } from './research.js';
@@ -763,6 +764,7 @@ export interface RetryAttemptOptions {
   maxRetries: number;
   reworkContext?: string;
   onProgress?: AgentProgressCallback;
+  runAgentQuery?: typeof runAgentQuery;
 }
 
 /**
@@ -798,6 +800,7 @@ export async function attemptImplementationWithRetries(
   changesMade: string[]
 ): Promise<AgentResult> {
   const { story, storyPath, workingDir, maxRetries, reworkContext, onProgress } = options;
+  const agentQuery = options.runAgentQuery || runAgentQuery;
 
   let attemptNumber = 0;
   let lastVerification: { passed: boolean; failures: number; testsOutput: string; buildOutput: string; timestamp: string } | null = null;
@@ -898,7 +901,7 @@ Use the available tools to read files, write code, and run commands as needed.`;
       }
     }
 
-    const implementationResult = await runAgentQuery({
+    const implementationResult = await agentQuery({
       prompt,
       systemPrompt: IMPLEMENTATION_SYSTEM_PROMPT,
       workingDirectory: workingDir,
@@ -1112,7 +1115,8 @@ ${implementationResult}
 export async function runImplementationAgent(
   storyPath: string,
   sdlcRoot: string,
-  options: AgentOptions = {}
+  options: AgentOptions = {},
+  provider?: IProvider
 ): Promise<AgentResult> {
   const logger = getLogger();
   const startTime = Date.now();
@@ -1192,6 +1196,10 @@ export async function runImplementationAgent(
     const tddEnabled = story.frontmatter.tdd_enabled ?? config.tdd?.enabled ?? false;
 
     // Check if orchestrator is enabled
+    const injectedRunAgentQuery: typeof runAgentQuery | undefined = provider
+      ? ((queryOptions) => runAgentQuery(queryOptions, provider))
+      : undefined;
+
     if (config.useOrchestrator && !tddEnabled) {
       changesMade.push('Using sequential task orchestrator for implementation');
 
@@ -1204,7 +1212,8 @@ export async function runImplementationAgent(
           maxRetriesPerTask: config.implementation.maxRetries,
           commitAfterEachTask: true,
           stopOnFirstFailure: true,
-        }
+        },
+        provider
       );
 
       if (!orchestratorResult.success) {
@@ -1241,6 +1250,7 @@ export async function runImplementationAgent(
       // Run TDD implementation loop
       const tddResult = await runTDDImplementation(story, sdlcRoot, {
         onProgress: options.onProgress,
+        runAgentQuery: injectedRunAgentQuery,
       });
 
       // Merge changes
@@ -1299,6 +1309,7 @@ export async function runImplementationAgent(
         maxRetries,
         reworkContext: options.reworkContext,
         onProgress: options.onProgress,
+        runAgentQuery: injectedRunAgentQuery,
       },
       changesMade
     );

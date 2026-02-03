@@ -1,5 +1,10 @@
 import { getApiKey, getCredentialType, CredentialType } from './auth.js';
-import type { ProviderProgressEvent as NewProviderProgressEvent, ProviderProgressCallback as NewProviderProgressCallback, ProviderQueryOptions as NewProviderQueryOptions } from '../providers/index.js';
+import type {
+  ProviderProgressEvent as NewProviderProgressEvent,
+  ProviderProgressCallback as NewProviderProgressCallback,
+  ProviderQueryOptions as NewProviderQueryOptions,
+  IProvider,
+} from '../providers/index.js';
 import { ProviderRegistry } from '../providers/index.js';
 
 // Re-export error classes and utilities from agent-errors module
@@ -46,13 +51,13 @@ export interface AgentMessage {
  * Automatically configures authentication from environment or keychain.
  * CLAUDE.md discovery is handled automatically by the SDK when settingSources includes 'project'.
  */
-export async function runAgentQuery(options: AgentQueryOptions): Promise<string> {
-  // Get the default provider (Claude) from the registry
-  const provider = ProviderRegistry.getDefault();
+export async function runAgentQuery(options: AgentQueryOptions, provider?: IProvider): Promise<string> {
+  // Get the default provider (Claude) from the registry when not injected
+  const resolvedProvider = provider ?? ProviderRegistry.getDefault();
 
   // Delegate to the provider's query method
   // The provider handles all retry logic, authentication, streaming, etc.
-  return provider.query(options);
+  return resolvedProvider.query(options);
 }
 
 /**

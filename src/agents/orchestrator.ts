@@ -27,6 +27,7 @@ import {
   readStoryFile,
 } from '../core/task-progress.js';
 import { runSingleTaskAgent } from './single-task.js';
+import type { IProvider } from '../providers/types.js';
 import { getLogger } from '../core/logger.js';
 
 const logger = getLogger();
@@ -380,7 +381,8 @@ async function commitTaskCompletion(
 export async function runImplementationOrchestrator(
   storyPath: string,
   sdlcRoot: string,
-  options?: OrchestratorOptions
+  options?: OrchestratorOptions,
+  provider?: IProvider
 ): Promise<OrchestratorResult> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const workingDir = path.dirname(storyPath);
@@ -475,7 +477,7 @@ export async function runImplementationOrchestrator(
         verificationPassed: true,
       };
     } else {
-      result = await runSingleTaskAgent(taskContext);
+      result = await runSingleTaskAgent(taskContext, undefined, provider);
     }
 
     totalAgentInvocations++;

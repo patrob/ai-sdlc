@@ -57,6 +57,35 @@ Follow the Testing Pyramid: **many unit tests, fewer integration tests, fewest E
 - Testing third-party libraries or frameworks
 - Testing individual function behavior in isolation
 
+## Testing Philosophy (Framework-Agnostic)
+
+These principles apply regardless of testing framework (Vitest, Jest, pytest, cargo test, etc.):
+
+### Test Behavior, Not Implementation
+- Tests should verify WHAT code does, not HOW it does it
+- Avoid testing internal method calls or private state
+- If refactoring breaks tests without changing behavior, tests are too coupled
+
+### Mock at Boundaries, Not Internals
+- Mock external dependencies: APIs, databases, file systems, network
+- Avoid mocking internal classes or modules when possible
+- Internal mocks break when implementation changes
+
+### Prefer Dependency Injection
+- Pass dependencies as parameters rather than importing directly
+- Makes testing easier without complex module mocking
+- Example: `function processData(data, logger)` vs `import { logger } from './logger'`
+
+### When Mocking is Hard, Reconsider Design
+- Difficult mocking often signals tightly coupled code
+- Consider extracting interfaces or using dependency injection
+- Testability is a feature of good design
+
+### Learn from Existing Tests
+- Before writing new tests, look at existing test files in the codebase
+- Follow established patterns for mocking, setup, and assertions
+- Consistency helps maintainability
+
 ## Critical Rules
 
 - **Export testable functions**: Never recreate production logic in tests. Export functions from production code and import them in tests

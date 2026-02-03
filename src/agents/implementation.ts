@@ -1710,7 +1710,21 @@ ${truncatedTestOutput}
 `;
   }
 
-  prompt += `Your task:
+  prompt += `## Recovery Strategies
+
+When fixing test failures:
+
+1. **Look at existing tests** - Find similar test files in this codebase and follow their patterns for mocking and setup.
+
+2. **Test behavior, not implementation** - If your test depends on internal details, it may need restructuring.
+
+3. **Mock at boundaries** - Mock external services (APIs, databases), not internal classes. Internal mocks break easily.
+
+4. **Consider the design** - If mocking is complex, the code may need refactoring to be more testable (e.g., dependency injection).
+
+5. **Try a different approach** - If you've attempted the same fix twice, step back and try a fundamentally different solution.
+
+Your task:
 1. ANALYZE the test/build output above - what is actually failing?
 2. Compare EXPECTED vs ACTUAL results in the errors
 3. Identify the root cause in your implementation code

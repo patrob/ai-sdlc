@@ -40,6 +40,7 @@ import { runReworkAgent } from './rework.js';
 import { runRefinementAgent } from './refinement.js';
 import { runImplementationOrchestrator } from './orchestrator.js';
 import { runStateAssessor } from './state-assessor.js';
+import { runPlanReviewAgent } from './plan-review.js';
 
 /**
  * Union type of all built-in agent types.
@@ -48,6 +49,7 @@ import { runStateAssessor } from './state-assessor.js';
 export type AgentType =
   | 'research'
   | 'planning'
+  | 'plan-review'
   | 'implementation'
   | 'review'
   | 'single-task'
@@ -127,6 +129,25 @@ class PlanningAgentAdapter extends FunctionAgentAdapter {
 
   getSystemPrompt(context: AgentContext): string {
     return 'Planning agent system prompt';
+  }
+}
+
+/**
+ * Adapter for plan-review agent
+ */
+class PlanReviewAgentAdapter extends FunctionAgentAdapter {
+  readonly name = 'plan-review';
+  readonly requiredCapabilities: (keyof ProviderCapabilities)[] = [
+    'supportsTools',
+    'supportsSystemPrompt',
+  ];
+
+  async execute(context: AgentContext): Promise<AgentResult> {
+    return runPlanReviewAgent(context.storyPath, context.sdlcRoot, context.options, this.provider);
+  }
+
+  getSystemPrompt(context: AgentContext): string {
+    return 'Plan review agent system prompt';
   }
 }
 
@@ -336,6 +357,7 @@ export class AgentFactory {
   private static builtInAgents: Record<AgentType, new (provider: IProvider) => IAgent> = {
     research: ResearchAgentAdapter,
     planning: PlanningAgentAdapter,
+    'plan-review': PlanReviewAgentAdapter,
     implementation: ImplementationAgentAdapter,
     review: ReviewAgentAdapter,
     'single-task': SingleTaskAgentAdapter,

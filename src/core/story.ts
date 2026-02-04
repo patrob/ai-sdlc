@@ -12,6 +12,7 @@ import { getMostCommonError } from '../services/error-fingerprint.js';
 export const SECTION_FILES = {
   research: 'research.md',
   plan: 'plan.md',
+  plan_review: 'plan_review.md',
   review: 'review.md',
 } as const;
 
@@ -663,6 +664,7 @@ export async function readSectionContent(storyPath: string, section: SectionType
   const sectionHeaders: Record<SectionType, string> = {
     research: 'Research',
     plan: 'Implementation Plan',
+    plan_review: 'Plan Review',
     review: 'Review Notes',
   };
 

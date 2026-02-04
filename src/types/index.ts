@@ -42,7 +42,7 @@ export interface ProjectConfig {
  * Section types for split story outputs.
  * Each section is stored in a separate file within the story folder.
  */
-export type SectionType = 'research' | 'plan' | 'review';
+export type SectionType = 'research' | 'plan' | 'plan_review' | 'review';
 
 /**
  * Content type classification for story implementation.
@@ -215,6 +215,18 @@ export interface StoryFrontmatter {
   // Workflow tracking
   research_complete: boolean;
   plan_complete: boolean;
+  /**
+   * Whether the plan has been reviewed and approved by Tech Lead, Security, and PO.
+   * Set to true after plan_review agent approves from all three perspectives.
+   * @default false (plan needs review before implementation)
+   */
+  plan_review_complete?: boolean;
+  /**
+   * Current iteration number for plan review (1-indexed).
+   * Increments each time plan review finds issues and plan is refined.
+   * @default undefined (not yet started)
+   */
+  plan_review_iteration?: number;
   implementation_complete: boolean;
   reviews_complete: boolean;
   pr_url?: string;
@@ -377,6 +389,7 @@ export type ActionType =
   | 'refine'
   | 'research'
   | 'plan'
+  | 'plan_review'
   | 'implement'
   | 'review'
   | 'rework'
@@ -467,6 +480,17 @@ export interface RefinementConfig {
   maxIterations: number;
   escalateOnMaxAttempts: 'error' | 'manual' | 'skip';
   enableCircuitBreaker: boolean;
+}
+
+/**
+ * Plan review configuration
+ * Controls the plan review phase that occurs after planning but before implementation.
+ */
+export interface PlanReviewConfig {
+  /** Maximum iterations for plan refinement before proceeding. @default 3 */
+  maxIterations: number;
+  /** Require all three perspectives (Tech Lead, Security, PO) to be satisfied. @default true */
+  requireAllPerspectives: boolean;
 }
 
 /**
@@ -800,6 +824,11 @@ export interface Config {
   sdlcFolder: string;
   stageGates: StageGateConfig;
   refinement: RefinementConfig;
+  /**
+   * Plan review configuration.
+   * Controls the plan review phase that shapes plans before implementation.
+   */
+  planReview?: PlanReviewConfig;
   reviewConfig: ReviewConfig;
   implementation: ImplementationConfig;
   defaultLabels: string[];

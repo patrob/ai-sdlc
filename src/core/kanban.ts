@@ -236,6 +236,7 @@ export function calculateCompletionScore(story: Story): number {
   let score = 0;
   if (story.frontmatter.reviews_complete) score += 40;
   if (story.frontmatter.implementation_complete) score += 30;
+  if (story.frontmatter.plan_review_complete) score += 25;
   if (story.frontmatter.plan_complete) score += 20;
   if (story.frontmatter.research_complete) score += 10;
   return score;
@@ -429,6 +430,15 @@ export async function assessState(sdlcRoot: string): Promise<StateAssessment> {
         storyPath: story.path,
         reason: `Story "${story.frontmatter.title}" needs implementation plan`,
         priority: story.frontmatter.priority + 300 - completionScore,
+      });
+    } else if (!story.frontmatter.plan_review_complete) {
+      // Plan review: evaluate plan from Tech Lead, Security, and PO perspectives
+      recommendedActions.push({
+        type: 'plan_review',
+        storyId: story.frontmatter.id,
+        storyPath: story.path,
+        reason: `Story "${story.frontmatter.title}" needs plan review`,
+        priority: story.frontmatter.priority + 350 - completionScore,
       });
     } else {
       recommendedActions.push({

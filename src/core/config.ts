@@ -372,7 +372,7 @@ function validateProjectsConfig(projects: any): boolean {
       }
 
       // Validate each command in the project
-      const commandFields = ['install', 'build', 'test', 'start'];
+      const commandFields = ['install', 'build', 'test', 'start', 'lint', 'verify'];
       for (const field of commandFields) {
         if (project.commands[field] !== undefined) {
           if (!validateCommand(project.commands[field], `projects[].commands.${field}`)) {
@@ -425,6 +425,20 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
     if (!validateCommand(userConfig.startCommand, 'startCommand')) {
       console.warn('Invalid or unsafe startCommand in config, removing');
       delete userConfig.startCommand;
+    }
+  }
+
+  if (userConfig.lintCommand !== undefined) {
+    if (!validateCommand(userConfig.lintCommand, 'lintCommand')) {
+      console.warn('Invalid or unsafe lintCommand in config, removing');
+      delete userConfig.lintCommand;
+    }
+  }
+
+  if (userConfig.verifyCommand !== undefined) {
+    if (!validateCommand(userConfig.verifyCommand, 'verifyCommand')) {
+      console.warn('Invalid or unsafe verifyCommand in config, removing');
+      delete userConfig.verifyCommand;
     }
   }
 

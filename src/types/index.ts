@@ -31,6 +31,10 @@ export interface ProjectConfig {
     build?: string;
     test?: string;
     start?: string;
+    /** Command to run linting (e.g., 'npm run lint') */
+    lint?: string;
+    /** Command to run full verification (e.g., 'make verify') */
+    verify?: string;
   };
 }
 
@@ -819,6 +823,10 @@ export interface Config {
   installCommand?: string;
   /** Command to start the application (e.g., 'npm start'). Auto-detected during init. */
   startCommand?: string;
+  /** Command to run linting (e.g., 'npm run lint'). Auto-detected during init. */
+  lintCommand?: string;
+  /** Command to run full verification (e.g., 'make verify'). Auto-detected during init. */
+  verifyCommand?: string;
   /**
    * Detected projects within the repository.
    * Supports monorepos with multiple projects in subdirectories.

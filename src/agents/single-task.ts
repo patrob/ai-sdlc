@@ -9,6 +9,11 @@ import {
   SingleTaskAgentOptions,
   ImplementationTask,
 } from '../types/index.js';
+import {
+  discoverCommands,
+  buildSingleTestCommand,
+  parseCommand,
+} from '../core/command-discovery.js';
 
 /**
  * System prompt for single-task implementation agent
@@ -253,18 +258,27 @@ export async function verifyChanges(
   // Run tests for changed modules
   const testFiles = detectTestFiles(filesChanged);
   if (testFiles.length > 0) {
-    // Check if test files actually exist before running
-    const testResult = spawnSync('npm', ['test', '--', ...testFiles], {
-      cwd: workingDir,
-      encoding: 'utf8',
-    });
+    // Discover test command from project configuration
+    const { commands } = discoverCommands(workingDir);
+    const baseTestCommand = commands.test || 'npm test';
 
-    testsRun = true;
+    // Run tests for each detected test file
+    for (const testFile of testFiles) {
+      const singleTestCommand = buildSingleTestCommand(baseTestCommand, testFile);
+      const { executable, args } = parseCommand(singleTestCommand);
 
-    if (testResult.status !== 0) {
-      const stderr = testResult.stderr || testResult.stdout || '';
-      if (stderr.trim()) {
-        errors.push(`Test failures:\n${stderr}`);
+      const testResult = spawnSync(executable, args, {
+        cwd: workingDir,
+        encoding: 'utf8',
+      });
+
+      testsRun = true;
+
+      if (testResult.status !== 0) {
+        const stderr = testResult.stderr || testResult.stdout || '';
+        if (stderr.trim()) {
+          errors.push(`Test failures:\n${stderr}`);
+        }
       }
     }
   } else {

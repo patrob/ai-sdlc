@@ -27,6 +27,12 @@ import {
   updateErrorHistory,
   DEFAULT_IDENTICAL_ERROR_THRESHOLD,
 } from '../services/error-fingerprint.js';
+import {
+  discoverCommands,
+  buildSingleTestCommand,
+  parseCommand,
+  getTestCommand,
+} from '../core/command-discovery.js';
 
 // Re-export for convenience
 export type { AgentProgressCallback };
@@ -172,7 +178,12 @@ export async function runSingleTest(
     const outputChunks: string[] = [];
     let killed = false;
 
-    const child = spawn('npm', ['test', '--', testFile], {
+    // Discover test command from project configuration
+    const baseTestCommand = getTestCommand(workingDir);
+    const singleTestCommand = buildSingleTestCommand(baseTestCommand, testFile);
+    const { executable, args } = parseCommand(singleTestCommand);
+
+    const child = spawn(executable, args, {
       cwd: workingDir,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -230,7 +241,11 @@ export async function runAllTests(
     const outputChunks: string[] = [];
     let killed = false;
 
-    const child = spawn('npm', ['test'], {
+    // Discover test command from project configuration
+    const testCommand = getTestCommand(workingDir);
+    const { executable, args } = parseCommand(testCommand);
+
+    const child = spawn(executable, args, {
       cwd: workingDir,
       stdio: ['pipe', 'pipe', 'pipe'],
     });

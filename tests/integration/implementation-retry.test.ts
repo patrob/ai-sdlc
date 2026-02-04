@@ -96,8 +96,8 @@ implementation:
     }
   });
 
-  describe('retry count persistence to frontmatter', () => {
-    it('should increment implementation_retry_count on each failed attempt', async () => {
+  describe('retry count during internal iterations', () => {
+    it('should NOT increment implementation_retry_count during internal iterations', async () => {
       const { verifyImplementation } = await import('../../src/agents/verification.js');
       const mockVerify = verifyImplementation as Mock;
 
@@ -127,36 +127,34 @@ implementation:
 
       await runImplementationAgent(storyPath, sdlcRoot, {});
 
-      // Read the story file to verify retry count was tracked
+      // Read the story file to verify retry count was NOT incremented during internal iterations
+      // Retry counting only happens in runner.ts when REVIEW returns RECOVERY decision
       const updatedStory = parseStory(storyPath);
-      // After verification passes, retry count should persist (not be reset)
-      // It will only be reset by review agent on APPROVED decision
-      expect(updatedStory.frontmatter.implementation_retry_count).toBe(2);
+      expect(updatedStory.frontmatter.implementation_retry_count).toBeUndefined();
     });
 
-    it('should preserve retry count in frontmatter after max retries exhausted', async () => {
+    it('should iterate until tests pass without artificial limits', async () => {
       const { verifyImplementation } = await import('../../src/agents/verification.js');
       const mockVerify = verifyImplementation as Mock;
 
-      // All attempts fail
-      mockVerify.mockResolvedValue({
-        passed: false,
-        failures: 1,
-        timestamp: new Date().toISOString(),
-        testsOutput: 'Test failed',
-        buildOutput: 'Build succeeded',
-      });
-
-      // Default beforeEach mock returns different diffs each time, avoiding no-change detection
+      // Fail 5 times (more than old maxRetries of 3), then succeed on 6th attempt
+      mockVerify
+        .mockResolvedValueOnce({ passed: false, failures: 1, timestamp: new Date().toISOString(), testsOutput: 'Error 1', buildOutput: '' })
+        .mockResolvedValueOnce({ passed: false, failures: 1, timestamp: new Date().toISOString(), testsOutput: 'Error 2', buildOutput: '' })
+        .mockResolvedValueOnce({ passed: false, failures: 1, timestamp: new Date().toISOString(), testsOutput: 'Error 3', buildOutput: '' })
+        .mockResolvedValueOnce({ passed: false, failures: 1, timestamp: new Date().toISOString(), testsOutput: 'Error 4', buildOutput: '' })
+        .mockResolvedValueOnce({ passed: false, failures: 1, timestamp: new Date().toISOString(), testsOutput: 'Error 5', buildOutput: '' })
+        .mockResolvedValueOnce({ passed: true, failures: 0, timestamp: new Date().toISOString(), testsOutput: 'All tests passed', buildOutput: '' });
 
       const result = await runImplementationAgent(storyPath, sdlcRoot, {});
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Implementation blocked');
+      // Should succeed on attempt 6 (more than old maxRetries would have allowed)
+      expect(result.success).toBe(true);
+      expect(mockVerify).toHaveBeenCalledTimes(6);
 
-      // Verify retry count was incremented
+      // No retry count should be set (only set by runner.ts on RECOVERY)
       const updatedStory = parseStory(storyPath);
-      expect(updatedStory.frontmatter.implementation_retry_count).toBeGreaterThan(0);
+      expect(updatedStory.frontmatter.implementation_retry_count).toBeUndefined();
     });
   });
 
@@ -189,16 +187,25 @@ implementation:
     });
   });
 
-  describe('max retries exhausted scenario', () => {
-    it('should return error with attempt summary when all retries fail', async () => {
+  describe('safety mechanisms', () => {
+    it('should iterate indefinitely with different errors (no artificial limit)', async () => {
       const { verifyImplementation } = await import('../../src/agents/verification.js');
       const mockVerify = verifyImplementation as Mock;
 
       // Return DIFFERENT errors each time to avoid triggering identical error detection
-      // This tests the "max retries exhausted" path rather than the "identical error loop" path
+      // After 8 different errors, finally succeed
       let verifyCallCount = 0;
       mockVerify.mockImplementation(() => {
         verifyCallCount++;
+        if (verifyCallCount >= 8) {
+          return Promise.resolve({
+            passed: true,
+            failures: 0,
+            timestamp: new Date().toISOString(),
+            testsOutput: 'All tests passed',
+            buildOutput: 'Build succeeded',
+          });
+        }
         return Promise.resolve({
           passed: false,
           failures: verifyCallCount,
@@ -212,11 +219,9 @@ implementation:
 
       const result = await runImplementationAgent(storyPath, sdlcRoot, {});
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Implementation blocked');
-      expect(result.error).toContain('attempts');
-      // Should include test output snippet
-      expect(result.error).toContain('test');
+      // Should eventually succeed without being blocked by an artificial max retries limit
+      expect(result.success).toBe(true);
+      expect(mockVerify).toHaveBeenCalledTimes(8);
     });
   });
 
@@ -246,9 +251,9 @@ implementation:
       expect(result.success).toBe(false);
       expect(result.error).toContain('No progress detected');
 
-      // Verify retry count was tracked before early exit
+      // Retry count should NOT be set (only set by runner.ts on RECOVERY)
       const story = parseStory(storyPath);
-      expect(story.frontmatter.implementation_retry_count).toBeGreaterThanOrEqual(1);
+      expect(story.frontmatter.implementation_retry_count).toBeUndefined();
 
       // Should exit after detecting no changes (may be 1 or 2 calls depending on when detection happens)
       expect(mockVerify).toHaveBeenCalled();
@@ -289,33 +294,24 @@ implementation:
   });
 
   describe('per-story config overrides', () => {
-    it('should respect per-story max_implementation_retries', async () => {
+    it('should still calculate effective max retries for retry prompt context', async () => {
       // Update story with per-story override
       const storyContent = fs.readFileSync(storyPath, 'utf-8');
       const updatedContent = storyContent.replace(
         'implementation_complete: false',
-        'implementation_complete: false\nmax_implementation_retries: 1'
+        'implementation_complete: false\nmax_implementation_retries: 5'
       );
       fs.writeFileSync(storyPath, updatedContent);
 
-      const { verifyImplementation } = await import('../../src/agents/verification.js');
-      const mockVerify = verifyImplementation as Mock;
+      const story = parseStory(storyPath);
+      const config = loadConfig(tempDir);
 
-      mockVerify.mockResolvedValue({
-        passed: false,
-        failures: 1,
-        timestamp: new Date().toISOString(),
-        testsOutput: 'Test failed',
-        buildOutput: 'Build succeeded',
-      });
+      // The effective max is still calculated for retry prompt context
+      const { getEffectiveMaxImplementationRetries } = await import('../../src/core/story.js');
+      const effectiveMax = getEffectiveMaxImplementationRetries(story, config);
 
-      // Default beforeEach mock returns different diffs each time
-
-      const result = await runImplementationAgent(storyPath, sdlcRoot, {});
-
-      expect(result.success).toBe(false);
-      // With max_implementation_retries: 1, should only do 2 attempts (1 + 1 retry)
-      expect(mockVerify).toHaveBeenCalledTimes(2);
+      // Should use per-story override (5)
+      expect(effectiveMax).toBe(5);
     });
 
     it('should cap per-story override at maxRetriesUpperBound', async () => {

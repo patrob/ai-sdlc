@@ -477,6 +477,8 @@ function shouldExecutePhase(story: Story, phase: ActionType): boolean {
       return !story.frontmatter.research_complete;
     case 'plan':
       return !story.frontmatter.plan_complete;
+    case 'plan_review':
+      return !story.frontmatter.plan_review_complete;
     case 'implement':
       return !story.frontmatter.implementation_complete;
     case 'review':
@@ -493,7 +495,7 @@ function shouldExecutePhase(story: Story, phase: ActionType): boolean {
  * @returns Array of actions to execute in sequence
  */
 function generateFullSDLCActions(story: Story, c?: any): Action[] {
-  const allPhases: ActionType[] = ['refine', 'research', 'plan', 'implement', 'review'];
+  const allPhases: ActionType[] = ['refine', 'research', 'plan', 'plan_review', 'implement', 'review'];
   const actions: Action[] = [];
   const skippedPhases: string[] = [];
 
@@ -2298,6 +2300,7 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
     const prevPhaseState = {
       research_complete: storyBeforeAction.frontmatter.research_complete,
       plan_complete: storyBeforeAction.frontmatter.plan_complete,
+      plan_review_complete: storyBeforeAction.frontmatter.plan_review_complete ?? false,
       implementation_complete: storyBeforeAction.frontmatter.implementation_complete,
       reviews_complete: storyBeforeAction.frontmatter.reviews_complete,
       status: storyBeforeAction.frontmatter.status,
@@ -2346,6 +2349,11 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
       case 'plan':
         const { runPlanningAgent } = await import('../agents/planning.js');
         result = await runPlanningAgent(action.storyPath, sdlcRoot, { onProgress: onAgentProgress });
+        break;
+
+      case 'plan_review':
+        const { runPlanReviewAgent } = await import('../agents/plan-review.js');
+        result = await runPlanReviewAgent(action.storyPath, sdlcRoot, { onProgress: onAgentProgress });
         break;
 
       case 'implement':
@@ -2530,6 +2538,10 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
             // Plan completes when plan_complete transitions from false to true
             phaseJustCompleted = !prevPhaseState.plan_complete && story.frontmatter.plan_complete;
             break;
+          case 'plan_review':
+            // Plan review completes when plan_review_complete transitions from false to true
+            phaseJustCompleted = !prevPhaseState.plan_review_complete && (story.frontmatter.plan_review_complete ?? false);
+            break;
           case 'implement':
             // Implement completes when implementation_complete transitions from false to true
             phaseJustCompleted = !prevPhaseState.implementation_complete && story.frontmatter.implementation_complete;
@@ -2634,6 +2646,13 @@ export function getPhaseInfo(actionType: ActionType, colors: any): PhaseInfo | n
         name: 'Plan',
         icon: '📋',
         iconAscii: '[P]',
+        colorFn: colors.phasePlan,
+      };
+    case 'plan_review':
+      return {
+        name: 'Plan Review',
+        icon: '📝',
+        iconAscii: '[PR]',
         colorFn: colors.phasePlan,
       };
     case 'implement':
@@ -2799,6 +2818,7 @@ function formatAction(action: Action, includePhaseIndicator: boolean = false, co
     refine: 'Refine',
     research: 'Research',
     plan: 'Plan',
+    plan_review: 'Plan Review',
     implement: 'Implement',
     review: 'Review',
     rework: 'Rework',

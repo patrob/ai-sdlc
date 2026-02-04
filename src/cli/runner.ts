@@ -7,6 +7,7 @@ import { Action, StateAssessment, ReviewResult, ReviewDecision, ReworkContext } 
 import { runRefinementAgent } from '../agents/refinement.js';
 import { runResearchAgent } from '../agents/research.js';
 import { runPlanningAgent } from '../agents/planning.js';
+import { runPlanReviewAgent } from '../agents/plan-review.js';
 import { runImplementationAgent } from '../agents/implementation.js';
 import { runReviewAgent, createPullRequest, generateReviewSummary } from '../agents/review.js';
 import { runReworkAgent, packageReworkContext } from '../agents/rework.js';
@@ -203,6 +204,9 @@ export class WorkflowRunner {
       case 'plan':
         return runPlanningAgent(currentStoryPath, this.sdlcRoot);
 
+      case 'plan_review':
+        return runPlanReviewAgent(currentStoryPath, this.sdlcRoot);
+
       case 'implement':
         return runImplementationAgent(currentStoryPath, this.sdlcRoot);
 
@@ -351,6 +355,7 @@ export class WorkflowRunner {
       refine: 'Refining',
       research: 'Researching',
       plan: 'Planning',
+      plan_review: 'Reviewing plan for',
       implement: 'Implementing',
       review: 'Reviewing',
       rework: 'Reworking',

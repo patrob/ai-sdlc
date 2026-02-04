@@ -6,10 +6,7 @@ import {
   writeStory,
   updateStoryStatus,
   updateStoryField,
-  incrementImplementationRetryCount,
-  isAtMaxImplementationRetries,
   getEffectiveMaxImplementationRetries,
-  incrementTotalRecoveryAttempts,
   readSectionContent,
   moveToBlocked,
 } from '../core/story.js';
@@ -803,8 +800,15 @@ export interface AttemptHistoryEntry {
 /**
  * Attempt implementation with retry logic
  *
- * Runs the implementation loop, retrying on test failures up to maxRetries times.
- * Includes no-change detection to exit early if the agent makes no progress.
+ * Runs the implementation loop indefinitely until tests pass.
+ * Safety mechanisms prevent true infinite loops:
+ * - Identical error fingerprinting blocks after same error 3+ consecutive times
+ * - No-change detection exits if agent makes no file changes
+ * - Global recovery limit (10 attempts) enforced in runner.ts
+ *
+ * Note: maxRetries parameter is still used for retry prompt context but
+ * does NOT limit iterations. Retry counting only happens in runner.ts
+ * when REVIEW returns RECOVERY decision.
  *
  * @param options Retry attempt options
  * @param changesMade Array to track changes (mutated in place)
@@ -826,7 +830,11 @@ export async function attemptImplementationWithRetries(
   const planContent = await readSectionContent(storyPath, 'plan');
   const researchContent = await readSectionContent(storyPath, 'research');
 
-  while (attemptNumber <= maxRetries) {
+  // Iterate indefinitely until tests pass. Safety mechanisms:
+  // 1. Identical error fingerprinting blocks after same error 3+ consecutive times
+  // 2. No-change detection exits if agent makes no file changes
+  // 3. Global recovery limit in runner.ts (10 total recovery attempts across all phases)
+  while (true) {
     attemptNumber++;
 
     const contentType = story.frontmatter.content_type || 'code';
@@ -910,9 +918,9 @@ Use the available tools to read files, write code, and run commands as needed.`;
     // Send progress callback for all attempts (not just retries)
     if (onProgress) {
       if (attemptNumber === 1) {
-        onProgress({ type: 'assistant_message', content: `Starting implementation attempt 1/${maxRetries + 1}...` });
+        onProgress({ type: 'assistant_message', content: `Starting implementation attempt 1...` });
       } else {
-        onProgress({ type: 'assistant_message', content: `Analyzing test failures, retrying implementation (${attemptNumber - 1}/${maxRetries})...` });
+        onProgress({ type: 'assistant_message', content: `Analyzing test failures, retrying implementation (attempt ${attemptNumber})...` });
       }
     }
 
@@ -1000,11 +1008,9 @@ ${implementationResult}
     // Verification failed - check for retry conditions
     lastVerification = verification;
 
-    // Track retry attempt
-    await incrementImplementationRetryCount(updatedStory);
-
-    // Increment global recovery counter
-    await incrementTotalRecoveryAttempts(updatedStory);
+    // NOTE: Retry counting is NOT done here during internal iterations.
+    // Retry count is only incremented in runner.ts when REVIEW returns RECOVERY decision.
+    // This allows unlimited internal iterations until tests pass.
 
     // Extract first 100 chars of test and build output for history
     const testSnippet = verification.testsOutput.substring(0, 100).replace(/\n/g, ' ');
@@ -1067,58 +1073,21 @@ ${implementationResult}
     });
 
     // Add structured retry entry to changes array
-    if (attemptNumber > 1) {
-      changesMade.push(`Implementation retry ${attemptNumber - 1}/${maxRetries}: ${verification.failures} test(s) failing`);
-    } else {
-      changesMade.push(`Attempt ${attemptNumber}: ${verification.failures} test(s) failing`);
-    }
-
-    // Check if we've reached max retries
-    if (attemptHistory.length > maxRetries) {
-      const attemptSummary = attemptHistory
-        .map((a) => {
-          const parts = [];
-          if (a.testFailures > 0) {
-            parts.push(`${a.testFailures} test(s)`);
-          }
-          if (a.buildFailures > 0) {
-            parts.push(`${a.buildFailures} build error(s)`);
-          }
-          const errors = parts.length > 0 ? parts.join(', ') : 'verification failed';
-
-          const snippets = [];
-          if (a.testSnippet && a.testSnippet.trim()) {
-            snippets.push(`[test: ${a.testSnippet}]`);
-          }
-          if (a.buildSnippet && a.buildSnippet.trim()) {
-            snippets.push(`[build: ${a.buildSnippet}]`);
-          }
-          const snippetText = snippets.length > 0 ? ` - ${snippets.join(' ')}` : '';
-
-          return `  Attempt ${a.attempt}: ${errors}${snippetText}`;
-        })
-        .join('\n');
-
-      return {
-        success: false,
-        story: parseStory(storyPath),
-        changesMade,
-        error: `Implementation blocked after ${attemptNumber} attempts:\n${attemptSummary}\n\nLast test output:\n${truncateTestOutput(verification.testsOutput, 5000)}`,
-      };
-    }
+    changesMade.push(`Attempt ${attemptNumber}: ${verification.failures} test(s) failing`);
 
     // Continue to next retry attempt - send progress update
     if (onProgress) {
-      onProgress({ type: 'assistant_message', content: `Retry ${attemptNumber} failed: ${verification.failures} test(s) failing, attempting retry ${attemptNumber + 1}...` });
+      onProgress({ type: 'assistant_message', content: `Attempt ${attemptNumber} failed: ${verification.failures} test(s) failing, continuing...` });
     }
   }
 
-  // If we exit the loop without returning, all retries exhausted (shouldn't normally reach here)
+  // Note: This code is unreachable since we use while(true) with explicit returns.
+  // Kept for TypeScript compiler satisfaction.
   return {
     success: false,
     story: parseStory(storyPath),
     changesMade,
-    error: 'Implementation failed: All retry attempts exhausted without resolution.',
+    error: 'Implementation failed unexpectedly.',
   };
 }
 

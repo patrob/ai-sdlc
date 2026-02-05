@@ -2,7 +2,7 @@
 id: S-0038
 title: Multi-Process Orchestrator
 priority: 4
-status: in-progress
+status: backlog
 type: feature
 created: '2026-01-15'
 labels:
@@ -16,7 +16,7 @@ plan_complete: true
 implementation_complete: false
 reviews_complete: false
 slug: multi-process-orchestrator
-updated: '2026-01-27'
+updated: '2026-02-05'
 branch: ai-sdlc/multi-process-orchestrator
 last_test_run:
   passed: true

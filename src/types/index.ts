@@ -1250,3 +1250,6 @@ export interface ProcessOrchestratorState {
 
 // Export workflow state types
 export * from './workflow-state.js';
+
+// Export workflow config types for modular agent architecture
+export * from './workflow-config.js';

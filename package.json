@@ -55,6 +55,7 @@
     "commander": "^12.0.0",
     "glob": "^11.0.0",
     "gray-matter": "^4.0.3",
+    "js-yaml": "^4.1.1",
     "ora": "^8.0.0",
     "proper-lockfile": "^4.1.2",
     "string-width": "^8.1.0",

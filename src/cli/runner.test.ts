@@ -9,6 +9,8 @@ import * as planning from '../agents/planning.js';
 import * as implementation from '../agents/implementation.js';
 import * as review from '../agents/review.js';
 import * as rework from '../agents/rework.js';
+import * as phaseExecutor from '../core/phase-executor.js';
+import * as workflowConfig from '../core/workflow-config.js';
 import { Action, StateAssessment, ReviewDecision, Story } from '../types/index.js';
 
 // Mock all dependencies
@@ -21,6 +23,8 @@ vi.mock('../agents/planning.js');
 vi.mock('../agents/implementation.js');
 vi.mock('../agents/review.js');
 vi.mock('../agents/rework.js');
+vi.mock('../core/phase-executor.js');
+vi.mock('../core/workflow-config.js');
 vi.mock('../core/theme.js', () => ({
   getThemedChalk: () => ({
     success: (s: string) => s,
@@ -306,6 +310,58 @@ describe('WorkflowRunner', () => {
 
       expect(story.moveToBlocked).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Global recovery limit'));
+    });
+
+    it('should pass onProgress callback to PhaseExecutor when using multi-agent workflow in verbose mode', async () => {
+      // Set up multi-agent workflow scenario
+      vi.mocked(workflowConfig.loadWorkflowConfig).mockReturnValue({
+        version: '1.0',
+        phases: {
+          refine: {
+            agents: [
+              { id: 'agent-1', role: 'story_refiner' },
+              { id: 'agent-2', role: 'tech_lead_reviewer' },
+            ],
+          },
+        },
+      });
+      vi.mocked(workflowConfig.getPhaseConfig).mockReturnValue({
+        agents: [
+          { id: 'agent-1', role: 'story_refiner' },
+          { id: 'agent-2', role: 'tech_lead_reviewer' },
+        ],
+      });
+      vi.mocked(workflowConfig.hasCustomAgents).mockReturnValue(true);
+
+      const mockExecute = vi.fn().mockResolvedValue({
+        success: true,
+        outputs: [],
+        summary: 'Done',
+      });
+      vi.mocked(phaseExecutor.PhaseExecutor).mockImplementation(() => ({
+        execute: mockExecute,
+      }) as any);
+
+      const action: Action = { ...mockAction, type: 'refine' };
+      vi.mocked(kanban.assessState).mockResolvedValue({
+        ...mockAssessment,
+        recommendedActions: [action],
+      });
+
+      // Run in verbose mode
+      const runner = new WorkflowRunner({ verbose: true });
+      await runner.run();
+
+      // Verify PhaseExecutor.execute was called with onProgress callback
+      expect(mockExecute).toHaveBeenCalledWith(
+        'refine',
+        expect.objectContaining({
+          phase: 'refine',
+          storyPath: expect.any(String),
+          sdlcRoot: expect.any(String),
+          onProgress: expect.any(Function),
+        })
+      );
     });
   });
 

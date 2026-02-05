@@ -5,6 +5,7 @@ import { assessState, kanbanExists } from '../core/kanban.js';
 import { parseStory, resetRPIVCycle, markStoryComplete, updateStoryStatus, isAtMaxRetries, getStory, incrementImplementationRetryCount, updateStoryField, autoCompleteStoryAfterReview, isAtGlobalRecoveryLimit, getTotalRecoveryAttempts, incrementTotalRecoveryAttempts, moveToBlocked } from '../core/story.js';
 import { Action, StateAssessment, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
 import { runRefinementAgent } from '../agents/refinement.js';
+import { PhaseExecutor, loadWorkflowConfig, hasCustomAgents, getPhaseConfig } from '../core/index.js';
 import { runResearchAgent } from '../agents/research.js';
 import { runPlanningAgent } from '../agents/planning.js';
 import { runPlanReviewAgent } from '../agents/plan-review.js';
@@ -195,8 +196,33 @@ export class WorkflowRunner {
     }
 
     switch (action.type) {
-      case 'refine':
+      case 'refine': {
+        // Check for custom workflow config
+        const workflowConfig = loadWorkflowConfig(this.sdlcRoot);
+        const phaseConfig = getPhaseConfig(workflowConfig, 'refine');
+
+        if (hasCustomAgents(phaseConfig)) {
+          // Use PhaseExecutor for multi-agent workflow
+          const executor = new PhaseExecutor(this.sdlcRoot, workflowConfig);
+          const result = await executor.execute('refine', {
+            phase: 'refine',
+            storyPath: currentStoryPath,
+            sdlcRoot: this.sdlcRoot,
+          });
+
+          // Convert PhaseExecutionResult to AgentResult format
+          const story = parseStory(currentStoryPath);
+          return {
+            success: result.success,
+            story,
+            changesMade: [result.summary],
+            error: result.error,
+          };
+        }
+
+        // Default: use single agent (backward compatible)
         return runRefinementAgent(currentStoryPath, this.sdlcRoot);
+      }
 
       case 'research':
         return runResearchAgent(currentStoryPath, this.sdlcRoot);

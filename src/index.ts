@@ -6,6 +6,7 @@ import { createRequire } from 'module';
 import { init, status, add, run, details, unblock, migrate, listWorktrees, addWorktree, removeWorktree, importIssue, linkIssue } from './cli/commands.js';
 import { hasApiKey } from './core/auth.js';
 import { loadConfig, saveConfig, DEFAULT_LOGGING_CONFIG, getSdlcRoot } from './core/config.js';
+import { loadWorkflowConfig, WorkflowConfigLoader } from './core/workflow-config.js';
 import { getThemedChalk } from './core/theme.js';
 import { ThemePreference, LogConfig } from './types/index.js';
 import { initLogger, getLogger } from './core/logger.js';
@@ -222,7 +223,7 @@ program
 program
   .command('config')
   .description('Manage configuration settings')
-  .argument('[key]', 'Configuration key to view or modify (e.g., "theme")')
+  .argument('[key]', 'Configuration key to view or modify (e.g., "theme", "workflow")')
   .argument('[value]', 'Value to set (leave empty to view current value)')
   .action((key?: string, value?: string) => {
     const config = loadConfig();
@@ -233,6 +234,58 @@ program
       console.log(c.bold('Current Configuration:'));
       console.log(JSON.stringify(config, null, 2));
       return;
+    }
+
+    // Handle workflow configuration
+    if (key === 'workflow') {
+      try {
+        const sdlcRoot = getSdlcRoot();
+        const loader = new WorkflowConfigLoader(sdlcRoot);
+
+        if (!loader.exists()) {
+          console.log(c.dim('No workflow.yaml found. Using default configuration.'));
+          console.log(c.dim(''));
+          console.log(c.dim('To enable multi-agent workflows, create .ai-sdlc/workflow.yaml'));
+          console.log(c.dim('See templates/workflow.yaml for an example configuration.'));
+          console.log(c.dim(''));
+        }
+
+        const workflowConfig = loader.load();
+        console.log(c.bold('Workflow Configuration:'));
+        console.log(c.dim(`Version: ${workflowConfig.version}`));
+        console.log(c.dim(`Source: ${loader.exists() ? loader.getPath() : '(default)'}`));
+        console.log('');
+
+        // Display phases
+        console.log(c.bold('Phases:'));
+        for (const [phaseName, phaseConfig] of Object.entries(workflowConfig.phases)) {
+          const hasAgents = phaseConfig.agents && phaseConfig.agents.length > 0;
+          const agentCount = phaseConfig.agents?.length ?? 0;
+          const status = hasAgents ? `${agentCount} agent(s) configured` : 'default (single agent)';
+          console.log(`  ${phaseName}: ${c.dim(status)}`);
+
+          // Show agent details if custom configured
+          if (hasAgents && phaseConfig.agents) {
+            for (const agent of phaseConfig.agents) {
+              const isGroup = agent.agents && agent.agents.length > 0;
+              if (isGroup) {
+                const composition = agent.composition ?? 'sequential';
+                const consensus = agent.consensus ?? 'none';
+                console.log(c.dim(`    └─ ${agent.id} (group: ${composition}, consensus: ${consensus})`));
+                for (const nested of agent.agents!) {
+                  console.log(c.dim(`       └─ ${nested.id}: ${nested.role}`));
+                }
+              } else {
+                console.log(c.dim(`    └─ ${agent.id}: ${agent.role}`));
+              }
+            }
+          }
+        }
+        return;
+      } catch (error) {
+        console.log(c.error(`Error loading workflow config: ${error instanceof Error ? error.message : String(error)}`));
+        process.exit(1);
+      }
     }
 
     // Handle theme configuration
@@ -261,7 +314,7 @@ program
       console.log(newC.dim('Theme changes take effect immediately.'));
     } else {
       console.log(c.warning(`Unknown configuration key: ${key}`));
-      console.log(c.dim('Available keys: theme'));
+      console.log(c.dim('Available keys: theme, workflow'));
     }
   });
 

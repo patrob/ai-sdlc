@@ -41,6 +41,11 @@ import { runRefinementAgent } from './refinement.js';
 import { runImplementationOrchestrator } from './orchestrator.js';
 import { runStateAssessor } from './state-assessor.js';
 import { runPlanReviewAgent } from './plan-review.js';
+import {
+  runTechLeadReviewer,
+  runSecurityReviewer,
+  runProductOwnerReviewer,
+} from './perspectives/index.js';
 
 /**
  * Union type of all built-in agent types.
@@ -56,7 +61,10 @@ export type AgentType =
   | 'orchestrator'
   | 'rework'
   | 'state-assessor'
-  | 'refinement';
+  | 'refinement'
+  | 'tech-lead-reviewer'
+  | 'security-reviewer'
+  | 'product-owner-reviewer';
 
 /**
  * Factory function signature for creating agent instances.
@@ -342,6 +350,111 @@ class RefinementAgentAdapter extends FunctionAgentAdapter {
 }
 
 /**
+ * Adapter for tech-lead-reviewer agent
+ */
+class TechLeadReviewerAdapter extends FunctionAgentAdapter {
+  readonly name = 'tech-lead-reviewer';
+  readonly requiredCapabilities: (keyof ProviderCapabilities)[] = [
+    'supportsTools',
+    'supportsSystemPrompt',
+  ];
+
+  async execute(context: AgentContext): Promise<AgentResult> {
+    const result = await runTechLeadReviewer(
+      context.storyPath,
+      context.sdlcRoot,
+      context.options,
+      this.provider
+    );
+
+    // Convert TechLeadReviewResult to AgentResult
+    const { parseStory } = await import('../core/story.js');
+    const story = parseStory(context.storyPath);
+
+    return {
+      success: result.output.approved,
+      story,
+      changesMade: [`Tech Lead Review: ${result.output.content}`],
+      error: result.output.approved ? undefined : 'Tech Lead review did not approve',
+    };
+  }
+
+  getSystemPrompt(context: AgentContext): string {
+    return 'Tech Lead reviewer agent system prompt';
+  }
+}
+
+/**
+ * Adapter for security-reviewer agent
+ */
+class SecurityReviewerAdapter extends FunctionAgentAdapter {
+  readonly name = 'security-reviewer';
+  readonly requiredCapabilities: (keyof ProviderCapabilities)[] = [
+    'supportsTools',
+    'supportsSystemPrompt',
+  ];
+
+  async execute(context: AgentContext): Promise<AgentResult> {
+    const result = await runSecurityReviewer(
+      context.storyPath,
+      context.sdlcRoot,
+      context.options,
+      this.provider
+    );
+
+    // Convert SecurityReviewResult to AgentResult
+    const { parseStory } = await import('../core/story.js');
+    const story = parseStory(context.storyPath);
+
+    return {
+      success: result.output.approved,
+      story,
+      changesMade: [`Security Review: ${result.output.content}`],
+      error: result.output.approved ? undefined : 'Security review did not approve',
+    };
+  }
+
+  getSystemPrompt(context: AgentContext): string {
+    return 'Security reviewer agent system prompt';
+  }
+}
+
+/**
+ * Adapter for product-owner-reviewer agent
+ */
+class ProductOwnerReviewerAdapter extends FunctionAgentAdapter {
+  readonly name = 'product-owner-reviewer';
+  readonly requiredCapabilities: (keyof ProviderCapabilities)[] = [
+    'supportsTools',
+    'supportsSystemPrompt',
+  ];
+
+  async execute(context: AgentContext): Promise<AgentResult> {
+    const result = await runProductOwnerReviewer(
+      context.storyPath,
+      context.sdlcRoot,
+      context.options,
+      this.provider
+    );
+
+    // Convert ProductOwnerReviewResult to AgentResult
+    const { parseStory } = await import('../core/story.js');
+    const story = parseStory(context.storyPath);
+
+    return {
+      success: result.output.approved,
+      story,
+      changesMade: [`Product Owner Review: ${result.output.content}`],
+      error: result.output.approved ? undefined : 'Product Owner review did not approve',
+    };
+  }
+
+  getSystemPrompt(context: AgentContext): string {
+    return 'Product Owner reviewer agent system prompt';
+  }
+}
+
+/**
  * Centralized factory for creating agent instances.
  *
  * Provides type-safe agent instantiation with dependency injection.
@@ -365,6 +478,9 @@ export class AgentFactory {
     rework: ReworkAgentAdapter,
     'state-assessor': StateAssessorAgentAdapter,
     refinement: RefinementAgentAdapter,
+    'tech-lead-reviewer': TechLeadReviewerAdapter,
+    'security-reviewer': SecurityReviewerAdapter,
+    'product-owner-reviewer': ProductOwnerReviewerAdapter,
   };
 
   /**

@@ -1,0 +1,17 @@
+version: "1.0"
+phases:
+  refine:
+    agents:
+      - id: initial-refinement
+        role: story_refiner
+      - id: multi-perspective-review
+        composition: parallel
+        consensus: required
+        maxIterations: 3
+        agents:
+          - id: tech-review
+            role: tech_lead_reviewer
+          - id: security-review
+            role: security_reviewer
+          - id: po-review
+            role: product_owner_reviewer

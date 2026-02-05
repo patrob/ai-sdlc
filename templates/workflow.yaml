@@ -1,0 +1,86 @@
+# AI-SDLC Workflow Configuration
+#
+# This file configures the agent execution workflow for each SDLC phase.
+# Place this file in your .ai-sdlc directory to enable multi-agent workflows.
+#
+# Documentation: https://github.com/patrob/ai-sdlc#workflow-configuration
+
+version: "1.0"
+
+phases:
+  # Refinement Phase
+  # ----------------
+  # Transforms backlog items into well-defined, ready-to-implement stories.
+  # By default, uses a single story_refiner agent.
+  #
+  # Example: Multi-perspective refinement with consensus
+  # This configuration runs three reviewers in parallel and requires
+  # them to reach consensus before the story is considered refined.
+  #
+  refine:
+    agents:
+      # First: Run the standard refinement to create initial story
+      - id: initial-refinement
+        role: story_refiner
+
+      # Then: Run multiple perspectives in parallel
+      - id: multi-perspective-review
+        composition: parallel  # Run all agents simultaneously
+        consensus: required    # Agents must reach agreement
+        maxIterations: 3       # Max rounds to seek consensus
+        agents:
+          - id: tech-review
+            role: tech_lead_reviewer
+          - id: security-review
+            role: security_reviewer
+          - id: po-review
+            role: product_owner_reviewer
+
+  # Research Phase
+  # --------------
+  # Investigates technical requirements and gathers implementation context.
+  # Uses default single-agent behavior when no agents are specified.
+  research: {}
+
+  # Planning Phase
+  # --------------
+  # Creates detailed implementation plans with task breakdowns.
+  plan: {}
+
+  # Plan Review Phase
+  # -----------------
+  # Reviews implementation plans before development begins.
+  plan_review: {}
+
+  # Implementation Phase
+  # --------------------
+  # Executes TDD cycles to implement the story.
+  implement: {}
+
+  # Review Phase
+  # ------------
+  # Reviews completed implementation for quality, security, and requirements.
+  review: {}
+
+# Available Agent Roles:
+# ----------------------
+# - story_refiner: Transforms raw backlog items into well-defined stories
+# - tech_lead_reviewer: Reviews technical feasibility and architecture
+# - security_reviewer: Reviews security requirements and vulnerabilities
+# - product_owner_reviewer: Reviews user value and acceptance criteria
+# - researcher: Investigates technical requirements
+# - planner: Creates implementation plans
+# - plan_reviewer: Reviews implementation plans
+# - implementer: Implements code via TDD
+# - reviewer: Reviews completed implementation
+
+# Composition Modes:
+# ------------------
+# - sequential: Run agents one after another (default)
+# - parallel: Run agents simultaneously
+
+# Consensus Requirements:
+# -----------------------
+# - required: Agents must reach agreement (iterate until consensus or maxIterations)
+# - optional: Record disagreements but don't block progress
+# - none: No consensus tracking, results are independent (default)

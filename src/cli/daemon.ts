@@ -8,6 +8,7 @@ import { getThemedChalk } from '../core/theme.js';
 import { runRefinementAgent } from '../agents/refinement.js';
 import { runResearchAgent } from '../agents/research.js';
 import { runPlanningAgent } from '../agents/planning.js';
+import { runPlanReviewAgent } from '../agents/plan-review.js';
 import { runImplementationAgent } from '../agents/implementation.js';
 import { runReviewAgent } from '../agents/review.js';
 import { runReworkAgent } from '../agents/rework.js';
@@ -400,6 +401,10 @@ export class DaemonRunner {
 
         case 'plan':
           result = await runPlanningAgent(currentStoryPath, this.sdlcRoot);
+          break;
+
+        case 'plan_review':
+          result = await runPlanReviewAgent(currentStoryPath, this.sdlcRoot);
           break;
 
         case 'implement':

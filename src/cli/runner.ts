@@ -5,8 +5,10 @@ import { assessState, kanbanExists } from '../core/kanban.js';
 import { parseStory, resetRPIVCycle, markStoryComplete, updateStoryStatus, isAtMaxRetries, getStory, incrementImplementationRetryCount, updateStoryField, autoCompleteStoryAfterReview, isAtGlobalRecoveryLimit, getTotalRecoveryAttempts, incrementTotalRecoveryAttempts, moveToBlocked } from '../core/story.js';
 import { Action, StateAssessment, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
 import { runRefinementAgent } from '../agents/refinement.js';
+import { PhaseExecutor, loadWorkflowConfig, hasCustomAgents, getPhaseConfig } from '../core/index.js';
 import { runResearchAgent } from '../agents/research.js';
 import { runPlanningAgent } from '../agents/planning.js';
+import { runPlanReviewAgent } from '../agents/plan-review.js';
 import { runImplementationAgent } from '../agents/implementation.js';
 import { runReviewAgent, createPullRequest, generateReviewSummary } from '../agents/review.js';
 import { runReworkAgent, packageReworkContext } from '../agents/rework.js';
@@ -164,6 +166,7 @@ export class WorkflowRunner {
    */
   private async executeAction(action: Action) {
     const config = loadConfig();
+    const c = getThemedChalk(config);
 
     // Resolve story by ID to get current path (handles moves between folders)
     let currentStoryPath: string;
@@ -172,7 +175,6 @@ export class WorkflowRunner {
       story = getStory(this.sdlcRoot, action.storyId);
       currentStoryPath = story.path;
     } catch (error) {
-      const c = getThemedChalk(config);
       console.log(c.error(`Error: Cannot execute action "${action.type}"`));
       console.log(c.dim(`  Story ID: ${action.storyId}`));
       console.log(c.dim(`  Original path: ${action.storyPath}`));
@@ -194,14 +196,45 @@ export class WorkflowRunner {
     }
 
     switch (action.type) {
-      case 'refine':
+      case 'refine': {
+        // Check for custom workflow config
+        const workflowConfig = loadWorkflowConfig(this.sdlcRoot);
+        const phaseConfig = getPhaseConfig(workflowConfig, 'refine');
+
+        if (hasCustomAgents(phaseConfig)) {
+          // Use PhaseExecutor for multi-agent workflow
+          const executor = new PhaseExecutor(this.sdlcRoot, workflowConfig);
+          const result = await executor.execute('refine', {
+            phase: 'refine',
+            storyPath: currentStoryPath,
+            sdlcRoot: this.sdlcRoot,
+            onProgress: this.options.verbose
+              ? (msg) => console.log(c.dim(`  ${msg}`))
+              : undefined,
+          });
+
+          // Convert PhaseExecutionResult to AgentResult format
+          const story = parseStory(currentStoryPath);
+          return {
+            success: result.success,
+            story,
+            changesMade: [result.summary],
+            error: result.error,
+          };
+        }
+
+        // Default: use single agent (backward compatible)
         return runRefinementAgent(currentStoryPath, this.sdlcRoot);
+      }
 
       case 'research':
         return runResearchAgent(currentStoryPath, this.sdlcRoot);
 
       case 'plan':
         return runPlanningAgent(currentStoryPath, this.sdlcRoot);
+
+      case 'plan_review':
+        return runPlanReviewAgent(currentStoryPath, this.sdlcRoot);
 
       case 'implement':
         return runImplementationAgent(currentStoryPath, this.sdlcRoot);
@@ -351,6 +384,7 @@ export class WorkflowRunner {
       refine: 'Refining',
       research: 'Researching',
       plan: 'Planning',
+      plan_review: 'Reviewing plan for',
       implement: 'Implementing',
       review: 'Reviewing',
       rework: 'Reworking',

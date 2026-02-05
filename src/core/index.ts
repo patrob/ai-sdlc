@@ -17,3 +17,7 @@ export * from './client.js';
 export * from './workflow-state.js';
 export * from './task-progress.js';
 export * from './llm-utils.js';
+export * from './workflow-config.js';
+export * from './result-merger.js';
+export * from './consensus-manager.js';
+export * from './phase-executor.js';

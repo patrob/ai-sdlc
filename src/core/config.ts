@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig, EpicConfig, MergeConfig, TicketingConfig, ProjectConfig, TechStack } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, PlanReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig, EpicConfig, MergeConfig, TicketingConfig, ProjectConfig, TechStack } from '../types/index.js';
 
 const CONFIG_FILENAME = '.ai-sdlc.json';
 
@@ -108,6 +108,14 @@ export const DEFAULT_IMPLEMENTATION_CONFIG: ImplementationConfig = {
 };
 
 /**
+ * Default plan review configuration
+ */
+export const DEFAULT_PLAN_REVIEW_CONFIG: PlanReviewConfig = {
+  maxIterations: 3,
+  requireAllPerspectives: true,
+};
+
+/**
  * Default logging configuration
  */
 export const DEFAULT_LOGGING_CONFIG: LogConfig = {
@@ -158,6 +166,7 @@ export const DEFAULT_CONFIG: Config = {
     detectTestAntipatterns: true,
     autoCreatePROnApproval: false, // Set to true in automated mode at runtime
   },
+  planReview: { ...DEFAULT_PLAN_REVIEW_CONFIG },
   implementation: { ...DEFAULT_IMPLEMENTATION_CONFIG },
   defaultLabels: [],
   groupings: undefined, // Use DEFAULT_GROUPINGS at runtime if not specified
@@ -675,6 +684,10 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
         reviewConfig: {
           ...DEFAULT_CONFIG.reviewConfig,
           ...userConfig.reviewConfig,
+        },
+        planReview: {
+          ...DEFAULT_PLAN_REVIEW_CONFIG,
+          ...userConfig.planReview,
         },
         implementation: {
           ...DEFAULT_IMPLEMENTATION_CONFIG,

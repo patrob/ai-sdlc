@@ -22,3 +22,5 @@ When modifying a file, you may make small improvements (rename unclear variables
 - [Implementation workflow](docs/implementation-workflow.md) — Anti-hallucination, completion criteria, failure handling
 - [Code conventions](docs/code-conventions.md) — ActionType patterns, SOLID, DRY, security
 - [Story documents](docs/story-documents.md) — Accuracy and status tracking
+- [Debugging patterns](docs/debugging-patterns.md) — CLI verification, package shadowing
+- [Advanced debugging](docs/advanced-debugging.md) — TDD bug fixes, parallel investigation, autonomous pipelines

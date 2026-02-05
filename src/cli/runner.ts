@@ -166,6 +166,7 @@ export class WorkflowRunner {
    */
   private async executeAction(action: Action) {
     const config = loadConfig();
+    const c = getThemedChalk(config);
 
     // Resolve story by ID to get current path (handles moves between folders)
     let currentStoryPath: string;
@@ -174,7 +175,6 @@ export class WorkflowRunner {
       story = getStory(this.sdlcRoot, action.storyId);
       currentStoryPath = story.path;
     } catch (error) {
-      const c = getThemedChalk(config);
       console.log(c.error(`Error: Cannot execute action "${action.type}"`));
       console.log(c.dim(`  Story ID: ${action.storyId}`));
       console.log(c.dim(`  Original path: ${action.storyPath}`));
@@ -208,6 +208,9 @@ export class WorkflowRunner {
             phase: 'refine',
             storyPath: currentStoryPath,
             sdlcRoot: this.sdlcRoot,
+            onProgress: this.options.verbose
+              ? (msg) => console.log(c.dim(`  ${msg}`))
+              : undefined,
           });
 
           // Convert PhaseExecutionResult to AgentResult format

@@ -264,6 +264,96 @@ Test story content`);
 
       expect(onProgress).toHaveBeenCalled();
     });
+
+    it('should call onProgress with agent ID for each agent in sequence', async () => {
+      const onProgress = vi.fn();
+      const config: WorkflowConfig = {
+        version: '1.0',
+        phases: {
+          refine: {
+            agents: [
+              { id: 'initial-refiner', role: 'story_refiner' },
+              { id: 'tech-reviewer', role: 'tech_lead_reviewer' },
+            ],
+          },
+        },
+      };
+
+      const executor = new PhaseExecutor(tempDir, config);
+      await executor.execute('refine', {
+        phase: 'refine',
+        storyPath,
+        sdlcRoot: tempDir,
+        onProgress,
+      });
+
+      // Should call onProgress for EACH agent
+      expect(onProgress).toHaveBeenCalledWith('Executing agent: initial-refiner');
+      expect(onProgress).toHaveBeenCalledWith('Executing agent: tech-reviewer');
+    });
+
+    it('should call onProgress for nested parallel agents', async () => {
+      const onProgress = vi.fn();
+      const config: WorkflowConfig = {
+        version: '1.0',
+        phases: {
+          refine: {
+            agents: [
+              { id: 'initial', role: 'story_refiner' },
+              {
+                id: 'multi-review',
+                composition: 'parallel',
+                agents: [
+                  { id: 'tech-review', role: 'tech_lead_reviewer' },
+                  { id: 'security-review', role: 'security_reviewer' },
+                  { id: 'po-review', role: 'product_owner_reviewer' },
+                ],
+              },
+            ],
+          },
+        },
+      };
+
+      const executor = new PhaseExecutor(tempDir, config);
+      await executor.execute('refine', {
+        phase: 'refine',
+        storyPath,
+        sdlcRoot: tempDir,
+        onProgress,
+      });
+
+      // Should call onProgress for the initial agent
+      expect(onProgress).toHaveBeenCalledWith('Executing agent: initial');
+      // Should call onProgress for the group
+      expect(onProgress).toHaveBeenCalledWith('Executing agent: multi-review');
+    });
+
+    it('should accept onProgress via options parameter', async () => {
+      const onProgress = vi.fn();
+      const config: WorkflowConfig = {
+        version: '1.0',
+        phases: {
+          refine: {
+            agents: [
+              { id: 'test-agent', role: 'story_refiner' },
+            ],
+          },
+        },
+      };
+
+      const executor = new PhaseExecutor(tempDir, config);
+      await executor.execute(
+        'refine',
+        {
+          phase: 'refine',
+          storyPath,
+          sdlcRoot: tempDir,
+        },
+        { onProgress }
+      );
+
+      expect(onProgress).toHaveBeenCalledWith('Executing agent: test-agent');
+    });
   });
 
   describe('error handling', () => {

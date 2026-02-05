@@ -1,8 +1,10 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { IProvider, ProviderCapabilities, ProviderQueryOptions } from '../types.js';
 import { ClaudeAuthenticator } from './authenticator.js';
+
+// Re-export authenticator for external use
+export { ClaudeAuthenticator } from './authenticator.js';
 import { DEFAULT_MODEL, SUPPORTED_MODELS, PERMISSION_MODE, DEFAULT_SETTING_SOURCES, MAX_CONTEXT_TOKENS } from './config.js';
-import { configureAgentSdkAuth, getTokenExpirationInfo } from '../../core/auth.js';
 import { loadConfig, DEFAULT_TIMEOUTS } from '../../core/config.js';
 import { getLogger } from '../../core/logger.js';
 import { platform, homedir } from 'os';
@@ -206,6 +208,8 @@ export class ClaudeProvider implements IProvider {
     const logger = getLogger();
 
     // Configure authentication
+    // Import the global function for backward compatibility with tests that mock it
+    const { configureAgentSdkAuth } = await import('../../core/auth.js');
     const authResult = configureAgentSdkAuth();
     if (!authResult.configured) {
       const credentialPath = path.join(homedir(), '.claude', '.credentials.json');
@@ -224,13 +228,14 @@ export class ClaudeProvider implements IProvider {
 
     // Check token expiration (only for OAuth tokens from credential file)
     if (authResult.type === 'oauth_token') {
-      const tokenInfo = getTokenExpirationInfo();
+      const tokenInfo = this.authenticator.getTokenExpirationInfo();
 
       // If token is expired, throw authentication error
       if (tokenInfo.isExpired) {
-        const source = tokenInfo.source ? `Token from ${tokenInfo.source}` : 'OAuth token';
+        const source = this.authenticator.getApiKeySource();
+        const sourceLabel = source === 'credentials_file' ? 'Token from ~/.claude/.credentials.json' : 'OAuth token';
         throw new AuthenticationError(
-          `${source} has expired. Please run \`claude login\` to refresh your credentials.`
+          `${sourceLabel} has expired. Please run \`claude login\` to refresh your credentials.`
         );
       }
 

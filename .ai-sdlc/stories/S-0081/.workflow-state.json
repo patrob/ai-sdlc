@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1770321957637-c2264700",
+  "timestamp": "2026-02-05T20:11:40.191Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "refine",
+      "storyId": "S-0081",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0081-extract-claude-authenticator/.ai-sdlc/stories/S-0081/story.md",
+      "completedAt": "2026-02-05T20:06:40.321Z"
+    },
+    {
+      "type": "research",
+      "storyId": "S-0081",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0081-extract-claude-authenticator/.ai-sdlc/stories/S-0081/story.md",
+      "completedAt": "2026-02-05T20:09:28.096Z"
+    },
+    {
+      "type": "plan",
+      "storyId": "S-0081",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0081-extract-claude-authenticator/.ai-sdlc/stories/S-0081/story.md",
+      "completedAt": "2026-02-05T20:10:59.876Z"
+    },
+    {
+      "type": "plan_review",
+      "storyId": "S-0081",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0081-extract-claude-authenticator/.ai-sdlc/stories/S-0081/story.md",
+      "completedAt": "2026-02-05T20:11:40.191Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0081-extract-claude-authenticator/.ai-sdlc",
+    "options": {
+      "auto": true,
+      "story": "S-0081",
+      "fullSDLC": true
+    },
+    "storyContentHash": "c01e94ec864415d61dd4e2dda0f0ea7792a2745f6ec62840a5f75660dd186ffd"
+  }
+}

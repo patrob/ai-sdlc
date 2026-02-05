@@ -4,7 +4,6 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { createRequire } from 'module';
 import { init, status, add, run, details, unblock, migrate, listWorktrees, addWorktree, removeWorktree, importIssue, linkIssue } from './cli/commands.js';
-import { hasApiKey } from './core/auth.js';
 import { loadConfig, saveConfig, DEFAULT_LOGGING_CONFIG, getSdlcRoot } from './core/config.js';
 import { loadWorkflowConfig, WorkflowConfigLoader } from './core/workflow-config.js';
 import { getThemedChalk } from './core/theme.js';
@@ -26,7 +25,10 @@ const packageJson = require('../package.json');
 
 // Check for API key when running commands that need it
 function checkApiKey(): boolean {
-  if (!hasApiKey()) {
+  const provider = ProviderRegistry.getDefault();
+  const authenticator = provider.getAuthenticator();
+
+  if (!authenticator.isConfigured()) {
     const config = loadConfig();
     const c = getThemedChalk(config);
     console.log(c.warning('Warning: No API key found.'));

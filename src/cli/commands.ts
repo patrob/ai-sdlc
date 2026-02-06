@@ -301,7 +301,7 @@ function sanitizeFileContent(content: string): string {
 /**
  * Add a new story to the backlog
  */
-export async function add(title?: string, options?: { file?: string }): Promise<void> {
+export async function add(title?: string, options?: { file?: string; ai?: boolean }): Promise<void> {
   const spinner = ora('Creating story...').start();
 
   try {
@@ -389,6 +389,52 @@ export async function add(title?: string, options?: { file?: string }): Promise<
       storyTitle = title!;
     }
 
+    // AI-assisted ideation (--ai flag)
+    if (options?.ai) {
+      spinner.text = 'Running AI ideation...';
+      try {
+        const { runIdeation, findPotentialDuplicates } = await import('../agents/ideation.js');
+        const { findAllStories } = await import('../core/kanban.js');
+
+        // Check for duplicates first (fast, local-only)
+        const existingStories = findAllStories(sdlcRoot);
+        const duplicates = findPotentialDuplicates(storyTitle, existingStories);
+
+        if (duplicates.length > 0) {
+          spinner.warn(c.warning('Potential duplicates found:'));
+          for (const dup of duplicates.slice(0, 3)) {
+            const pct = Math.round(dup.similarity * 100);
+            console.log(c.dim(`  - [${dup.story.frontmatter.id}] ${dup.story.frontmatter.title} (${pct}% similar)`));
+          }
+        }
+
+        // Run AI ideation
+        const ideation = await runIdeation(storyTitle, sdlcRoot);
+
+        // Append AI-generated acceptance criteria to story content
+        if (ideation.acceptanceCriteria.length > 0) {
+          const acContent = ideation.acceptanceCriteria
+            .map(ac => `- [ ] ${ac}`)
+            .join('\n');
+          storyContent = (storyContent || '') + `\n\n## Acceptance Criteria\n\n${acContent}\n`;
+        }
+
+        // Show decomposition suggestions
+        if (ideation.suggestedDecomposition) {
+          console.log(c.warning('\nDecomposition suggested:'));
+          for (const sub of ideation.suggestedDecomposition) {
+            console.log(c.dim(`  - ${sub}`));
+          }
+        }
+
+        spinner.text = 'Creating story with AI enrichment...';
+      } catch (error) {
+        // AI ideation is best-effort; continue without it
+        const msg = error instanceof Error ? error.message : String(error);
+        spinner.text = `AI ideation unavailable (${msg}), creating story...`;
+      }
+    }
+
     // Create the story
     const story = await createStory(storyTitle, sdlcRoot, {}, storyContent);
 
@@ -398,6 +444,9 @@ export async function add(title?: string, options?: { file?: string }): Promise<
     console.log(c.dim(`  Slug: ${story.slug}`));
     if (options?.file) {
       console.log(c.dim(`  Source: ${path.basename(options.file)}`));
+    }
+    if (options?.ai) {
+      console.log(c.dim(`  AI-assisted: yes`));
     }
     console.log();
     console.log(c.info('Next step:'), `ai-sdlc run`);
@@ -2823,6 +2872,7 @@ function formatAction(action: Action, includePhaseIndicator: boolean = false, co
     review: 'Review',
     rework: 'Rework',
     create_pr: 'Create PR for',
+    merge: 'Merge PR for',
     move_to_done: 'Move to done',
   };
 
@@ -3125,6 +3175,81 @@ export async function unblock(storyId: string, options?: { resetRetries?: boolea
     spinner.fail('Failed to unblock story');
     const message = error instanceof Error ? error.message : String(error);
     console.error(c.error(`  ${message}`));
+    process.exit(1);
+  }
+}
+
+/**
+ * Approve a story that is awaiting human approval.
+ * Sets an approval marker on the story and emits an event.
+ */
+export async function approve(storyId: string): Promise<void> {
+  const config = loadConfig();
+  const c = getThemedChalk(config);
+  const sdlcRoot = getSdlcRoot();
+
+  if (!kanbanExists(sdlcRoot)) {
+    console.log(c.warning('ai-sdlc not initialized. Run `ai-sdlc init` first.'));
+    return;
+  }
+
+  try {
+    const story = getStory(sdlcRoot, storyId);
+    await updateStoryField(story, 'plan_review_complete', true);
+    console.log(c.success(`Approved story ${storyId}: "${story.frontmatter.title}"`));
+
+    // Emit event via EventBus (lazy import to avoid circular)
+    const { getEventBus } = await import('../core/event-bus.js');
+    getEventBus().emit({
+      type: 'story_phase_change',
+      storyId: story.frontmatter.id,
+      fromPhase: 'awaiting_approval',
+      toPhase: 'approved',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(c.error(`Failed to approve story: ${message}`));
+    process.exit(1);
+  }
+}
+
+/**
+ * Provide human feedback on a story.
+ * Appends feedback to the story's review section and emits an event.
+ */
+export async function feedback(storyId: string, feedbackText: string): Promise<void> {
+  const config = loadConfig();
+  const c = getThemedChalk(config);
+  const sdlcRoot = getSdlcRoot();
+
+  if (!kanbanExists(sdlcRoot)) {
+    console.log(c.warning('ai-sdlc not initialized. Run `ai-sdlc init` first.'));
+    return;
+  }
+
+  try {
+    const story = getStory(sdlcRoot, storyId);
+
+    // Append feedback to story content
+    const feedbackEntry = `\n\n## Human Feedback (${new Date().toISOString()})\n\n${feedbackText}\n`;
+    const updatedContent = story.content + feedbackEntry;
+    await writeStory({ ...story, content: updatedContent });
+
+    console.log(c.success(`Feedback recorded for story ${storyId}: "${story.frontmatter.title}"`));
+
+    // Emit event
+    const { getEventBus } = await import('../core/event-bus.js');
+    getEventBus().emit({
+      type: 'story_phase_change',
+      storyId: story.frontmatter.id,
+      fromPhase: 'awaiting_feedback',
+      toPhase: 'feedback_received',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(c.error(`Failed to record feedback: ${message}`));
     process.exit(1);
   }
 }

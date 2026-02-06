@@ -20,8 +20,9 @@ function loadStoriesFromWorktrees(sdlcRoot: string): Map<string, Story> {
 
   try {
     // Determine worktree base path and project root
-    const projectRoot = path.dirname(sdlcRoot);
-    const worktreeBasePath = path.join(sdlcRoot, 'worktrees');
+    // Resolve to absolute paths since git worktree list returns absolute paths
+    const projectRoot = path.resolve(path.dirname(sdlcRoot));
+    const worktreeBasePath = path.resolve(path.join(sdlcRoot, 'worktrees'));
 
     // Get list of active worktrees
     const worktreeService = new GitWorktreeService(projectRoot, worktreeBasePath);

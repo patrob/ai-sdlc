@@ -364,11 +364,14 @@ export class GitWorktreeService {
 
       // Filter to only ai-sdlc managed worktrees
       if (worktreePath && worktreePath.startsWith(this.worktreeBasePath)) {
+        // Try to extract story ID from branch name first, then fall back to directory name
         const storyIdMatch = branch.match(/^ai-sdlc\/(S-\d+)-/);
+        const dirName = worktreePath.split('/').pop() || '';
+        const dirStoryIdMatch = dirName.match(/^(S-\d+)-/);
         worktrees.push({
           path: worktreePath,
           branch,
-          storyId: storyIdMatch ? storyIdMatch[1] : undefined,
+          storyId: storyIdMatch?.[1] ?? dirStoryIdMatch?.[1] ?? undefined,
           exists: existsSync(worktreePath),
         });
       }

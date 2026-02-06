@@ -1250,6 +1250,42 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
     return null;
   }
 
+  // Check worktrees first (worktree version is more up-to-date)
+  const worktreesFolder = path.join(sdlcRoot, 'worktrees');
+  if (fs.existsSync(worktreesFolder)) {
+    try {
+      const worktreeDirs = fs.readdirSync(worktreesFolder, { withFileTypes: true })
+        .filter(dirent => dirent.isDirectory())
+        .map(dirent => dirent.name);
+
+      const sdlcFolderName = path.basename(sdlcRoot);
+      for (const wtDir of worktreeDirs) {
+        // Scan story directories to get correct filesystem casing
+        // (realpathSync does NOT canonicalize casing on macOS)
+        const wtStoriesFolder = path.join(worktreesFolder, wtDir, sdlcFolderName, STORIES_FOLDER);
+        if (!fs.existsSync(wtStoriesFolder)) continue;
+
+        const storyDirs = fs.readdirSync(wtStoriesFolder, { withFileTypes: true })
+          .filter(dirent => dirent.isDirectory())
+          .map(dirent => dirent.name);
+
+        const actualDir = storyDirs.find(d => d.toLowerCase() === storyId.toLowerCase());
+        if (!actualDir) continue;
+
+        const wtStoryPath = path.join(wtStoriesFolder, actualDir, STORY_FILENAME);
+        if (fs.existsSync(wtStoryPath)) {
+          const canonicalPath = fs.realpathSync(wtStoryPath);
+          const story = parseStory(canonicalPath);
+          if (story.frontmatter.id?.toLowerCase() === storyId.toLowerCase()) {
+            return { ...story, path: canonicalPath };
+          }
+        }
+      }
+    } catch {
+      // Fall through to main stories folder
+    }
+  }
+
   // O(n) directory scan for case-insensitive matching in new architecture
   // Reads all story directories to find case-insensitive match
   // Note: fs.realpathSync() does NOT canonicalize casing on macOS, so we must scan

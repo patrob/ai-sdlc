@@ -85,7 +85,37 @@ export type ProviderProgressEvent =
   | { type: 'assistant_message'; content: string }
   | { type: 'completion' }
   | { type: 'error'; message: string }
-  | { type: 'retry'; attempt: number; delay: number; error: string; errorType: string };
+  | { type: 'retry'; attempt: number; delay: number; error: string; errorType: string }
+  | { type: 'cost_update'; inputTokens: number; outputTokens: number; model: string };
+
+/**
+ * Token usage information from an AI provider query.
+ */
+export interface TokenUsage {
+  /** Number of input/prompt tokens consumed */
+  inputTokens: number;
+  /** Number of output/completion tokens generated */
+  outputTokens: number;
+  /** Total tokens (input + output) */
+  totalTokens: number;
+}
+
+/**
+ * Extended result from a provider query including usage metadata.
+ *
+ * This complements the string return from `IProvider.query()` with
+ * optional cost/duration tracking data accessible via `getLastQueryResult()`.
+ */
+export interface ProviderQueryResult {
+  /** The AI-generated response text */
+  response: string;
+  /** Token usage breakdown (if available from provider) */
+  usage?: TokenUsage;
+  /** Wall-clock duration of the query in milliseconds */
+  durationMs: number;
+  /** Model identifier used for this query */
+  model?: string;
+}
 
 /**
  * Callback function for receiving real-time progress updates from provider query execution.
@@ -277,4 +307,15 @@ export interface IProvider {
    * @returns Authenticator instance for this provider
    */
   getAuthenticator(): IAuthenticator;
+
+  /**
+   * Get the result metadata from the most recent query.
+   *
+   * Optional method that providers can implement to expose token usage,
+   * duration, and model information from the last `query()` call.
+   * Returns undefined if no query has been executed or provider doesn't track this.
+   *
+   * @returns Query result with usage metadata, or undefined
+   */
+  getLastQueryResult?(): ProviderQueryResult | undefined;
 }

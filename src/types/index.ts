@@ -394,6 +394,7 @@ export type ActionType =
   | 'review'
   | 'rework'
   | 'create_pr'
+  | 'merge'
   | 'move_to_done';
 
 export interface Action {
@@ -820,6 +821,36 @@ export const DEFAULT_GROUPINGS: GroupingConfig[] = [
   },
 ];
 
+/**
+ * Cost limit configuration for controlling AI token spending.
+ * Prevents runaway costs from unbounded token consumption.
+ */
+export interface CostLimitConfig {
+  /** Maximum total tokens per story before auto-pause. @default undefined (no limit) */
+  perStoryMaxTokens?: number;
+  /** Maximum total tokens per run (all stories) before auto-pause. @default undefined (no limit) */
+  perRunMaxTokens?: number;
+  /** Percentage of limit at which to emit a warning (0-100). @default 80 */
+  warningThresholdPercent?: number;
+}
+
+/**
+ * Notification channel type for human-in-the-loop events
+ */
+export type NotificationChannelType = 'console' | 'file';
+
+/**
+ * Notification configuration for human-in-the-loop workflows
+ */
+export interface NotificationConfig {
+  /** Enable notifications. @default true */
+  enabled: boolean;
+  /** Channels to send notifications through. @default ['console'] */
+  channels: NotificationChannelType[];
+  /** File path for file-based notifications (relative to sdlcRoot). @default 'notifications.log' */
+  filePath?: string;
+}
+
 export interface Config {
   sdlcFolder: string;
   stageGates: StageGateConfig;
@@ -926,6 +957,18 @@ export interface Config {
    * @default false
    */
   useOrchestrator?: boolean;
+  /**
+   * Cost limit configuration for controlling AI token spending.
+   * Prevents runaway costs from unbounded token consumption.
+   * @default undefined (no limits)
+   */
+  costLimits?: CostLimitConfig;
+  /**
+   * Notification configuration for human-in-the-loop workflows.
+   * Controls how and where approval/feedback notifications are sent.
+   * @default { enabled: true, channels: ['console'] }
+   */
+  notification?: NotificationConfig;
 }
 
 /**

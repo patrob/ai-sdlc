@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "workflowId": "workflow-1770346572707-b474855c",
+  "timestamp": "2026-02-06T02:56:36.091Z",
+  "currentAction": null,
+  "completedActions": [
+    {
+      "type": "plan_review",
+      "storyId": "S-0129",
+      "storyPath": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0129-add-json-output-format-to-the-status-command-via-j/.ai-sdlc/stories/S-0129/story.md",
+      "completedAt": "2026-02-06T02:56:36.091Z"
+    }
+  ],
+  "context": {
+    "sdlcRoot": "/Users/probinson/Repos/on-par/pocs/ai-sdlc/.ai-sdlc/worktrees/S-0129-add-json-output-format-to-the-status-command-via-j/.ai-sdlc",
+    "options": {
+      "story": "S-0129",
+      "fullSDLC": false
+    },
+    "storyContentHash": "7dd99968bc1d2768726a3e96a193661e6a35ba622fa93de28b1a0ebe08a8a4cf"
+  }
+}

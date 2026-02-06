@@ -21,3 +21,6 @@ export * from './workflow-config.js';
 export * from './result-merger.js';
 export * from './consensus-manager.js';
 export * from './phase-executor.js';
+export * from './event-bus.js';
+export * from './cost-tracker.js';
+export * from './notification.js';

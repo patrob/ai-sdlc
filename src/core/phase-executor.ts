@@ -30,6 +30,7 @@ import {
   formatConcernsForIteration,
 } from './consensus-manager.js';
 import { getLogger } from './logger.js';
+import { getEventBus } from './event-bus.js';
 import type { IProvider } from '../providers/types.js';
 import { ProviderRegistry } from '../providers/registry.js';
 
@@ -329,11 +330,24 @@ export class PhaseExecutor {
 
     const provider = options.provider ?? ProviderRegistry.getDefault();
     const onProgress = options.onProgress ?? context.onProgress;
+    const storyId = context.storyPath.split('/').pop()?.replace('.md', '') ?? context.storyPath;
+    const eventBus = getEventBus();
+    const startTime = Date.now();
+
+    eventBus.emit({
+      type: 'agent_start',
+      storyId,
+      phase: context.phase,
+      agentId: agentConfig.id,
+      timestamp: new Date().toISOString(),
+    });
 
     try {
       // Execute the appropriate reviewer based on role
       // Note: onProgress types differ between internal use and agent APIs
       // We use 'as any' to bridge the type mismatch
+      let output: AgentOutput;
+
       switch (role) {
         case 'tech_lead_reviewer': {
           const result = await runTechLeadReviewer(
@@ -342,11 +356,12 @@ export class PhaseExecutor {
             { onProgress: onProgress as any },
             provider
           );
-          return {
+          output = {
             ...result.output,
             agentId: agentConfig.id,
             iteration: options.iterationContext?.iteration,
           };
+          break;
         }
 
         case 'security_reviewer': {
@@ -356,11 +371,12 @@ export class PhaseExecutor {
             { onProgress: onProgress as any },
             provider
           );
-          return {
+          output = {
             ...result.output,
             agentId: agentConfig.id,
             iteration: options.iterationContext?.iteration,
           };
+          break;
         }
 
         case 'product_owner_reviewer': {
@@ -370,11 +386,12 @@ export class PhaseExecutor {
             { onProgress: onProgress as any },
             provider
           );
-          return {
+          output = {
             ...result.output,
             agentId: agentConfig.id,
             iteration: options.iterationContext?.iteration,
           };
+          break;
         }
 
         case 'story_refiner': {
@@ -384,7 +401,7 @@ export class PhaseExecutor {
             { onProgress: onProgress as any },
             provider
           );
-          return {
+          output = {
             agentId: agentConfig.id,
             role: 'story_refiner',
             content: result.changesMade.join('\n'),
@@ -396,10 +413,11 @@ export class PhaseExecutor {
             approved: result.success,
             iteration: options.iterationContext?.iteration,
           };
+          break;
         }
 
         default:
-          return {
+          output = {
             agentId: agentConfig.id,
             role,
             content: `Unsupported role: ${role}`,
@@ -411,11 +429,32 @@ export class PhaseExecutor {
             approved: false,
           };
       }
+
+      eventBus.emit({
+        type: 'agent_complete',
+        storyId,
+        phase: context.phase,
+        agentId: agentConfig.id,
+        durationMs: Date.now() - startTime,
+        success: output.approved,
+        timestamp: new Date().toISOString(),
+      });
+
+      return output;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.error('phase-executor', `Agent execution failed: ${agentConfig.id}`, {
         role,
         error: errorMessage,
+      });
+
+      eventBus.emit({
+        type: 'agent_error',
+        storyId,
+        phase: context.phase,
+        agentId: agentConfig.id,
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
       });
 
       return {

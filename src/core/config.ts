@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, PlanReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig, EpicConfig, MergeConfig, TicketingConfig, ProjectConfig, TechStack } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, PlanReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig, EpicConfig, MergeConfig, TicketingConfig, ProjectConfig, TechStack, CostLimitConfig, NotificationConfig } from '../types/index.js';
 
 const CONFIG_FILENAME = '.ai-sdlc.json';
 
@@ -100,6 +100,42 @@ export function validateMergeConfig(config: Partial<MergeConfig>): MergeConfig {
 }
 
 /**
+ * Validate cost limit configuration values
+ * @param config Partial cost limit configuration to validate
+ * @returns Validated cost limit configuration
+ */
+export function validateCostLimitConfig(config: Partial<CostLimitConfig>): CostLimitConfig {
+  const validated: CostLimitConfig = {};
+
+  if (config.perStoryMaxTokens !== undefined) {
+    if (typeof config.perStoryMaxTokens !== 'number' || !Number.isFinite(config.perStoryMaxTokens) || config.perStoryMaxTokens <= 0) {
+      console.warn('Warning: costLimits.perStoryMaxTokens must be a positive number, ignoring');
+    } else {
+      validated.perStoryMaxTokens = config.perStoryMaxTokens;
+    }
+  }
+
+  if (config.perRunMaxTokens !== undefined) {
+    if (typeof config.perRunMaxTokens !== 'number' || !Number.isFinite(config.perRunMaxTokens) || config.perRunMaxTokens <= 0) {
+      console.warn('Warning: costLimits.perRunMaxTokens must be a positive number, ignoring');
+    } else {
+      validated.perRunMaxTokens = config.perRunMaxTokens;
+    }
+  }
+
+  if (config.warningThresholdPercent !== undefined) {
+    if (typeof config.warningThresholdPercent !== 'number' || config.warningThresholdPercent < 0 || config.warningThresholdPercent > 100) {
+      console.warn('Warning: costLimits.warningThresholdPercent must be 0-100, using 80');
+      validated.warningThresholdPercent = 80;
+    } else {
+      validated.warningThresholdPercent = config.warningThresholdPercent;
+    }
+  }
+
+  return validated;
+}
+
+/**
  * Default implementation configuration
  */
 export const DEFAULT_IMPLEMENTATION_CONFIG: ImplementationConfig = {
@@ -130,6 +166,15 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
   initialDelay: 2000,
   maxDelay: 32000,
   maxTotalDuration: 60000,
+};
+
+/**
+ * Default notification configuration
+ */
+export const DEFAULT_NOTIFICATION_CONFIG_VALUE: NotificationConfig = {
+  enabled: true,
+  channels: ['console'],
+  filePath: 'notifications.log',
 };
 
 /**
@@ -193,6 +238,8 @@ export const DEFAULT_CONFIG: Config = {
   ticketing: { ...DEFAULT_TICKETING_CONFIG },
   // Orchestrator configuration
   useOrchestrator: false,
+  // Notification configuration
+  notification: { ...DEFAULT_NOTIFICATION_CONFIG_VALUE },
 };
 
 /**
@@ -585,6 +632,16 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
     }
   }
 
+  // Validate cost limit configuration if present
+  if (userConfig.costLimits !== undefined) {
+    if (typeof userConfig.costLimits !== 'object' || userConfig.costLimits === null) {
+      console.warn('Invalid costLimits in config (must be object), ignoring');
+      delete userConfig.costLimits;
+    } else {
+      userConfig.costLimits = validateCostLimitConfig(userConfig.costLimits);
+    }
+  }
+
   // Validate ticketing configuration if present
   if (userConfig.ticketing !== undefined) {
     if (typeof userConfig.ticketing !== 'object' || userConfig.ticketing === null) {
@@ -724,6 +781,13 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
         ticketing: {
           ...DEFAULT_TICKETING_CONFIG,
           ...userConfig.ticketing,
+        },
+        costLimits: userConfig.costLimits
+          ? validateCostLimitConfig(userConfig.costLimits)
+          : undefined,
+        notification: {
+          ...DEFAULT_NOTIFICATION_CONFIG_VALUE,
+          ...userConfig.notification,
         },
       };
     } catch (error) {

@@ -5,13 +5,14 @@ import { assessState, kanbanExists } from '../core/kanban.js';
 import { parseStory, resetRPIVCycle, markStoryComplete, updateStoryStatus, isAtMaxRetries, getStory, incrementImplementationRetryCount, updateStoryField, autoCompleteStoryAfterReview, isAtGlobalRecoveryLimit, getTotalRecoveryAttempts, incrementTotalRecoveryAttempts, moveToBlocked } from '../core/story.js';
 import { Action, StateAssessment, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
 import { runRefinementAgent } from '../agents/refinement.js';
-import { PhaseExecutor, loadWorkflowConfig, hasCustomAgents, getPhaseConfig } from '../core/index.js';
+import { PhaseExecutor, loadWorkflowConfig, hasCustomAgents, getPhaseConfig, getEventBus } from '../core/index.js';
 import { runResearchAgent } from '../agents/research.js';
 import { runPlanningAgent } from '../agents/planning.js';
 import { runPlanReviewAgent } from '../agents/plan-review.js';
 import { runImplementationAgent } from '../agents/implementation.js';
 import { runReviewAgent, createPullRequest, generateReviewSummary } from '../agents/review.js';
 import { runReworkAgent, packageReworkContext } from '../agents/rework.js';
+import { runMergeAgent } from '../agents/merge.js';
 import { getThemedChalk } from '../core/theme.js';
 import { getTerminalWidth, formatSuccessMessage } from './formatting.js';
 
@@ -31,6 +32,7 @@ export interface RunOptions {
 export class WorkflowRunner {
   private sdlcRoot: string;
   private options: RunOptions;
+  private lastPhaseByStory = new Map<string, string>();
 
   constructor(options: RunOptions = {}) {
     this.sdlcRoot = getSdlcRoot();
@@ -184,6 +186,19 @@ export class WorkflowRunner {
       return { success: false, error: error instanceof Error ? error.message : 'Story not found', changesMade: [] };
     }
 
+    // Emit story_phase_change event when action type changes for a story
+    const lastPhase = this.lastPhaseByStory.get(action.storyId);
+    if (lastPhase && lastPhase !== action.type) {
+      getEventBus().emit({
+        type: 'story_phase_change',
+        storyId: action.storyId,
+        fromPhase: lastPhase,
+        toPhase: action.type,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    this.lastPhaseByStory.set(action.storyId, action.type);
+
     // Check global recovery circuit breaker
     if (isAtGlobalRecoveryLimit(story)) {
       const c = getThemedChalk(config);
@@ -285,6 +300,9 @@ export class WorkflowRunner {
 
       case 'create_pr':
         return createPullRequest(currentStoryPath, this.sdlcRoot);
+
+      case 'merge':
+        return runMergeAgent(currentStoryPath, this.sdlcRoot);
 
       default:
         throw new Error(`Unknown action type: ${action.type}`);
@@ -389,6 +407,7 @@ export class WorkflowRunner {
       review: 'Reviewing',
       rework: 'Reworking',
       create_pr: 'Creating PR for',
+      merge: 'Merging PR for',
       move_to_done: 'Moving to done',
     };
 

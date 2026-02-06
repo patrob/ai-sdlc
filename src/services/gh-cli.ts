@@ -606,6 +606,152 @@ export async function ghLinkIssueToPR(
   await ghIssueComment(owner, repo, issueNumber, body);
 }
 
+/**
+ * Check status result for PR CI checks
+ */
+export type PRCheckConclusion = 'success' | 'failure' | 'pending' | 'neutral' | 'skipped' | 'cancelled' | 'timed_out' | 'action_required' | 'stale';
+
+export interface PRCheckResult {
+  name: string;
+  status: 'completed' | 'in_progress' | 'queued' | 'waiting' | 'pending' | 'requested';
+  conclusion: PRCheckConclusion | null;
+}
+
+export interface PRChecksStatus {
+  checks: PRCheckResult[];
+  allPassed: boolean;
+  anyFailed: boolean;
+  anyPending: boolean;
+}
+
+/**
+ * Get CI check statuses for a PR.
+ *
+ * @param prNumber PR number
+ * @param cwd Working directory (to determine repo context)
+ * @returns Check status summary
+ * @throws {GhNotInstalledError} If gh CLI is not installed
+ */
+export function ghPRChecks(prNumber: number, cwd?: string): PRChecksStatus {
+  const args = [
+    'pr',
+    'checks',
+    prNumber.toString(),
+    '--json',
+    'name,state,conclusion',
+  ];
+
+  const result = spawnSync('gh', args, {
+    encoding: 'utf-8',
+    shell: false,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 30000,
+    cwd,
+  });
+
+  if (result.error) {
+    // @ts-expect-error - error.code is not in the type definition but exists at runtime
+    if (result.error.code === 'ENOENT') {
+      throw new GhNotInstalledError();
+    }
+    throw new Error(`Failed to execute gh command: ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    const stderr = result.stderr || '';
+    // No checks configured is not an error - treat as all passed
+    if (stderr.toLowerCase().includes('no checks')) {
+      return { checks: [], allPassed: true, anyFailed: false, anyPending: false };
+    }
+    throw new Error(`gh pr checks failed: ${stderr}`);
+  }
+
+  let checks: PRCheckResult[];
+  try {
+    checks = JSON.parse(result.stdout);
+  } catch {
+    return { checks: [], allPassed: true, anyFailed: false, anyPending: false };
+  }
+
+  const anyFailed = checks.some(c =>
+    c.conclusion === 'failure' || c.conclusion === 'cancelled' || c.conclusion === 'timed_out'
+  );
+  const anyPending = checks.some(c =>
+    c.status !== 'completed'
+  );
+  const allPassed = !anyFailed && !anyPending;
+
+  return { checks, allPassed, anyFailed, anyPending };
+}
+
+/**
+ * Merge strategy type alias
+ */
+export type GhMergeStrategy = 'squash' | 'merge' | 'rebase';
+
+/**
+ * Merge a PR using gh CLI.
+ *
+ * @param prNumber PR number
+ * @param strategy Merge strategy (squash, merge, rebase)
+ * @param deleteBranch Whether to delete the branch after merge
+ * @param cwd Working directory
+ * @returns Merge SHA from stdout
+ * @throws {GhNotInstalledError} If gh CLI is not installed
+ */
+export function ghPRMerge(
+  prNumber: number,
+  strategy: GhMergeStrategy = 'squash',
+  deleteBranch: boolean = true,
+  cwd?: string
+): string {
+  const args = [
+    'pr',
+    'merge',
+    prNumber.toString(),
+    `--${strategy}`,
+    '--auto',
+  ];
+
+  if (deleteBranch) {
+    args.push('--delete-branch');
+  }
+
+  const result = spawnSync('gh', args, {
+    encoding: 'utf-8',
+    shell: false,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 60000,
+    cwd,
+  });
+
+  if (result.error) {
+    // @ts-expect-error - error.code is not in the type definition but exists at runtime
+    if (result.error.code === 'ENOENT') {
+      throw new GhNotInstalledError();
+    }
+    throw new Error(`Failed to execute gh command: ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    const stderr = result.stderr || '';
+    throw new Error(`gh pr merge failed: ${stderr}`);
+  }
+
+  return result.stdout.trim();
+}
+
+/**
+ * Extract PR number from a GitHub PR URL.
+ *
+ * @param prUrl PR URL like https://github.com/owner/repo/pull/123
+ * @returns PR number or null if URL is invalid
+ */
+export function extractPRNumber(prUrl: string): number | null {
+  const match = prUrl.match(/\/pull\/(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
 export async function ghIssueList(
   owner: string,
   repo: string,

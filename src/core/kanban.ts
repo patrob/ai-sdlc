@@ -400,6 +400,24 @@ export async function assessState(sdlcRoot: string): Promise<StateAssessment> {
         reason: `Story "${story.frontmatter.title}" needs review${retryCount > 0 ? ` (retry ${retryCount})` : ''}`,
         priority: story.frontmatter.priority + 100 + priorityPenalty - completionScore,
       });
+    } else if (!story.frontmatter.pr_url) {
+      const completionScore = calculateCompletionScore(story);
+      recommendedActions.push({
+        type: 'create_pr',
+        storyId: story.frontmatter.id,
+        storyPath: story.path,
+        reason: `Story "${story.frontmatter.title}" is ready for PR`,
+        priority: story.frontmatter.priority + 150 - completionScore,
+      });
+    } else if (config.merge?.enabled && !story.frontmatter.pr_merged) {
+      const completionScore = calculateCompletionScore(story);
+      recommendedActions.push({
+        type: 'merge',
+        storyId: story.frontmatter.id,
+        storyPath: story.path,
+        reason: `Story "${story.frontmatter.title}" has PR ready to merge`,
+        priority: story.frontmatter.priority + 155 - completionScore,
+      });
     } else {
       const completionScore = calculateCompletionScore(story);
       recommendedActions.push({

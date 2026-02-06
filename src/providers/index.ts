@@ -27,3 +27,8 @@ export { ProviderRegistry } from './registry.js';
 // Export Claude provider
 export { ClaudeProvider } from './claude/index.js';
 export { ClaudeAuthenticator } from './claude/authenticator.js';
+
+// Export mock and dry-run providers
+export { MockProvider, MockAuthenticator } from './mock-provider.js';
+export type { MockProviderOptions, RecordedCall } from './mock-provider.js';
+export { DryRunProvider } from './dry-run-provider.js';

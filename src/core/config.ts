@@ -110,10 +110,7 @@ export const DEFAULT_IMPLEMENTATION_CONFIG: ImplementationConfig = {
 /**
  * Default plan review configuration
  */
-export const DEFAULT_PLAN_REVIEW_CONFIG: PlanReviewConfig = {
-  maxIterations: 3,
-  requireAllPerspectives: true,
-};
+export const DEFAULT_PLAN_REVIEW_CONFIG: PlanReviewConfig = {};
 
 /**
  * Default logging configuration

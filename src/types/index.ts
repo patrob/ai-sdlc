@@ -485,12 +485,12 @@ export interface RefinementConfig {
 /**
  * Plan review configuration
  * Controls the plan review phase that occurs after planning but before implementation.
+ * Plan review is a single-pass enrichment step, not a gate.
  */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface PlanReviewConfig {
-  /** Maximum iterations for plan refinement before proceeding. @default 3 */
-  maxIterations: number;
-  /** Require all three perspectives (Tech Lead, Security, PO) to be satisfied. @default true */
-  requireAllPerspectives: boolean;
+  // Plan review is enrichment-only; no iteration or gating config needed.
+  // Interface retained for Config compatibility and future extensibility.
 }
 
 /**

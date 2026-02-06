@@ -2,19 +2,10 @@ import { z } from 'zod';
 import { parseStory, updateStoryField, writeStory, writeSectionContent, readSectionContent } from '../core/story.js';
 import { runAgentQuery } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
-import { loadConfig } from '../core/config.js';
-import { Story, AgentResult, PlanReviewConfig } from '../types/index.js';
+import { Story, AgentResult } from '../types/index.js';
 import path from 'path';
 import type { AgentOptions } from './research.js';
 import type { IProvider } from '../providers/types.js';
-
-/**
- * Default plan review configuration
- */
-export const DEFAULT_PLAN_REVIEW_CONFIG: PlanReviewConfig = {
-  maxIterations: 3,
-  requireAllPerspectives: true,
-};
 
 /**
  * Individual suggestion from plan review
@@ -269,27 +260,22 @@ export function formatSuggestions(suggestions: PlanReviewSuggestion[]): string {
     grouped[suggestion.perspective].push(suggestion);
   }
 
+  const perspectiveLabels: Record<string, string> = {
+    techLead: 'Tech Lead Perspective',
+    security: 'Security Engineer Perspective',
+    productOwner: 'Product Owner Perspective',
+  };
+
   const sections: string[] = [];
 
-  if (grouped.techLead.length > 0) {
-    sections.push('### Tech Lead Perspective\n' +
-      grouped.techLead.map(s =>
-        `- **[${s.severity}]** ${s.description}${s.suggestedChange ? `\n  - Suggested: ${s.suggestedChange}` : ''}`
-      ).join('\n'));
-  }
-
-  if (grouped.security.length > 0) {
-    sections.push('### Security Engineer Perspective\n' +
-      grouped.security.map(s =>
-        `- **[${s.severity}]** ${s.description}${s.suggestedChange ? `\n  - Suggested: ${s.suggestedChange}` : ''}`
-      ).join('\n'));
-  }
-
-  if (grouped.productOwner.length > 0) {
-    sections.push('### Product Owner Perspective\n' +
-      grouped.productOwner.map(s =>
-        `- **[${s.severity}]** ${s.description}${s.suggestedChange ? `\n  - Suggested: ${s.suggestedChange}` : ''}`
-      ).join('\n'));
+  for (const [key, label] of Object.entries(perspectiveLabels)) {
+    const items = grouped[key];
+    if (items.length > 0) {
+      sections.push(`### ${label}\n` +
+        items.map(s =>
+          `- **[${s.severity}]** ${s.description}${s.suggestedChange ? `\n  - Suggested: ${s.suggestedChange}` : ''}`
+        ).join('\n'));
+    }
   }
 
   return sections.join('\n\n');
@@ -298,14 +284,10 @@ export function formatSuggestions(suggestions: PlanReviewSuggestion[]): string {
 /**
  * Plan Review Agent
  *
- * Evaluates implementation plans from three perspectives (Tech Lead, Security, PO)
- * before implementation begins. This "shifts left" by catching issues early.
- *
- * Workflow:
- * 1. Read the story requirements and existing plan
- * 2. Evaluate from three perspectives
- * 3. If all perspectives satisfied → mark plan_review_complete
- * 4. If any perspective unsatisfied → reset plan_complete, increment iteration
+ * Single-pass enrichment step that evaluates implementation plans from three
+ * perspectives (Tech Lead, Security, PO) before implementation begins.
+ * Perspectives and suggestions are written to plan_review.md as documentation
+ * for the implementer. Always proceeds to implementation after capture.
  */
 export async function runPlanReviewAgent(
   storyPath: string,
@@ -319,17 +301,12 @@ export async function runPlanReviewAgent(
   const changesMade: string[] = [];
   const workingDir = path.dirname(sdlcRoot);
 
-  // Load config for plan review settings
-  const config = loadConfig(workingDir);
-  const planReviewConfig = config.planReview ?? DEFAULT_PLAN_REVIEW_CONFIG;
-
   // Get current iteration
   const iteration = (story.frontmatter.plan_review_iteration ?? 0) + 1;
 
   logger.info('plan-review', 'Starting plan review phase', {
     storyId: story.frontmatter.id,
     iteration,
-    maxIterations: planReviewConfig.maxIterations,
   });
 
   try {
@@ -357,19 +334,16 @@ export async function runPlanReviewAgent(
     // Build prompt and run review
     const prompt = buildPlanReviewPrompt(story, planContent, iteration, previousFeedback);
 
+    const queryOptions = {
+      prompt,
+      systemPrompt: PLAN_REVIEW_SYSTEM_PROMPT,
+      workingDirectory: workingDir,
+      onProgress: options.onProgress,
+    };
+
     const response = provider
-      ? await runAgentQuery({
-          prompt,
-          systemPrompt: PLAN_REVIEW_SYSTEM_PROMPT,
-          workingDirectory: workingDir,
-          onProgress: options.onProgress,
-        }, provider)
-      : await runAgentQuery({
-          prompt,
-          systemPrompt: PLAN_REVIEW_SYSTEM_PROMPT,
-          workingDirectory: workingDir,
-          onProgress: options.onProgress,
-        });
+      ? await runAgentQuery(queryOptions, provider)
+      : await runAgentQuery(queryOptions);
 
     // Parse the response
     const result = parsePlanReviewResponse(response, story, iteration);
@@ -397,54 +371,19 @@ ${formatSuggestions(result.suggestions)}
     });
     changesMade.push(`Wrote plan review feedback (iteration ${iteration})`);
 
-    // Update story based on result
-    let updatedStory = story;
-
-    // Always update the iteration counter
-    updatedStory = await updateStoryField(updatedStory, 'plan_review_iteration', iteration);
+    // Update story: set iteration counter and mark complete (enrichment, not a gate)
+    let updatedStory = await updateStoryField(story, 'plan_review_iteration', iteration);
+    updatedStory = await updateStoryField(updatedStory, 'plan_review_complete', true);
     await writeStory(updatedStory);
+    changesMade.push('Marked plan_review_complete: true');
 
-    if (result.overallReady) {
-      // All perspectives satisfied - mark complete
-      updatedStory = await updateStoryField(updatedStory, 'plan_review_complete', true);
-      await writeStory(updatedStory);
-      changesMade.push('Marked plan_review_complete: true');
-
-      logger.info('plan-review', 'Plan review complete - all perspectives satisfied', {
-        storyId: story.frontmatter.id,
-        iteration,
-        durationMs: Date.now() - startTime,
-      });
-    } else {
-      // Not all perspectives satisfied - need refinement
-      // Check if we've hit max iterations
-      if (iteration >= planReviewConfig.maxIterations) {
-        logger.warn('plan-review', 'Max plan review iterations reached', {
-          storyId: story.frontmatter.id,
-          iteration,
-          maxIterations: planReviewConfig.maxIterations,
-        });
-
-        // Still mark complete but log the warning
-        // The suggestions are documented, implementation can proceed
-        updatedStory = await updateStoryField(updatedStory, 'plan_review_complete', true);
-        await writeStory(updatedStory);
-        changesMade.push(`Marked plan_review_complete: true (max iterations ${planReviewConfig.maxIterations} reached, proceeding with remaining suggestions)`);
-      } else {
-        // Reset plan_complete to trigger re-planning
-        updatedStory = await updateStoryField(updatedStory, 'plan_complete', false);
-        await writeStory(updatedStory);
-        changesMade.push('Reset plan_complete to false for refinement');
-
-        logger.info('plan-review', 'Plan review requires refinement', {
-          storyId: story.frontmatter.id,
-          iteration,
-          blockingIssues: result.suggestions.filter(s => s.severity === 'blocking').length,
-          importantIssues: result.suggestions.filter(s => s.severity === 'important').length,
-          durationMs: Date.now() - startTime,
-        });
-      }
-    }
+    logger.info('plan-review', 'Plan review complete - perspectives captured', {
+      storyId: story.frontmatter.id,
+      iteration,
+      perspectivesSatisfied: result.perspectivesSatisfied,
+      suggestionsCount: result.suggestions.length,
+      durationMs: Date.now() - startTime,
+    });
 
     // Re-read story to return updated state
     const finalStory = parseStory(storyPath);

@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { createRequire } from 'module';
-import { init, status, add, run, details, unblock, migrate, listWorktrees, addWorktree, removeWorktree, importIssue, linkIssue } from './cli/commands.js';
+import { init, status, add, run, details, unblock, approve, feedback, migrate, listWorktrees, addWorktree, removeWorktree, importIssue, linkIssue } from './cli/commands.js';
 import { hasApiKey } from './core/auth.js';
 import { loadConfig, saveConfig, DEFAULT_LOGGING_CONFIG, getSdlcRoot } from './core/config.js';
 import { loadWorkflowConfig, WorkflowConfigLoader } from './core/workflow-config.js';
@@ -12,12 +12,14 @@ import { ThemePreference, LogConfig } from './types/index.js';
 import { initLogger, getLogger } from './core/logger.js';
 import { getLatestLogPath, readLastLines, tailLog } from './core/story-logger.js';
 import { setupGlobalCleanupHandlers } from './core/process-manager.js';
-import { ProviderRegistry, ClaudeProvider } from './providers/index.js';
+import { ProviderRegistry, ClaudeProvider, MockProvider, DryRunProvider } from './providers/index.js';
 import fs from 'fs';
 import path from 'path';
 
 // Register AI providers
 ProviderRegistry.register('claude', () => new ClaudeProvider());
+ProviderRegistry.register('mock', () => new MockProvider());
+ProviderRegistry.register('dry-run', () => new DryRunProvider());
 
 setupGlobalCleanupHandlers();
 
@@ -65,7 +67,13 @@ program
   .command('add [title]')
   .description('Add a new story to the backlog')
   .option('-f, --file <path>', 'Create story from file (supports .md, .txt, .markdown)')
-  .action((title, options) => add(title, options));
+  .option('--ai', 'Use AI-assisted ideation for acceptance criteria and decomposition')
+  .action((title, options) => {
+    if (options.ai) {
+      checkApiKey();
+    }
+    return add(title, options);
+  });
 
 program
   .command('details <id>')
@@ -78,6 +86,16 @@ program
   .description('Unblock a story from the blocked folder and return it to the workflow')
   .option('--reset-retries', 'Reset retry_count and refinement_count to 0')
   .action((storyId, options) => unblock(storyId, options));
+
+program
+  .command('approve <story-id>')
+  .description('Approve a story that is awaiting human approval')
+  .action((storyId) => approve(storyId));
+
+program
+  .command('feedback <story-id> <text>')
+  .description('Provide human feedback on a story')
+  .action((storyId, text) => feedback(storyId, text));
 
 program
   .command('migrate')

@@ -28,6 +28,7 @@ import { generateReviewSummary } from '../agents/review.js';
 import { getTerminalWidth } from './formatting.js';
 import { validateGitState, GitValidationResult } from '../core/git-utils.js';
 import { StoryLogger } from '../core/story-logger.js';
+import type { SerializedStory, StatusJsonOutput } from '../types/index.js';
 import { detectConflicts } from '../core/conflict-detector.js';
 import { getLogger } from '../core/logger.js';
 
@@ -154,9 +155,23 @@ export async function init(options: InitOptions = {}): Promise<void> {
 }
 
 /**
+ * Serialize a Story object for JSON output by extracting essential fields
+ */
+function serializeStoryForJson(story: Story): SerializedStory {
+  return {
+    id: story.frontmatter.id,
+    title: story.frontmatter.title,
+    status: story.frontmatter.status,
+    priority: story.frontmatter.priority,
+    type: story.frontmatter.type,
+    created: story.frontmatter.created,
+  };
+}
+
+/**
  * Show current board state
  */
-export async function status(options?: { active?: boolean }): Promise<void> {
+export async function status(options?: { active?: boolean; json?: boolean }): Promise<void> {
   const config = loadConfig();
   const sdlcRoot = getSdlcRoot();
   const c = getThemedChalk(config);
@@ -168,6 +183,24 @@ export async function status(options?: { active?: boolean }): Promise<void> {
 
   const assessment = await assessState(sdlcRoot);
   const stats = getBoardStats(sdlcRoot);
+
+  // Handle JSON output mode
+  if (options?.json) {
+    const jsonOutput: StatusJsonOutput = {
+      backlog: assessment.backlogItems.map(serializeStoryForJson),
+      ready: assessment.readyItems.map(serializeStoryForJson),
+      inProgress: assessment.inProgressItems.map(serializeStoryForJson),
+      done: options.active ? [] : assessment.doneItems.map(serializeStoryForJson),
+      counts: {
+        backlog: stats['backlog'],
+        ready: stats['ready'],
+        inProgress: stats['in-progress'],
+        done: options.active ? 0 : stats['done'],
+      },
+    };
+    console.log(JSON.stringify(jsonOutput, null, 2));
+    return;
+  }
 
   console.log();
   console.log(c.bold('═══ AI SDLC Board ═══'));

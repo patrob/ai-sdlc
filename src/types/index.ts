@@ -414,6 +414,29 @@ export interface StateAssessment {
   recommendedActions: Action[];
 }
 
+// JSON output types for status command
+export interface SerializedStory {
+  id: string;
+  slug: string;
+  title: string;
+  status: StoryStatus;
+  priority: number;
+  type: StoryType;
+  created: string;
+  labels: string[];
+}
+
+export interface StatusJsonOutput {
+  version: 1;
+  generatedAt: string;
+  backlog: SerializedStory[];
+  ready: SerializedStory[];
+  inProgress: SerializedStory[];
+  done: SerializedStory[];
+  blocked: SerializedStory[];
+  total: number;
+}
+
 // Theme types
 export type ThemePreference = 'auto' | 'light' | 'dark' | 'none';
 

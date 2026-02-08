@@ -3,7 +3,7 @@ id: S-0129
 title: Add JSON output format to the status command via --json flag
 slug: add-json-output-format-to-the-status-command-via-j
 priority: 80
-status: in-progress
+status: done
 type: feature
 created: '2026-02-06'
 labels: []
@@ -32,6 +32,8 @@ review_history:
     codeReviewPassed: true
     securityReviewPassed: true
     poReviewPassed: true
+pr_url: 'https://github.com/patrob/ai-sdlc/pull/37'
+implementation_retry_count: 0
 ---
 ## Summary
 

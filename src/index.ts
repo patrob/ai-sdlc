@@ -61,6 +61,7 @@ program
   .command('status')
   .description('Show current board state')
   .option('--active', 'Hide done stories from output')
+  .option('--json', 'Output board state as JSON')
   .action((options) => status(options));
 
 program

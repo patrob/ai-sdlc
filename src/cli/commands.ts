@@ -28,6 +28,7 @@ import { generateReviewSummary } from '../agents/review.js';
 import { getTerminalWidth } from './formatting.js';
 import { validateGitState, GitValidationResult } from '../core/git-utils.js';
 import { StoryLogger } from '../core/story-logger.js';
+import type { SerializedStory, StatusJsonOutput } from '../types/index.js';
 import { detectConflicts } from '../core/conflict-detector.js';
 import { getLogger } from '../core/logger.js';
 
@@ -154,9 +155,25 @@ export async function init(options: InitOptions = {}): Promise<void> {
 }
 
 /**
+ * Serialize a Story object for JSON output by extracting essential fields
+ */
+function serializeStoryForJson(story: Story): SerializedStory {
+  return {
+    id: story.frontmatter.id,
+    slug: story.slug,
+    title: story.frontmatter.title,
+    status: story.frontmatter.status,
+    priority: story.frontmatter.priority,
+    type: story.frontmatter.type,
+    created: story.frontmatter.created,
+    labels: story.frontmatter.labels ?? [],
+  };
+}
+
+/**
  * Show current board state
  */
-export async function status(options?: { active?: boolean }): Promise<void> {
+export async function status(options?: { active?: boolean; json?: boolean }): Promise<void> {
   const config = loadConfig();
   const sdlcRoot = getSdlcRoot();
   const c = getThemedChalk(config);
@@ -167,6 +184,31 @@ export async function status(options?: { active?: boolean }): Promise<void> {
   }
 
   const assessment = await assessState(sdlcRoot);
+
+  // Handle JSON output mode
+  if (options?.json) {
+    const blockedStories = findStoriesByStatus(sdlcRoot, 'blocked');
+    const backlog = assessment.backlogItems.map(serializeStoryForJson);
+    const ready = assessment.readyItems.map(serializeStoryForJson);
+    const inProgress = assessment.inProgressItems.map(serializeStoryForJson);
+    const done = options.active ? [] : assessment.doneItems.map(serializeStoryForJson);
+    const blocked = blockedStories.map(serializeStoryForJson);
+    const total = backlog.length + ready.length + inProgress.length + done.length + blocked.length;
+
+    const jsonOutput: StatusJsonOutput = {
+      version: 1,
+      generatedAt: new Date().toISOString(),
+      backlog,
+      ready,
+      inProgress,
+      done,
+      blocked,
+      total,
+    };
+    console.log(JSON.stringify(jsonOutput, null, 2));
+    return;
+  }
+
   const stats = getBoardStats(sdlcRoot);
 
   console.log();

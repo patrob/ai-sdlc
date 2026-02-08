@@ -15,6 +15,19 @@ const __dirname = path.dirname(__filename);
 // Test fixture directory
 const TEST_FIXTURE_DIR = path.join(__dirname, '../fixtures/status-json-output-test');
 
+/** Helper to write a story markdown file into the fixture directory */
+function writeStoryFixture(sdlcRoot: string, id: string, fields: Record<string, unknown>): void {
+  const dir = path.join(sdlcRoot, STORIES_FOLDER, id);
+  fs.mkdirSync(dir, { recursive: true });
+  const fm = Object.entries(fields).map(([k, v]) => {
+    if (Array.isArray(v)) return `${k}: [${v.map(i => JSON.stringify(i)).join(', ')}]`;
+    // Quote date-like strings so YAML doesn't auto-convert to Date objects
+    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return `${k}: '${v}'`;
+    return `${k}: ${v}`;
+  }).join('\n');
+  fs.writeFileSync(path.join(dir, 'story.md'), `---\n${fm}\n---\n\n# ${fields.title}\n`);
+}
+
 describe.sequential('Status Command - JSON Output Integration', () => {
   let consoleLogSpy: any;
 
@@ -51,204 +64,126 @@ describe.sequential('Status Command - JSON Output Integration', () => {
   });
 
   describe.sequential('Basic JSON Output', () => {
-    it('should output valid JSON when --json flag is provided', async () => {
+    it('should output valid JSON with v1 schema when --json flag is provided', async () => {
       const sdlcRoot = getSdlcRoot();
 
       // Create stories in different statuses
       createStory('Backlog Story', sdlcRoot);
 
-      // Create ready story
-      const readyStoryId = 'ready-1';
-      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, readyStoryId), { recursive: true });
-      const readyStory = `---
-id: ready-1
-title: Ready Story
-slug: ready-story
-priority: 20
-status: ready
-type: feature
-created: 2024-01-02
-labels: []
-research_complete: true
-plan_complete: true
-implementation_complete: false
-reviews_complete: false
----
+      writeStoryFixture(sdlcRoot, 'ready-1', {
+        id: 'ready-1', title: 'Ready Story', slug: 'ready-story',
+        priority: 20, status: 'ready', type: 'feature', created: '2024-01-02',
+        labels: [], research_complete: true, plan_complete: true,
+        implementation_complete: false, reviews_complete: false,
+      });
 
-# Ready Story
-`;
-      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, readyStoryId, 'story.md'), readyStory);
+      writeStoryFixture(sdlcRoot, 'in-progress-1', {
+        id: 'in-progress-1', title: 'In Progress Story', slug: 'in-progress-story',
+        priority: 30, status: 'in-progress', type: 'bug', created: '2024-01-03',
+        labels: [], research_complete: true, plan_complete: true,
+        implementation_complete: false, reviews_complete: false,
+      });
 
-      // Create in-progress story
-      const inProgressStoryId = 'in-progress-1';
-      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, inProgressStoryId), { recursive: true });
-      const inProgressStory = `---
-id: in-progress-1
-title: In Progress Story
-slug: in-progress-story
-priority: 30
-status: in-progress
-type: bug
-created: 2024-01-03
-labels: []
-research_complete: true
-plan_complete: true
-implementation_complete: false
-reviews_complete: false
----
+      writeStoryFixture(sdlcRoot, 'done-1', {
+        id: 'done-1', title: 'Done Story', slug: 'done-story',
+        priority: 40, status: 'done', type: 'chore', created: '2024-01-04',
+        labels: [], research_complete: true, plan_complete: true,
+        implementation_complete: true, reviews_complete: true,
+      });
 
-# In Progress Story
-`;
-      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, inProgressStoryId, 'story.md'), inProgressStory);
-
-      // Create done story
-      const doneStoryId = 'done-1';
-      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, doneStoryId), { recursive: true });
-      const doneStory = `---
-id: done-1
-title: Done Story
-slug: done-story
-priority: 40
-status: done
-type: chore
-created: 2024-01-04
-labels: []
-research_complete: true
-plan_complete: true
-implementation_complete: true
-reviews_complete: true
----
-
-# Done Story
-`;
-      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, doneStoryId, 'story.md'), doneStory);
-
-      // Call status with --json flag
       await status({ json: true });
 
-      // Verify console.log was called exactly once
       expect(consoleLogSpy).toHaveBeenCalledTimes(1);
 
-      // Get the JSON output
-      const output = consoleLogSpy.mock.calls[0][0];
+      const parsed: StatusJsonOutput = JSON.parse(consoleLogSpy.mock.calls[0][0]);
 
-      // Verify it's valid JSON
-      let parsed: StatusJsonOutput;
-      expect(() => {
-        parsed = JSON.parse(output);
-      }).not.toThrow();
+      // Verify v1 schema envelope
+      expect(parsed.version).toBe(1);
+      expect(parsed.generatedAt).toBeDefined();
+      expect(new Date(parsed.generatedAt).toISOString()).toBe(parsed.generatedAt);
 
-      // Verify structure
-      parsed = JSON.parse(output);
-      expect(parsed).toHaveProperty('backlog');
-      expect(parsed).toHaveProperty('ready');
-      expect(parsed).toHaveProperty('inProgress');
-      expect(parsed).toHaveProperty('done');
-      expect(parsed).toHaveProperty('counts');
+      // Verify arrays
       expect(Array.isArray(parsed.backlog)).toBe(true);
       expect(Array.isArray(parsed.ready)).toBe(true);
       expect(Array.isArray(parsed.inProgress)).toBe(true);
       expect(Array.isArray(parsed.done)).toBe(true);
+      expect(Array.isArray(parsed.blocked)).toBe(true);
 
-      // Verify counts
-      expect(parsed.counts.backlog).toBe(1);
-      expect(parsed.counts.ready).toBe(1);
-      expect(parsed.counts.inProgress).toBe(1);
-      expect(parsed.counts.done).toBe(1);
-
-      // Verify story count in each column
+      // Verify story counts per column
       expect(parsed.backlog).toHaveLength(1);
       expect(parsed.ready).toHaveLength(1);
       expect(parsed.inProgress).toHaveLength(1);
       expect(parsed.done).toHaveLength(1);
+      expect(parsed.blocked).toHaveLength(0);
+
+      // Verify total
+      expect(parsed.total).toBe(4);
+
+      // Verify no `counts` property (removed)
+      expect(parsed).not.toHaveProperty('counts');
     });
 
-    it('should include required fields in each story object', async () => {
+    it('should include all required fields including slug and labels in each story', async () => {
       const sdlcRoot = getSdlcRoot();
 
-      // Create a single story with known values
-      const storyId = 'test-story-1';
-      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
-      const story = `---
-id: test-story-1
-title: Test Story Title
-slug: test-story-title
-priority: 50
-status: backlog
-type: spike
-created: 2024-02-05
-labels: []
-research_complete: false
-plan_complete: false
-implementation_complete: false
-reviews_complete: false
----
+      writeStoryFixture(sdlcRoot, 'test-story-1', {
+        id: 'test-story-1', title: 'Test Story Title', slug: 'test-story-title',
+        priority: 50, status: 'backlog', type: 'spike', created: '2024-02-05',
+        labels: ['epic-auth', 'sprint-1'],
+        research_complete: false, plan_complete: false,
+        implementation_complete: false, reviews_complete: false,
+      });
 
-# Test Story
-`;
-      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), story);
-
-      // Call status with --json flag
       await status({ json: true });
 
-      const output = consoleLogSpy.mock.calls[0][0];
-      const parsed: StatusJsonOutput = JSON.parse(output);
-
-      // Get the story from backlog
+      const parsed: StatusJsonOutput = JSON.parse(consoleLogSpy.mock.calls[0][0]);
       const storyObj = parsed.backlog[0];
 
-      // Verify all required fields are present
-      expect(storyObj).toHaveProperty('id');
-      expect(storyObj).toHaveProperty('title');
-      expect(storyObj).toHaveProperty('status');
-      expect(storyObj).toHaveProperty('priority');
-      expect(storyObj).toHaveProperty('type');
-      expect(storyObj).toHaveProperty('created');
-
-      // Verify values match
+      // Verify all required fields
       expect(storyObj.id).toBe('test-story-1');
+      expect(storyObj.slug).toBe('test-story-title');
       expect(storyObj.title).toBe('Test Story Title');
       expect(storyObj.status).toBe('backlog');
       expect(storyObj.priority).toBe(50);
       expect(storyObj.type).toBe('spike');
       expect(storyObj.created).toBe('2024-02-05');
+      expect(storyObj.labels).toEqual(['epic-auth', 'sprint-1']);
+    });
+
+    it('should default labels to empty array when story has no labels', async () => {
+      const sdlcRoot = getSdlcRoot();
+      createStory('No Labels Story', sdlcRoot);
+
+      await status({ json: true });
+
+      const parsed: StatusJsonOutput = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+      expect(parsed.backlog[0].labels).toEqual([]);
     });
 
     it('should output valid JSON for an empty board', async () => {
-      // Don't create any stories
-
-      // Call status with --json flag
       await status({ json: true });
 
-      const output = consoleLogSpy.mock.calls[0][0];
-      const parsed: StatusJsonOutput = JSON.parse(output);
+      const parsed: StatusJsonOutput = JSON.parse(consoleLogSpy.mock.calls[0][0]);
 
-      // Verify empty arrays
+      expect(parsed.version).toBe(1);
       expect(parsed.backlog).toEqual([]);
       expect(parsed.ready).toEqual([]);
       expect(parsed.inProgress).toEqual([]);
       expect(parsed.done).toEqual([]);
-
-      // Verify zero counts
-      expect(parsed.counts.backlog).toBe(0);
-      expect(parsed.counts.ready).toBe(0);
-      expect(parsed.counts.inProgress).toBe(0);
-      expect(parsed.counts.done).toBe(0);
+      expect(parsed.blocked).toEqual([]);
+      expect(parsed.total).toBe(0);
     });
 
     it('should not output visual elements in JSON mode', async () => {
       const sdlcRoot = getSdlcRoot();
       createStory('Test Story', sdlcRoot);
 
-      // Call status with --json flag
       await status({ json: true });
 
-      // Verify console.log was called exactly once
       expect(consoleLogSpy).toHaveBeenCalledTimes(1);
 
       const output = consoleLogSpy.mock.calls[0][0];
 
-      // Verify no visual elements (kanban board characters)
       expect(output).not.toContain('═══');
       expect(output).not.toContain('│');
       expect(output).not.toContain('BACKLOG');
@@ -257,71 +192,148 @@ reviews_complete: false
     });
   });
 
-  describe.sequential('JSON Output with --active Flag', () => {
-    it('should exclude done stories when both --json and --active flags are provided', async () => {
+  describe.sequential('Blocked Stories', () => {
+    it('should include blocked stories in the blocked array', async () => {
       const sdlcRoot = getSdlcRoot();
 
-      // Create backlog story
+      writeStoryFixture(sdlcRoot, 'blocked-1', {
+        id: 'blocked-1', title: 'Blocked Story', slug: 'blocked-story',
+        priority: 10, status: 'blocked', type: 'feature', created: '2024-01-01',
+        labels: ['epic-infra'],
+        research_complete: true, plan_complete: true,
+        implementation_complete: false, reviews_complete: false,
+        blocked_reason: 'Dependency not available',
+      });
+
+      writeStoryFixture(sdlcRoot, 'backlog-1', {
+        id: 'backlog-1', title: 'Backlog Story', slug: 'backlog-story',
+        priority: 20, status: 'backlog', type: 'feature', created: '2024-01-02',
+        labels: [],
+        research_complete: false, plan_complete: false,
+        implementation_complete: false, reviews_complete: false,
+      });
+
+      await status({ json: true });
+
+      const parsed: StatusJsonOutput = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+
+      expect(parsed.blocked).toHaveLength(1);
+      expect(parsed.blocked[0].id).toBe('blocked-1');
+      expect(parsed.blocked[0].slug).toBe('blocked-story');
+      expect(parsed.blocked[0].labels).toEqual(['epic-infra']);
+      expect(parsed.backlog).toHaveLength(1);
+      expect(parsed.total).toBe(2);
+    });
+  });
+
+  describe.sequential('Total Field', () => {
+    it('should have total equal to sum of all array lengths', async () => {
+      const sdlcRoot = getSdlcRoot();
+
+      createStory('Backlog 1', sdlcRoot);
+      createStory('Backlog 2', sdlcRoot);
+
+      writeStoryFixture(sdlcRoot, 'ready-1', {
+        id: 'ready-1', title: 'Ready', slug: 'ready',
+        priority: 30, status: 'ready', type: 'feature', created: '2024-01-03',
+        labels: [], research_complete: true, plan_complete: true,
+        implementation_complete: false, reviews_complete: false,
+      });
+
+      writeStoryFixture(sdlcRoot, 'blocked-1', {
+        id: 'blocked-1', title: 'Blocked', slug: 'blocked',
+        priority: 40, status: 'blocked', type: 'bug', created: '2024-01-04',
+        labels: [],
+        research_complete: true, plan_complete: true,
+        implementation_complete: false, reviews_complete: false,
+      });
+
+      await status({ json: true });
+
+      const parsed: StatusJsonOutput = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+
+      const sum = parsed.backlog.length + parsed.ready.length +
+        parsed.inProgress.length + parsed.done.length + parsed.blocked.length;
+      expect(parsed.total).toBe(sum);
+      expect(parsed.total).toBe(4);
+    });
+  });
+
+  describe.sequential('Security - Allowlist Verification', () => {
+    it('should NOT expose sensitive fields (path, content, last_error, blocked_diagnostic, worktree_path)', async () => {
+      const sdlcRoot = getSdlcRoot();
+
+      writeStoryFixture(sdlcRoot, 'sensitive-1', {
+        id: 'sensitive-1', title: 'Sensitive Story', slug: 'sensitive-story',
+        priority: 10, status: 'backlog', type: 'feature', created: '2024-01-01',
+        labels: [],
+        research_complete: false, plan_complete: false,
+        implementation_complete: false, reviews_complete: false,
+        last_error: 'secret error details',
+        worktree_path: '/home/user/secret/path',
+      });
+
+      await status({ json: true });
+
+      const parsed: StatusJsonOutput = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+      const story = parsed.backlog[0] as Record<string, unknown>;
+
+      expect(story).not.toHaveProperty('path');
+      expect(story).not.toHaveProperty('content');
+      expect(story).not.toHaveProperty('last_error');
+      expect(story).not.toHaveProperty('blocked_diagnostic');
+      expect(story).not.toHaveProperty('worktree_path');
+
+      // Verify only allowlisted fields exist
+      const allowedFields = ['id', 'slug', 'title', 'status', 'priority', 'type', 'created', 'labels'];
+      expect(Object.keys(story).sort()).toEqual(allowedFields.sort());
+    });
+  });
+
+  describe.sequential('JSON Output with --active Flag', () => {
+    it('should exclude done stories but include blocked when --active is set', async () => {
+      const sdlcRoot = getSdlcRoot();
+
       createStory('Backlog Story', sdlcRoot);
 
-      // Create done stories
-      const doneStoryId1 = 'done-1';
-      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, doneStoryId1), { recursive: true });
-      const doneStory1 = `---
-id: done-1
-title: Done Story 1
-slug: done-story-1
-priority: 10
-status: done
-type: feature
-created: 2024-01-01
-labels: []
-research_complete: true
-plan_complete: true
-implementation_complete: true
-reviews_complete: true
----
+      writeStoryFixture(sdlcRoot, 'done-1', {
+        id: 'done-1', title: 'Done Story 1', slug: 'done-story-1',
+        priority: 10, status: 'done', type: 'feature', created: '2024-01-01',
+        labels: [], research_complete: true, plan_complete: true,
+        implementation_complete: true, reviews_complete: true,
+      });
 
-# Done Story 1
-`;
-      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, doneStoryId1, 'story.md'), doneStory1);
+      writeStoryFixture(sdlcRoot, 'done-2', {
+        id: 'done-2', title: 'Done Story 2', slug: 'done-story-2',
+        priority: 20, status: 'done', type: 'bug', created: '2024-01-02',
+        labels: [], research_complete: true, plan_complete: true,
+        implementation_complete: true, reviews_complete: true,
+      });
 
-      const doneStoryId2 = 'done-2';
-      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, doneStoryId2), { recursive: true });
-      const doneStory2 = `---
-id: done-2
-title: Done Story 2
-slug: done-story-2
-priority: 20
-status: done
-type: bug
-created: 2024-01-02
-labels: []
-research_complete: true
-plan_complete: true
-implementation_complete: true
-reviews_complete: true
----
+      writeStoryFixture(sdlcRoot, 'blocked-1', {
+        id: 'blocked-1', title: 'Blocked Story', slug: 'blocked-story',
+        priority: 30, status: 'blocked', type: 'feature', created: '2024-01-03',
+        labels: [],
+        research_complete: true, plan_complete: true,
+        implementation_complete: false, reviews_complete: false,
+      });
 
-# Done Story 2
-`;
-      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, doneStoryId2, 'story.md'), doneStory2);
-
-      // Call status with both --json and --active flags
       await status({ json: true, active: true });
 
-      const output = consoleLogSpy.mock.calls[0][0];
-      const parsed: StatusJsonOutput = JSON.parse(output);
+      const parsed: StatusJsonOutput = JSON.parse(consoleLogSpy.mock.calls[0][0]);
 
-      // Verify done array is empty
+      // Done excluded
       expect(parsed.done).toEqual([]);
 
-      // Verify done count is 0
-      expect(parsed.counts.done).toBe(0);
+      // Blocked still included
+      expect(parsed.blocked).toHaveLength(1);
+      expect(parsed.blocked[0].id).toBe('blocked-1');
 
-      // Verify backlog story is still present
+      // Backlog still present
       expect(parsed.backlog).toHaveLength(1);
-      expect(parsed.counts.backlog).toBe(1);
+
+      // Total adjusts (done excluded)
+      expect(parsed.total).toBe(2); // backlog + blocked
     });
   });
 
@@ -329,69 +341,35 @@ reviews_complete: true
     it('should handle stories with emojis in titles', async () => {
       const sdlcRoot = getSdlcRoot();
 
-      const storyId = 'emoji-story';
-      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
-      const story = `---
-id: emoji-story
-title: 🚀 Deploy feature with ✨ magic
-slug: emoji-story
-priority: 10
-status: backlog
-type: feature
-created: 2024-01-01
-labels: []
-research_complete: false
-plan_complete: false
-implementation_complete: false
-reviews_complete: false
----
+      writeStoryFixture(sdlcRoot, 'emoji-story', {
+        id: 'emoji-story', title: '🚀 Deploy feature with ✨ magic', slug: 'emoji-story',
+        priority: 10, status: 'backlog', type: 'feature', created: '2024-01-01',
+        labels: [],
+        research_complete: false, plan_complete: false,
+        implementation_complete: false, reviews_complete: false,
+      });
 
-# Emoji Story
-`;
-      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), story);
-
-      // Call status with --json flag
       await status({ json: true });
 
-      const output = consoleLogSpy.mock.calls[0][0];
-      const parsed: StatusJsonOutput = JSON.parse(output);
-
-      // Verify emoji is preserved in JSON output
+      const parsed: StatusJsonOutput = JSON.parse(consoleLogSpy.mock.calls[0][0]);
       expect(parsed.backlog[0].title).toBe('🚀 Deploy feature with ✨ magic');
     });
 
     it('should handle very long story titles', async () => {
       const sdlcRoot = getSdlcRoot();
 
-      const longTitle = 'A'.repeat(200); // 200 character title
-      const storyId = 'long-title-story';
-      fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
-      const story = `---
-id: long-title-story
-title: ${longTitle}
-slug: long-title-story
-priority: 10
-status: backlog
-type: feature
-created: 2024-01-01
-labels: []
-research_complete: false
-plan_complete: false
-implementation_complete: false
-reviews_complete: false
----
+      const longTitle = 'A'.repeat(200);
+      writeStoryFixture(sdlcRoot, 'long-title-story', {
+        id: 'long-title-story', title: longTitle, slug: 'long-title-story',
+        priority: 10, status: 'backlog', type: 'feature', created: '2024-01-01',
+        labels: [],
+        research_complete: false, plan_complete: false,
+        implementation_complete: false, reviews_complete: false,
+      });
 
-# Long Title Story
-`;
-      fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), story);
-
-      // Call status with --json flag
       await status({ json: true });
 
-      const output = consoleLogSpy.mock.calls[0][0];
-      const parsed: StatusJsonOutput = JSON.parse(output);
-
-      // Verify full title is included (no truncation)
+      const parsed: StatusJsonOutput = JSON.parse(consoleLogSpy.mock.calls[0][0]);
       expect(parsed.backlog[0].title).toBe(longTitle);
       expect(parsed.backlog[0].title).toHaveLength(200);
     });
@@ -399,39 +377,22 @@ reviews_complete: false
     it('should handle multiple stories in the same column', async () => {
       const sdlcRoot = getSdlcRoot();
 
-      // Create 5 backlog stories
       for (let i = 1; i <= 5; i++) {
-        const storyId = `backlog-story-${i}`;
-        fs.mkdirSync(path.join(sdlcRoot, STORIES_FOLDER, storyId), { recursive: true });
-        const story = `---
-id: backlog-story-${i}
-title: Backlog Story ${i}
-slug: backlog-story-${i}
-priority: ${i * 10}
-status: backlog
-type: feature
-created: 2024-01-0${i}
-labels: []
-research_complete: false
-plan_complete: false
-implementation_complete: false
-reviews_complete: false
----
-
-# Backlog Story ${i}
-`;
-        fs.writeFileSync(path.join(sdlcRoot, STORIES_FOLDER, storyId, 'story.md'), story);
+        writeStoryFixture(sdlcRoot, `backlog-story-${i}`, {
+          id: `backlog-story-${i}`, title: `Backlog Story ${i}`, slug: `backlog-story-${i}`,
+          priority: i * 10, status: 'backlog', type: 'feature', created: `2024-01-0${i}`,
+          labels: [],
+          research_complete: false, plan_complete: false,
+          implementation_complete: false, reviews_complete: false,
+        });
       }
 
-      // Call status with --json flag
       await status({ json: true });
 
-      const output = consoleLogSpy.mock.calls[0][0];
-      const parsed: StatusJsonOutput = JSON.parse(output);
+      const parsed: StatusJsonOutput = JSON.parse(consoleLogSpy.mock.calls[0][0]);
 
-      // Verify all 5 stories are in backlog
       expect(parsed.backlog).toHaveLength(5);
-      expect(parsed.counts.backlog).toBe(5);
+      expect(parsed.total).toBe(5);
 
       // Verify stories are ordered by priority
       expect(parsed.backlog[0].priority).toBe(10);
@@ -444,7 +405,6 @@ reviews_complete: false
       const sdlcRoot = getSdlcRoot();
       createStory('Test Story', sdlcRoot);
 
-      // Call status without --json flag
       await status();
 
       // Verify console.log was called multiple times (visual output)

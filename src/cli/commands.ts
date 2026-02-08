@@ -160,11 +160,13 @@ export async function init(options: InitOptions = {}): Promise<void> {
 function serializeStoryForJson(story: Story): SerializedStory {
   return {
     id: story.frontmatter.id,
+    slug: story.slug,
     title: story.frontmatter.title,
     status: story.frontmatter.status,
     priority: story.frontmatter.priority,
     type: story.frontmatter.type,
     created: story.frontmatter.created,
+    labels: story.frontmatter.labels ?? [],
   };
 }
 
@@ -182,25 +184,32 @@ export async function status(options?: { active?: boolean; json?: boolean }): Pr
   }
 
   const assessment = await assessState(sdlcRoot);
-  const stats = getBoardStats(sdlcRoot);
 
   // Handle JSON output mode
   if (options?.json) {
+    const blockedStories = findStoriesByStatus(sdlcRoot, 'blocked');
+    const backlog = assessment.backlogItems.map(serializeStoryForJson);
+    const ready = assessment.readyItems.map(serializeStoryForJson);
+    const inProgress = assessment.inProgressItems.map(serializeStoryForJson);
+    const done = options.active ? [] : assessment.doneItems.map(serializeStoryForJson);
+    const blocked = blockedStories.map(serializeStoryForJson);
+    const total = backlog.length + ready.length + inProgress.length + done.length + blocked.length;
+
     const jsonOutput: StatusJsonOutput = {
-      backlog: assessment.backlogItems.map(serializeStoryForJson),
-      ready: assessment.readyItems.map(serializeStoryForJson),
-      inProgress: assessment.inProgressItems.map(serializeStoryForJson),
-      done: options.active ? [] : assessment.doneItems.map(serializeStoryForJson),
-      counts: {
-        backlog: stats['backlog'],
-        ready: stats['ready'],
-        inProgress: stats['in-progress'],
-        done: options.active ? 0 : stats['done'],
-      },
+      version: 1,
+      generatedAt: new Date().toISOString(),
+      backlog,
+      ready,
+      inProgress,
+      done,
+      blocked,
+      total,
     };
     console.log(JSON.stringify(jsonOutput, null, 2));
     return;
   }
+
+  const stats = getBoardStats(sdlcRoot);
 
   console.log();
   console.log(c.bold('═══ AI SDLC Board ═══'));

@@ -409,3 +409,188 @@ The ultimate goal requires four capabilities:
 5. **Use AgentFactory in PhaseExecutor** — single dispatch path
 
 These changes reduce code, improve clarity, and don't require new features — just removal of unnecessary abstraction layers that have accumulated as the codebase evolved.
+
+---
+
+## 9. Multi-Provider Effort Estimate
+
+The vision: support Claude Agent SDK, GitHub Copilot SDK, and OpenAI Agents SDK as interchangeable backends. Here's what that takes.
+
+### 9.1 Current Provider-Agnostic Readiness
+
+**Good news**: The hard architectural work is already done.
+
+| Layer | Status | Notes |
+|-------|--------|-------|
+| `IProvider` interface | Provider-agnostic | Clean abstraction with `query()`, `capabilities`, `authenticator` |
+| `ProviderRegistry` | Provider-agnostic | Runtime switching via `AI_SDLC_PROVIDER` env var |
+| Agent code | Provider-agnostic | All 16 agents use `IProvider`, zero Claude SDK imports |
+| Progress events | Provider-agnostic | Discriminated union covers common event types |
+| Capability validation | Provider-agnostic | Agents check `supportsTools`, `supportsSystemPrompt` |
+| Auth system | Partially coupled | Looks for `~/.claude/`, `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN` |
+| Config system | Partially coupled | `settingSources`, `permissionMode` are Claude-specific concepts |
+| Streaming types | Partially coupled | `AgentMessage` interface maps to Claude SDK message shapes |
+| Prompt design | Implicitly coupled | System prompts assume Claude's reasoning/formatting style |
+| Response parsing | Implicitly coupled | Regex + Zod parsers assume specific output patterns |
+
+### 9.2 SDK Architecture Comparison
+
+The three target SDKs have fundamentally different architectures:
+
+| Dimension | Claude Agent SDK | GitHub Copilot SDK | OpenAI Agents SDK |
+|-----------|-----------------|-------------------|-------------------|
+| **Architecture** | Wraps CLI process | JSON-RPC to CLI server | Direct API calls |
+| **Entry point** | `query(prompt, opts)` | `session.sendMessage(msg)` | `Runner.run(agent, input)` |
+| **Agent loop** | Opaque (engine-managed) | Opaque (engine-managed) | Explicit (controllable) |
+| **Tool definition** | `allowedTools` + MCP | `defineTool(name, schema, handler)` | `@function_tool` decorator |
+| **Streaming** | `AsyncIterable<SDKMessage>` | Event emitter (`session.on`) | `stream_events()` with 3 levels |
+| **Multi-agent** | Single agent/session | Single agent/session | First-class handoffs |
+| **Model routing** | `model` param | Auto-routing by task type | Per-agent `model` field |
+| **Multi-provider** | Anthropic only | BYOK (OpenAI, Anthropic, etc.) | LiteLLM (100+ models) |
+| **Auth** | API key / OAuth | GitHub OAuth / BYOK keys | API key |
+| **Sandbox** | `permissionMode` + sandbox | Default allow-all | seatbelt/landlock |
+
+**Key insight**: Claude and Copilot SDKs are opaque engines — you send a message and get results. OpenAI gives you the explicit loop. The `IProvider.query()` abstraction already handles the "fire and observe" pattern cleanly. The main work is adapting each SDK's streaming/auth/tool interfaces to the existing `IProvider` contract.
+
+### 9.3 Work Breakdown
+
+#### Epic 1: Simplification (prerequisite for multi-provider)
+*Do this first — it reduces the surface area that new providers must integrate with.*
+
+| Story | Size | What | Why First |
+|-------|------|------|-----------|
+| E1-S1: Kill adapter layer | S | Replace 13 adapter classes with function registry | Less code for new providers to interact with |
+| E1-S2: Unify dispatch | S | PhaseExecutor delegates to AgentFactory only | One integration point, not three |
+| E1-S3: Delete client.ts | XS | Remove pass-through, agents call provider directly | Cleaner provider injection |
+| E1-S4: Unify agent signatures | M | Single `AgentContext` input, single `AgentResult` output | Provider adapters don't need to handle N different shapes |
+| E1-S5: Add capability constraints | M | `allowedTools` per agent type, passed through provider | Provider-specific tool config |
+
+**Epic 1 total: ~2-3 weeks**
+
+#### Epic 2: Provider Abstraction Hardening
+
+| Story | Size | What |
+|-------|------|------|
+| E2-S1: Generalize auth | M | Provider-specific credential resolution (`{PROVIDER}_API_KEY`, `~/.{provider}/`) |
+| E2-S2: Generalize config | S | Extract `settingSources`/`permissionMode` into provider-specific config |
+| E2-S3: Normalize streaming | M | Adapter pattern: each provider maps native events → `ProviderProgressEvent` |
+| E2-S4: Abstract tool registration | M | `IToolConfig` interface that each provider translates to native tool format |
+| E2-S5: Model routing | S | `model` in workflow.yaml, provider maps to native model IDs |
+| E2-S6: Response parsing resilience | M | Make regex/Zod parsers tolerant of formatting differences across models |
+
+**Epic 2 total: ~3-4 weeks**
+
+#### Epic 3: Copilot SDK Provider
+
+| Story | Size | What |
+|-------|------|------|
+| E3-S1: CopilotProvider scaffold | M | Implement `IProvider` with `@github/copilot-sdk` |
+| E3-S2: Copilot auth | M | GitHub OAuth / token / BYOK credential flow |
+| E3-S3: Copilot streaming adapter | M | Map `session.on()` events → `ProviderProgressEvent` |
+| E3-S4: Copilot tool config | S | Map `IToolConfig` → `defineTool()` calls |
+| E3-S5: Copilot integration tests | M | End-to-end story execution with Copilot backend |
+
+**Epic 3 total: ~3-4 weeks**
+
+#### Epic 4: OpenAI Agents SDK Provider
+
+| Story | Size | What |
+|-------|------|------|
+| E4-S1: OpenAIProvider scaffold | M | Implement `IProvider` wrapping `Runner.run()` |
+| E4-S2: OpenAI auth | S | API key + LiteLLM config for alternate models |
+| E4-S3: OpenAI streaming adapter | M | Map `stream_events()` → `ProviderProgressEvent` |
+| E4-S4: OpenAI tool config | M | Map `IToolConfig` → `@function_tool` definitions (requires bundling tool implementations) |
+| E4-S5: OpenAI agent loop adapter | L | Handle explicit loop control vs fire-and-observe |
+| E4-S6: OpenAI integration tests | M | End-to-end story execution with OpenAI backend |
+
+**Epic 4 total: ~4-5 weeks**
+
+#### Epic 5: Cross-Provider Features
+
+| Story | Size | What |
+|-------|------|------|
+| E5-S1: Provider selection CLI | S | `ai-sdlc config --provider copilot` + `AI_SDLC_PROVIDER` |
+| E5-S2: Per-phase provider routing | M | workflow.yaml can specify different providers per phase |
+| E5-S3: Cost tracking normalization | M | Unified token/cost tracking across providers |
+| E5-S4: Provider capability matrix | S | Runtime capability detection + graceful degradation |
+| E5-S5: Fallback chains | M | If primary provider fails, fall back to secondary |
+
+**Epic 5 total: ~3 weeks**
+
+### 9.4 Total Estimate
+
+| Epic | Duration | Dependencies |
+|------|----------|-------------|
+| Epic 1: Simplification | 2-3 weeks | None |
+| Epic 2: Abstraction hardening | 3-4 weeks | Epic 1 |
+| Epic 3: Copilot provider | 3-4 weeks | Epic 2 |
+| Epic 4: OpenAI provider | 4-5 weeks | Epic 2 |
+| Epic 5: Cross-provider features | 3 weeks | Epics 3 + 4 |
+
+**Sequential path**: ~15-19 weeks (~4-5 months)
+
+**Parallel path** (Epics 3 & 4 concurrent): ~11-14 weeks (~3-3.5 months)
+
+**With this tool doing the work** (ai-sdlc running itself): Realistically 6-8 weeks, since each story is a focused, well-scoped change and the tool can run multiple stories per day.
+
+### 9.5 The Hardest Parts
+
+1. **OpenAI's explicit agent loop** (E4-S5): Claude and Copilot SDKs manage the plan-execute loop internally. OpenAI's Agents SDK gives you the loop and expects you to drive it. The `IProvider.query()` abstraction assumes "send prompt, receive result." For OpenAI, you'd need to either:
+   - Run the full `Runner.run()` internally (opaque mode) — simpler but loses OpenAI's step-through advantage
+   - Expose a `queryStreamed()` method that yields intermediate states — more powerful but breaks the current interface
+
+   **Recommendation**: Start with opaque mode. It works with the current interface. Add step-through later if needed.
+
+2. **Tool implementation bundling** (E4-S4): Claude and Copilot SDKs include built-in file editing, code execution, and search tools. OpenAI's Agents SDK does not — you must implement these tools yourself or use Codex CLI as an MCP server. This means:
+   - Either bundle a `codex --mcp` server alongside the OpenAI provider
+   - Or implement file/search/execute tools in TypeScript and register them as `@function_tool`s
+
+   **Recommendation**: Use Codex CLI as MCP server. It gives you the same tool quality as Claude/Copilot without reimplementing everything.
+
+3. **Response format divergence** (E2-S6): The biggest hidden cost. Agents parse responses with regex and Zod schemas tuned to Claude's output style. GPT-4o and Copilot models format differently. Each parser needs to either:
+   - Be made tolerant of multiple formats (preferred)
+   - Or add a response normalization layer per provider (more work)
+
+   **Recommendation**: Switch to structured output / JSON mode where possible. All three SDKs support it. For free-form responses, use the LLM itself to extract structured data rather than regex.
+
+### 9.6 Architecture Target State (Multi-Provider)
+
+```
+┌─────────────────────────────────────────────┐
+│              CLI / Daemon                     │
+│  ai-sdlc run --provider copilot --auto       │
+└──────────────┬──────────────────────────────┘
+               │
+┌──────────────▼──────────────────────────────┐
+│         Phase Executor                       │
+│  workflow.yaml → agent dispatch              │
+│                                              │
+│  ┌──────────────────────────────────────┐    │
+│  │  Agent Registry (function map)       │    │
+│  │  + capability constraints per type   │    │
+│  │  + model routing per phase           │    │
+│  └──────────────┬───────────────────────┘    │
+│                 │                             │
+│  ┌──────────────▼───────────────────────┐    │
+│  │  Provider Registry                    │    │
+│  │                                       │    │
+│  │  ┌──────────┐ ┌────────┐ ┌────────┐ │    │
+│  │  │ Claude   │ │Copilot │ │ OpenAI │ │    │
+│  │  │ Provider │ │Provider│ │Provider│ │    │
+│  │  │          │ │        │ │        │ │    │
+│  │  │ Agent SDK│ │JSON-RPC│ │Runner  │ │    │
+│  │  │ query()  │ │session │ │.run()  │ │    │
+│  │  └──────────┘ └────────┘ └────────┘ │    │
+│  └──────────────────────────────────────┘    │
+└──────────────────────────────────────────────┘
+```
+
+### 9.7 Recommendation: Sequencing
+
+**Do Epic 1 now.** It's pure simplification — less code, fewer bugs, cleaner architecture. It pays for itself immediately and makes everything after it cheaper.
+
+**Do Epic 2 next.** Harden the abstraction before adding providers. It's tempting to jump straight to "add Copilot provider" but you'll end up with Claude-shaped assumptions baked into the interface that every new provider has to work around.
+
+**Then pick one provider** (Copilot or OpenAI) based on your users. Ship it. Learn what the abstraction got wrong. Fix it. Then add the other.
+
+Don't try to ship all three providers simultaneously — the abstraction will be wrong in ways you can't predict until you've built the second provider.

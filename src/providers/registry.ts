@@ -1,5 +1,11 @@
 import type { IProvider } from './types.js';
 
+export interface ProviderSelectionConfig {
+  ai?: {
+    provider?: string;
+  };
+}
+
 /**
  * Centralized registry for AI provider management.
  *
@@ -100,8 +106,8 @@ export class ProviderRegistry {
   /**
    * Get the default provider based on environment configuration.
    *
-   * Reads the `AI_SDLC_PROVIDER` environment variable.
-   * Falls back to 'claude' if not set.
+   * Reads the `AI_SDLC_PROVIDER` environment variable first, then
+   * optional project configuration, then falls back to 'claude'.
    *
    * @returns Default provider instance
    * @throws Error if the default provider is not registered
@@ -115,8 +121,8 @@ export class ProviderRegistry {
    * const provider = ProviderRegistry.getDefault(); // Returns Claude provider
    * ```
    */
-  static getDefault(): IProvider {
-    const providerName = process.env.AI_SDLC_PROVIDER ?? 'claude';
+  static getDefault(config?: ProviderSelectionConfig): IProvider {
+    const providerName = process.env.AI_SDLC_PROVIDER ?? config?.ai?.provider ?? 'claude';
     return this.get(providerName);
   }
 

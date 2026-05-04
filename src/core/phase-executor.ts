@@ -8,6 +8,7 @@
  * @module core/phase-executor
  */
 
+import path from 'path';
 import {
   WorkflowConfig,
   PhaseConfig,
@@ -31,6 +32,7 @@ import {
 } from './consensus-manager.js';
 import { getLogger } from './logger.js';
 import { getEventBus } from './event-bus.js';
+import { loadConfig } from './config.js';
 import type { IProvider } from '../providers/types.js';
 import { ProviderRegistry } from '../providers/registry.js';
 
@@ -80,6 +82,10 @@ export class PhaseExecutor {
   constructor(sdlcRoot: string, config?: WorkflowConfig) {
     this.sdlcRoot = sdlcRoot;
     this.config = config ?? loadWorkflowConfig(sdlcRoot);
+  }
+
+  private resolveProvider(options: PhaseExecutorOptions): IProvider {
+    return options.provider ?? ProviderRegistry.getDefault(loadConfig(path.dirname(this.sdlcRoot)));
   }
 
   /**
@@ -180,7 +186,7 @@ export class PhaseExecutor {
     context: PhaseExecutionContext,
     options: PhaseExecutorOptions
   ): Promise<PhaseExecutionResult> {
-    const provider = options.provider ?? ProviderRegistry.getDefault();
+    const provider = this.resolveProvider(options);
     const onProgress = options.onProgress ?? context.onProgress;
 
     this.logger.debug('phase-executor', `Executing default agent for phase: ${phase}`);
@@ -328,7 +334,7 @@ export class PhaseExecutor {
       };
     }
 
-    const provider = options.provider ?? ProviderRegistry.getDefault();
+    const provider = this.resolveProvider(options);
     const onProgress = options.onProgress ?? context.onProgress;
     const storyId = context.storyPath.split('/').pop()?.replace('.md', '') ?? context.storyPath;
     const eventBus = getEventBus();

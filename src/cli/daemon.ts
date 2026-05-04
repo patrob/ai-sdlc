@@ -10,8 +10,9 @@ import { runResearchAgent } from '../agents/research.js';
 import { runPlanningAgent } from '../agents/planning.js';
 import { runPlanReviewAgent } from '../agents/plan-review.js';
 import { runImplementationAgent } from '../agents/implementation.js';
-import { runReviewAgent } from '../agents/review.js';
+import { createPullRequest, runReviewAgent } from '../agents/review.js';
 import { runReworkAgent } from '../agents/rework.js';
+import { runMergeAgent } from '../agents/merge.js';
 import { Action } from '../types/index.js';
 import { formatSummaryStatus, formatCompactStoryCompletion } from './formatting.js';
 import { ProcessManager } from '../core/process-manager.js';
@@ -420,6 +421,14 @@ export class DaemonRunner {
             throw new Error('Rework action requires context with review feedback');
           }
           result = await runReworkAgent(currentStoryPath, this.sdlcRoot, action.context as any);
+          break;
+
+        case 'create_pr':
+          result = await createPullRequest(currentStoryPath, this.sdlcRoot);
+          break;
+
+        case 'merge':
+          result = await runMergeAgent(currentStoryPath, this.sdlcRoot);
           break;
 
         default:

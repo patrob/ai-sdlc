@@ -150,6 +150,32 @@ describe('ProviderRegistry', () => {
       expect(result).toBe(customProvider);
     });
 
+    it('should use configured provider when env var is not set', () => {
+      const configuredProvider = createMockProvider('configured');
+      ProviderRegistry.register('configured', () => configuredProvider);
+
+      delete process.env.AI_SDLC_PROVIDER;
+      const result = ProviderRegistry.getDefault({
+        ai: { provider: 'configured' },
+      });
+
+      expect(result).toBe(configuredProvider);
+    });
+
+    it('should prefer AI_SDLC_PROVIDER over configured provider', () => {
+      const envProvider = createMockProvider('env-provider');
+      const configuredProvider = createMockProvider('configured');
+      ProviderRegistry.register('env-provider', () => envProvider);
+      ProviderRegistry.register('configured', () => configuredProvider);
+
+      process.env.AI_SDLC_PROVIDER = 'env-provider';
+      const result = ProviderRegistry.getDefault({
+        ai: { provider: 'configured' },
+      });
+
+      expect(result).toBe(envProvider);
+    });
+
     it('should fallback to claude when AI_SDLC_PROVIDER is not set', () => {
       const claudeProvider = createMockProvider('claude');
       ProviderRegistry.register('claude', () => claudeProvider);

@@ -2,12 +2,14 @@
 
 > **Alpha Release**: Expect breaking changes. Report issues at [GitHub Issues](https://github.com/patrob/ai-sdlc/issues)
 
-Agent-first SDLC workflow manager using Claude Agent SDK. A Kanban-style board with AI-powered workflow automation for software development stories.
+Agent-first SDLC workflow manager with configurable AI providers. A Kanban-style board with AI-powered workflow automation for software development stories.
 
 ## Features
 
 - **Kanban-style story management** (Backlog → Ready → In Progress → Done)
 - **AI-powered agents** for each workflow stage (refine, research, plan, implement, review)
+- **Configurable AI provider** selection via `.ai-sdlc.json` or `AI_SDLC_PROVIDER`
+- **/grill-me intake** to clarify raw feature requests before they enter the backlog
 - **Full SDLC automation** with `--auto --story` - takes a story from idea to reviewed code
 - **Epic processing** with `--epic` - parallel execution of related stories with dependency resolution
 - **TDD Mode** - Optional Test-Driven Development with Red-Green-Refactor cycles
@@ -29,6 +31,9 @@ ai-sdlc init
 # Add a story to the backlog
 ai-sdlc add "Implement user authentication"
 
+# Clarify a raw feature request into a story
+ai-sdlc grill-me "Customers need a better way to manage API keys"
+
 # View your board
 ai-sdlc status
 
@@ -43,9 +48,11 @@ ai-sdlc run --auto --story implement-user-authentication
 | `ai-sdlc init` | Initialize `.ai-sdlc` folder structure |
 | `ai-sdlc status` | View stories in Kanban board |
 | `ai-sdlc add "title"` | Add a new story to backlog |
+| `ai-sdlc grill-me "<request>"` | Clarify a feature request with `/grill-me` and add it as a story |
 | `ai-sdlc run` | Process next recommended action |
 | `ai-sdlc run --auto` | Process all pending actions |
 | `ai-sdlc run --auto --story <id>` | Full SDLC for one story |
+| `ai-sdlc run --request "<request>" --watch --grill-me` | Create a clarified story and start daemon processing |
 | `ai-sdlc run --batch <ids>` | Full SDLC for multiple stories sequentially (comma-separated) |
 | `ai-sdlc run --story <id> --step <phase>` | Run specific phase (refine/research/plan/implement/review) |
 | `ai-sdlc run --continue` | Resume after interruption |
@@ -185,6 +192,7 @@ Configure ai-sdlc behavior via a `.ai-sdlc.json` file in your project root. If n
 
 **Key configuration areas:**
 - **Stage gates** - Control approval requirements before implementation and PR creation
+- **AI provider** - Select the registered provider used by all agent queries
 - **Timeouts** - Configure operation timeouts (agent, build, test)
 - **Retry policies** - Control automatic retry behavior for review and implementation failures
 - **TDD mode** - Enable test-driven development with red-green-refactor cycles
@@ -200,6 +208,9 @@ Configure ai-sdlc behavior via a `.ai-sdlc.json` file in your project root. If n
 ```json
 {
   "sdlcFolder": ".ai-sdlc",
+  "ai": {
+    "provider": "claude"
+  },
   "stageGates": {
     "requireApprovalBeforeImplementation": true
   },
@@ -214,13 +225,36 @@ Configure ai-sdlc behavior via a `.ai-sdlc.json` file in your project root. If n
 
 ## Authentication
 
-Set your API key:
+Configure credentials for the selected AI provider. Built-ins are `claude`, `openai`, `codex`, `openrouter`, `copilot`, `mock`, and `dry-run`.
+
+For the default Claude provider, set:
 
 ```bash
 export ANTHROPIC_API_KEY=your-key-here
 ```
 
-Get an API key at: https://console.anthropic.com/
+You can also select another registered provider:
+
+```json
+{
+  "ai": {
+    "provider": "openai",
+    "model": "gpt-5.2"
+  }
+}
+```
+
+Credential env vars:
+
+| Provider | Credentials |
+|----------|-------------|
+| `claude` | `ANTHROPIC_API_KEY` or `claude login` |
+| `openai` / `codex` | `OPENAI_API_KEY` |
+| `openrouter` | `OPENROUTER_API_KEY` |
+| `copilot` | `COPILOT_API_KEY`, `GITHUB_TOKEN`, or `GH_TOKEN` |
+| `mock` / `dry-run` | none |
+
+`AI_SDLC_PROVIDER` overrides `.ai-sdlc.json` for one-off runs; `AI_SDLC_MODEL` or provider-specific model env vars override defaults for HTTP providers.
 
 ## Releasing
 

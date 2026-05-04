@@ -534,6 +534,16 @@ export interface ReviewConfig {
 }
 
 /**
+ * AI provider selection configuration.
+ */
+export interface AIProviderConfig {
+  /** Registered provider name to use for agent queries. @default 'claude' */
+  provider: string;
+  /** Optional model name passed through to providers that support model selection. */
+  model?: string;
+}
+
+/**
  * Implementation retry configuration
  */
 export interface ImplementationConfig {
@@ -876,6 +886,11 @@ export interface NotificationConfig {
 
 export interface Config {
   sdlcFolder: string;
+  /**
+   * AI provider configuration.
+   * Environment variable AI_SDLC_PROVIDER takes precedence over this value.
+   */
+  ai?: AIProviderConfig;
   stageGates: StageGateConfig;
   refinement: RefinementConfig;
   /**

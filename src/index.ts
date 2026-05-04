@@ -4,7 +4,6 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { createRequire } from 'module';
 import { init, status, add, run, details, unblock, approve, feedback, migrate, listWorktrees, addWorktree, removeWorktree, importIssue, linkIssue } from './cli/commands.js';
-import { hasApiKey } from './core/auth.js';
 import { loadConfig, saveConfig, DEFAULT_LOGGING_CONFIG, getSdlcRoot } from './core/config.js';
 import { loadWorkflowConfig, WorkflowConfigLoader } from './core/workflow-config.js';
 import { getThemedChalk } from './core/theme.js';
@@ -12,36 +11,42 @@ import { ThemePreference, LogConfig } from './types/index.js';
 import { initLogger, getLogger } from './core/logger.js';
 import { getLatestLogPath, readLastLines, tailLog } from './core/story-logger.js';
 import { setupGlobalCleanupHandlers } from './core/process-manager.js';
-import { ProviderRegistry, ClaudeProvider, MockProvider, DryRunProvider } from './providers/index.js';
+import { ProviderRegistry, registerBuiltInProviders } from './providers/index.js';
 import fs from 'fs';
 import path from 'path';
 
 // Register AI providers
-ProviderRegistry.register('claude', () => new ClaudeProvider());
-ProviderRegistry.register('mock', () => new MockProvider());
-ProviderRegistry.register('dry-run', () => new DryRunProvider());
+registerBuiltInProviders();
 
 setupGlobalCleanupHandlers();
 
 const require = createRequire(import.meta.url);
 const packageJson = require('../package.json');
 
-// Check for API key when running commands that need it
-function checkApiKey(): boolean {
-  if (!hasApiKey()) {
-    const config = loadConfig();
-    const c = getThemedChalk(config);
-    console.log(c.warning('Warning: No API key found.'));
-    console.log(c.dim('Agent commands require authentication.'));
-    console.log(c.dim('Options:'));
-    console.log(c.dim('  1. Sign in to Claude Code (credentials stored in Keychain)'));
-    console.log(c.dim('  2. Set ANTHROPIC_API_KEY environment variable'));
-    console.log(c.dim('Get a key at: https://console.anthropic.com/'));
+// Check provider credentials when running commands that need AI access.
+function checkProviderConfiguration(): boolean {
+  const config = loadConfig();
+  const c = getThemedChalk(config);
+
+  try {
+    const provider = ProviderRegistry.getDefault(config);
+    const authenticator = provider.getAuthenticator();
+
+    if (authenticator.isConfigured()) {
+      return true;
+    }
+
+    console.log(c.warning(`Warning: AI provider "${provider.name}" is not configured.`));
+    console.log(c.dim('Agent commands require provider credentials.'));
+    console.log(c.dim(`Configure provider "${provider.name}" credentials or set ai.provider / AI_SDLC_PROVIDER to a configured provider.`));
+    console.log();
+    return false;
+  } catch (error) {
+    console.log(c.warning('Warning: Could not resolve AI provider.'));
+    console.log(c.dim(error instanceof Error ? error.message : String(error)));
     console.log();
     return false;
   }
-
-  return true;
 }
 
 const program = new Command();
@@ -69,12 +74,28 @@ program
   .description('Add a new story to the backlog')
   .option('-f, --file <path>', 'Create story from file (supports .md, .txt, .markdown)')
   .option('--ai', 'Use AI-assisted ideation for acceptance criteria and decomposition')
+  .option('--grill-me', 'Clarify the feature request with /grill-me before creating the story')
   .action((title, options) => {
-    if (options.ai) {
-      checkApiKey();
+    if (options.ai || options.grillMe) {
+      checkProviderConfiguration();
     }
     return add(title, options);
   });
+
+function runGrillMeCommand(requestParts: string[]): Promise<void> {
+  checkProviderConfiguration();
+  return add(requestParts.join(' '), { grillMe: true });
+}
+
+program
+  .command('grill-me <request...>')
+  .description('Clarify a feature request with /grill-me and add it as a story')
+  .action(runGrillMeCommand);
+
+program
+  .command('/grill-me <request...>')
+  .description('Clarify a feature request with /grill-me and add it as a story')
+  .action(runGrillMeCommand);
 
 program
   .command('details <id>')
@@ -120,6 +141,8 @@ program
   .option('--step <phase>', 'Run a specific phase (refine, research, plan, implement, review) - cannot be combined with --auto --story')
   .option('--max-iterations <number>', 'Maximum retry iterations (default: infinite)')
   .option('--watch', 'Run in daemon mode, continuously processing backlog')
+  .option('--request <text>', 'Create a story from a feature request before running')
+  .option('--grill-me', 'Clarify --request with /grill-me before creating the story')
   .option('-v, --verbose', 'Show detailed daemon output (use with --watch)')
   .option('--force', 'Skip git validation and conflict checks (use with caution)')
   .option('--worktree', 'Create isolated git worktree for story execution (requires --story)')
@@ -128,8 +151,8 @@ program
   .option('--clean', 'Clean existing worktree and restart from scratch (requires --story)')
   .option('--log-level <level>', 'Set log verbosity (debug, info, warn, error)', 'info')
   .action((options) => {
-    if (!options.dryRun && !options.watch) {
-      checkApiKey();
+    if (!options.dryRun) {
+      checkProviderConfiguration();
     }
 
     // Initialize logger with config and CLI override

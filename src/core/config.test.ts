@@ -1,10 +1,62 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { DEFAULT_CONFIG, loadConfig, DEFAULT_DAEMON_CONFIG, DEFAULT_TIMEOUTS, validateImplementationConfig, DEFAULT_WORKTREE_CONFIG, validateWorktreeBasePath, getWorktreeConfig } from './config.js';
+import { DEFAULT_CONFIG, loadConfig, DEFAULT_DAEMON_CONFIG, DEFAULT_TIMEOUTS, validateImplementationConfig, DEFAULT_WORKTREE_CONFIG, validateWorktreeBasePath, getWorktreeConfig, DEFAULT_AI_PROVIDER_CONFIG } from './config.js';
 import { Config, TDDConfig, WorktreeConfig } from '../types/index.js';
 
 describe('config - TDD configuration', () => {
+  describe('AI provider config defaults', () => {
+    const tempDir = '.test-ai-provider-config';
+
+    beforeEach(() => {
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir);
+      }
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        const configFile = path.join(tempDir, '.ai-sdlc.json');
+        if (fs.existsSync(configFile)) {
+          fs.unlinkSync(configFile);
+        }
+        fs.rmdirSync(tempDir);
+      }
+    });
+
+    it('should default to claude provider', () => {
+      expect(DEFAULT_AI_PROVIDER_CONFIG.provider).toBe('claude');
+      expect(DEFAULT_CONFIG.ai?.provider).toBe('claude');
+      expect(loadConfig(tempDir).ai?.provider).toBe('claude');
+    });
+
+    it('should merge user-provided AI provider config with defaults', () => {
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
+      fs.writeFileSync(configPath, JSON.stringify({
+        ai: {
+          provider: 'mock',
+        },
+      }));
+
+      const config = loadConfig(tempDir);
+
+      expect(config.ai?.provider).toBe('mock');
+    });
+
+    it('should validate AI provider config shape', () => {
+      const configPath = path.join(tempDir, '.ai-sdlc.json');
+      fs.writeFileSync(configPath, JSON.stringify({
+        ai: {
+          provider: 123,
+        },
+      }));
+
+      const config = loadConfig(tempDir);
+
+      expect(config.ai?.provider).toBe('claude');
+    });
+  });
+
   describe('TDD config defaults', () => {
     it('should have tdd configuration in DEFAULT_CONFIG', () => {
       expect(DEFAULT_CONFIG.tdd).toBeDefined();

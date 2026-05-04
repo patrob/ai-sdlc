@@ -53,6 +53,15 @@ vi.mock('../core/story.js', () => ({
   getStory: vi.fn(),
 }));
 
+vi.mock('../agents/review.js', () => ({
+  runReviewAgent: vi.fn().mockResolvedValue({ success: true, changesMade: [] }),
+  createPullRequest: vi.fn().mockResolvedValue({ success: true, changesMade: [] }),
+}));
+
+vi.mock('../agents/merge.js', () => ({
+  runMergeAgent: vi.fn().mockResolvedValue({ success: true, changesMade: [] }),
+}));
+
 vi.mock('./runner.js', () => ({
   WorkflowRunner: vi.fn().mockImplementation(() => ({
     run: vi.fn().mockResolvedValue(undefined),
@@ -445,6 +454,55 @@ describe('DaemonRunner', () => {
 
       // parseStory should be called for validation, not for ID extraction
       expect(localParseStoryMock).toHaveBeenCalledWith(testPath);
+    });
+  });
+
+  describe('PR and merge actions', () => {
+    beforeEach(async () => {
+      const { getStory } = await import('../core/story.js');
+      vi.mocked(getStory).mockReturnValue({
+        path: '/test/.ai-sdlc/stories/S-001/story.md',
+        frontmatter: {
+          id: 'S-001',
+          title: 'Ready for PR',
+        },
+      } as any);
+    });
+
+    it('should create a pull request when daemon receives create_pr action', async () => {
+      const { createPullRequest } = await import('../agents/review.js');
+      const daemonAny = daemon as any;
+
+      await daemonAny.executeAction({
+        type: 'create_pr',
+        storyId: 'S-001',
+        storyPath: '/stale/path/story.md',
+        reason: 'ready for PR',
+        priority: 1,
+      });
+
+      expect(createPullRequest).toHaveBeenCalledWith(
+        '/test/.ai-sdlc/stories/S-001/story.md',
+        '/test/.ai-sdlc'
+      );
+    });
+
+    it('should run merge agent when daemon receives merge action', async () => {
+      const { runMergeAgent } = await import('../agents/merge.js');
+      const daemonAny = daemon as any;
+
+      await daemonAny.executeAction({
+        type: 'merge',
+        storyId: 'S-001',
+        storyPath: '/stale/path/story.md',
+        reason: 'ready to merge',
+        priority: 1,
+      });
+
+      expect(runMergeAgent).toHaveBeenCalledWith(
+        '/test/.ai-sdlc/stories/S-001/story.md',
+        '/test/.ai-sdlc'
+      );
     });
   });
 });

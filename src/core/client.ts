@@ -1,4 +1,5 @@
 import { getApiKey, getCredentialType, CredentialType } from './auth.js';
+import { loadConfig } from './config.js';
 import type {
   ProviderProgressEvent as NewProviderProgressEvent,
   ProviderProgressCallback as NewProviderProgressCallback,
@@ -53,11 +54,15 @@ export interface AgentMessage {
  */
 export async function runAgentQuery(options: AgentQueryOptions, provider?: IProvider): Promise<string> {
   // Get the default provider (Claude) from the registry when not injected
-  const resolvedProvider = provider ?? ProviderRegistry.getDefault();
+  const config = loadConfig(options.workingDirectory || process.cwd());
+  const resolvedProvider = provider ?? ProviderRegistry.getDefault(config);
+  const queryOptions = options.model || !config.ai?.model
+    ? options
+    : { ...options, model: config.ai.model };
 
   // Delegate to the provider's query method
   // The provider handles all retry logic, authentication, streaming, etc.
-  return resolvedProvider.query(options);
+  return resolvedProvider.query(queryOptions);
 }
 
 /**

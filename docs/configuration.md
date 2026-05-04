@@ -7,6 +7,7 @@ This document provides a complete reference for the `.ai-sdlc.json` configuratio
 - [Quick Start](#quick-start)
 - [Configuration Reference](#configuration-reference)
   - [Core Options](#core-options)
+  - [AI Provider](#ai-provider-ai)
   - [Stage Gates](#stage-gates-stagegates)
   - [Refinement](#refinement-refinement)
   - [Review Configuration](#review-configuration-reviewconfig)
@@ -65,6 +66,43 @@ For complete examples, see the [Example Configurations](#example-configurations)
 **Notes:**
 - `testCommand` and `buildCommand` are validated against a whitelist of safe executables. See [Validation Rules](#validation-rules).
 - `settingSources` controls which `.claude/` configuration files are loaded by the Agent SDK. Must include `"project"` to load CLAUDE.md files.
+
+---
+
+### AI Provider (`ai`)
+
+Controls which registered AI provider is used for all agent queries, including `/grill-me`, daemon processing, and the SDLC phases.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `ai.provider` | `string` | `"claude"` | Registered provider name. Built-in providers include `"claude"`, `"openai"`, `"codex"`, `"openrouter"`, `"copilot"`, `"mock"`, and `"dry-run"` |
+| `ai.model` | `string \| undefined` | `undefined` | Optional model name for providers that support model selection |
+
+`AI_SDLC_PROVIDER` takes precedence over `ai.provider` for one-off runs. `AI_SDLC_MODEL` provides a global model override for the HTTP providers when `ai.model` is not set; provider-specific model env vars take precedence over `AI_SDLC_MODEL`.
+
+Built-in provider credential and model settings:
+
+| Provider | Credential env vars | Optional base URL env var | Provider model env var | Default model |
+|----------|---------------------|---------------------------|------------------------|---------------|
+| `claude` | `ANTHROPIC_API_KEY` or Claude OAuth from `claude login` | n/a | n/a | `claude-sonnet-4-5-20250929` |
+| `openai` | `OPENAI_API_KEY` | `OPENAI_BASE_URL` | `AI_SDLC_OPENAI_MODEL` | `gpt-5.2` |
+| `codex` | `OPENAI_API_KEY` | `OPENAI_BASE_URL` | `AI_SDLC_CODEX_MODEL` | `gpt-5.3-codex` |
+| `openrouter` | `OPENROUTER_API_KEY` | `OPENROUTER_BASE_URL` | `AI_SDLC_OPENROUTER_MODEL` | `openai/gpt-5.2` |
+| `copilot` | `COPILOT_API_KEY`, `GITHUB_TOKEN`, or `GH_TOKEN` | `COPILOT_BASE_URL` | `AI_SDLC_COPILOT_MODEL` | `openai/gpt-4.1` |
+| `mock` | none | n/a | n/a | `mock-model` |
+| `dry-run` | none | n/a | n/a | `dry-run` |
+
+Configuration validation checks that credentials are present locally; it does not make live API calls. The test suite runs without live provider credentials.
+
+**Example:**
+```json
+{
+  "ai": {
+    "provider": "openrouter",
+    "model": "anthropic/claude-sonnet-4.5"
+  }
+}
+```
 
 ---
 
@@ -216,6 +254,14 @@ Controls automatic retry behavior for API calls (e.g., transient network failure
 ### Daemon (`daemon`)
 
 Controls daemon/watch mode for continuous backlog monitoring and automatic story processing.
+
+Daemon mode can create a story from a raw request before it starts watching:
+
+```bash
+ai-sdlc run --watch --request "Admins need usage alerts" --grill-me
+```
+
+The request is clarified with `/grill-me` when `--grill-me` is present, then processed by the configured AI provider.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -431,6 +477,12 @@ Configuration is resolved in this order (highest to lowest precedence):
 | Environment Variable | Config Property | Type | Valid Values | Description |
 |---------------------|-----------------|------|--------------|-------------|
 | `AI_SDLC_ROOT` | `sdlcFolder` | `string` | Valid path | **Testing only** - Override SDLC root folder. Not recommended for production use |
+| `AI_SDLC_PROVIDER` | `ai.provider` | `string` | Registered provider name | Select the provider for one-off runs |
+| `AI_SDLC_MODEL` | Provider model | `string` | Provider model ID | Global model override for HTTP providers when provider-specific model env is unset |
+| `AI_SDLC_OPENAI_MODEL` | OpenAI provider model | `string` | OpenAI model ID | Model override for `openai` |
+| `AI_SDLC_CODEX_MODEL` | Codex provider model | `string` | OpenAI Codex model ID | Model override for `codex` |
+| `AI_SDLC_OPENROUTER_MODEL` | OpenRouter provider model | `string` | OpenRouter model ID | Model override for `openrouter` |
+| `AI_SDLC_COPILOT_MODEL` | Copilot provider model | `string` | GitHub Models model ID | Model override for `copilot` |
 | `AI_SDLC_MAX_RETRIES` | `reviewConfig.maxRetries` | `number` | `0-10` | Maximum review retry attempts. Values outside range are rejected |
 | `AI_SDLC_IMPLEMENTATION_MAX_RETRIES` | `implementation.maxRetries` | `number` | `0-10` | Maximum implementation retry attempts. Values outside range are rejected |
 | `AI_SDLC_AUTO_COMPLETE` | `reviewConfig.autoCompleteOnApproval` | `boolean` | `"true"` or `"false"` | Auto-complete story on review approval. Must be string "true" or "false" |

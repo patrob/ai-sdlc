@@ -31,6 +31,7 @@ import { StoryLogger } from '../core/story-logger.js';
 import type { SerializedStory, StatusJsonOutput } from '../types/index.js';
 import { detectConflicts } from '../core/conflict-detector.js';
 import { getLogger } from '../core/logger.js';
+import { createStoryFromFeatureRequest } from './feature-request.js';
 
 /**
  * Branch divergence threshold for warnings
@@ -343,7 +344,7 @@ function sanitizeFileContent(content: string): string {
 /**
  * Add a new story to the backlog
  */
-export async function add(title?: string, options?: { file?: string; ai?: boolean }): Promise<void> {
+export async function add(title?: string, options?: { file?: string; ai?: boolean; grillMe?: boolean }): Promise<void> {
   const spinner = ora('Creating story...').start();
 
   try {
@@ -429,6 +430,27 @@ export async function add(title?: string, options?: { file?: string; ai?: boolea
     } else {
       // Traditional title-only input
       storyTitle = title!;
+    }
+
+    if (options?.grillMe) {
+      spinner.text = 'Clarifying feature request with /grill-me...';
+      const requestText = storyContent
+        ? `# ${storyTitle}\n\n${storyContent}`
+        : storyTitle;
+
+      const story = await createStoryFromFeatureRequest(requestText, sdlcRoot, { grillMe: true });
+
+      spinner.succeed(c.success(`Created: ${story.path}`));
+      console.log(c.dim(`  ID: ${story.frontmatter.id}`));
+      console.log(c.dim(`  Title: ${story.frontmatter.title}`));
+      console.log(c.dim(`  Slug: ${story.slug}`));
+      if (options.file) {
+        console.log(c.dim(`  Source: ${path.basename(options.file)}`));
+      }
+      console.log(c.dim(`  /grill-me: yes`));
+      console.log();
+      console.log(c.info('Next step:'), `ai-sdlc run`);
+      return;
     }
 
     // AI-assisted ideation (--ai flag)
@@ -1068,7 +1090,7 @@ export interface RunResult {
 /**
  * Run the workflow (process one action or all)
  */
-export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; batch?: string; epic?: string; maxConcurrent?: string; concurrent?: string; step?: string; maxIterations?: string; watch?: boolean; force?: boolean; worktree?: boolean; clean?: boolean; keepWorktrees?: boolean; merge?: boolean; mergeStrategy?: string }): Promise<RunResult> {
+export async function run(options: { auto?: boolean; dryRun?: boolean; continue?: boolean; story?: string; batch?: string; epic?: string; maxConcurrent?: string; concurrent?: string; step?: string; maxIterations?: string; watch?: boolean; verbose?: boolean; force?: boolean; worktree?: boolean; clean?: boolean; keepWorktrees?: boolean; merge?: boolean; mergeStrategy?: string; request?: string; grillMe?: boolean }): Promise<RunResult> {
   const config = loadConfig();
   // Parse maxIterations from CLI (undefined means use config default which is Infinity)
   const maxIterationsOverride = options.maxIterations !== undefined
@@ -1085,6 +1107,8 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     story: options.story,
     step: options.step,
     watch: options.watch,
+    request: options.request,
+    grillMe: options.grillMe,
     worktree: options.worktree,
     clean: options.clean,
     force: options.force,
@@ -1100,11 +1124,43 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     }
   }
 
+  if (options.grillMe && !options.request) {
+    console.log(c.error('Error: --grill-me requires --request <text>'));
+    return { success: false };
+  }
+
+  if (options.request && options.dryRun) {
+    console.log(c.info('Dry run - would create story from feature request'));
+    console.log(c.dim(`  /grill-me: ${options.grillMe ? 'yes' : 'no'}`));
+    console.log(c.dim(`  Request: ${options.request}`));
+    return { success: true };
+  }
+
+  if (options.request) {
+    if (!kanbanExists(sdlcRoot)) {
+      console.log(c.warning('ai-sdlc not initialized. Run `ai-sdlc init` first.'));
+      return { success: false };
+    }
+
+    const story = await createStoryFromFeatureRequest(options.request, sdlcRoot, {
+      grillMe: options.grillMe,
+    });
+    console.log(c.success(`Created story from feature request: ${story.frontmatter.id}`));
+    console.log(c.dim(`  Title: ${story.frontmatter.title}`));
+
+    if (!options.story) {
+      options.story = story.frontmatter.id;
+    }
+    if (!options.watch && options.auto === undefined) {
+      options.auto = true;
+    }
+  }
+
   // Handle daemon/watch mode
   if (options.watch) {
     console.log(c.info('🚀 Starting daemon mode...'));
     const { startDaemon } = await import('./daemon.js');
-    await startDaemon({ maxIterations: maxIterationsOverride });
+    await startDaemon({ maxIterations: maxIterationsOverride, verbose: options.verbose });
     return { success: true }; // Daemon runs indefinitely
   }
 

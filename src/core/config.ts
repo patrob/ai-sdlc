@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, PlanReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig, EpicConfig, MergeConfig, TicketingConfig, ProjectConfig, TechStack, CostLimitConfig, NotificationConfig } from '../types/index.js';
+import { Config, StageGateConfig, RefinementConfig, ReviewConfig, PlanReviewConfig, ImplementationConfig, TimeoutConfig, DaemonConfig, TDDConfig, WorktreeConfig, LogConfig, RetryConfig, EpicConfig, MergeConfig, TicketingConfig, ProjectConfig, TechStack, CostLimitConfig, NotificationConfig, AIProviderConfig } from '../types/index.js';
 
 const CONFIG_FILENAME = '.ai-sdlc.json';
 
@@ -186,8 +186,16 @@ export const DEFAULT_TICKETING_CONFIG: TicketingConfig = {
   postProgressComments: true,
 };
 
+/**
+ * Default AI provider configuration
+ */
+export const DEFAULT_AI_PROVIDER_CONFIG: AIProviderConfig = {
+  provider: 'claude',
+};
+
 export const DEFAULT_CONFIG: Config = {
   sdlcFolder: '.ai-sdlc',
+  ai: { ...DEFAULT_AI_PROVIDER_CONFIG },
   stageGates: {
     requireApprovalBeforeImplementation: false,
     requireApprovalBeforePR: false,
@@ -624,6 +632,23 @@ function sanitizeUserConfig(userConfig: any): Partial<Config> {
     }
   }
 
+  // Validate AI provider configuration if present
+  if (userConfig.ai !== undefined) {
+    if (typeof userConfig.ai !== 'object' || userConfig.ai === null) {
+      console.warn('Invalid ai in config (must be object), ignoring');
+      delete userConfig.ai;
+    } else {
+      if (userConfig.ai.provider !== undefined && typeof userConfig.ai.provider !== 'string') {
+        console.warn('Invalid ai.provider in config (must be string), using default');
+        delete userConfig.ai.provider;
+      }
+      if (userConfig.ai.model !== undefined && typeof userConfig.ai.model !== 'string') {
+        console.warn('Invalid ai.model in config (must be string), ignoring');
+        delete userConfig.ai.model;
+      }
+    }
+  }
+
   // Validate groupings configuration if present
   if (userConfig.groupings !== undefined) {
     if (!validateGroupingsConfig(userConfig.groupings)) {
@@ -746,6 +771,10 @@ export function loadConfig(workingDir: string = process.cwd()): Config {
         implementation: {
           ...DEFAULT_IMPLEMENTATION_CONFIG,
           ...userConfig.implementation,
+        },
+        ai: {
+          ...DEFAULT_AI_PROVIDER_CONFIG,
+          ...userConfig.ai,
         },
         timeouts: {
           ...DEFAULT_TIMEOUTS,

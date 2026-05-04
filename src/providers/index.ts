@@ -28,6 +28,15 @@ export { ProviderRegistry } from './registry.js';
 export { ClaudeProvider } from './claude/index.js';
 export { ClaudeAuthenticator } from './claude/authenticator.js';
 
+// Export OpenAI-compatible HTTP providers
+export {
+  OpenAIProvider,
+  CodexProvider,
+  OpenRouterProvider,
+  CopilotProvider,
+} from './openai-compatible-provider.js';
+export { registerBuiltInProviders } from './built-ins.js';
+
 // Export mock and dry-run providers
 export { MockProvider, MockAuthenticator } from './mock-provider.js';
 export type { MockProviderOptions, RecordedCall } from './mock-provider.js';

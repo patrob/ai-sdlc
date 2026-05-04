@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { createRequire } from 'module';
 import { init, status, add, run, details, unblock, approve, feedback, migrate, listWorktrees, addWorktree, removeWorktree, importIssue, linkIssue } from './cli/commands.js';
+import { startTui, checkTuiProviderConfiguration } from './cli/tui.js';
 import { loadConfig, saveConfig, DEFAULT_LOGGING_CONFIG, getSdlcRoot } from './core/config.js';
 import { loadWorkflowConfig, WorkflowConfigLoader } from './core/workflow-config.js';
 import { getThemedChalk } from './core/theme.js';
@@ -11,7 +12,7 @@ import { ThemePreference, LogConfig } from './types/index.js';
 import { initLogger, getLogger } from './core/logger.js';
 import { getLatestLogPath, readLastLines, tailLog } from './core/story-logger.js';
 import { setupGlobalCleanupHandlers } from './core/process-manager.js';
-import { ProviderRegistry, registerBuiltInProviders } from './providers/index.js';
+import { registerBuiltInProviders } from './providers/index.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -24,30 +25,7 @@ const require = createRequire(import.meta.url);
 const packageJson = require('../package.json');
 
 // Check provider credentials when running commands that need AI access.
-function checkProviderConfiguration(): boolean {
-  const config = loadConfig();
-  const c = getThemedChalk(config);
-
-  try {
-    const provider = ProviderRegistry.getDefault(config);
-    const authenticator = provider.getAuthenticator();
-
-    if (authenticator.isConfigured()) {
-      return true;
-    }
-
-    console.log(c.warning(`Warning: AI provider "${provider.name}" is not configured.`));
-    console.log(c.dim('Agent commands require provider credentials.'));
-    console.log(c.dim(`Configure provider "${provider.name}" credentials or set ai.provider / AI_SDLC_PROVIDER to a configured provider.`));
-    console.log();
-    return false;
-  } catch (error) {
-    console.log(c.warning('Warning: Could not resolve AI provider.'));
-    console.log(c.dim(error instanceof Error ? error.message : String(error)));
-    console.log();
-    return false;
-  }
-}
+const checkProviderConfiguration = checkTuiProviderConfiguration;
 
 const program = new Command();
 
@@ -261,6 +239,12 @@ program
     // Run returns a result object but CLI doesn't need it - just await for completion
     return run(options).then(() => {});
   });
+
+program
+  .command('tui')
+  .alias('ui')
+  .description('Start interactive slash-command TUI')
+  .action(() => startTui());
 
 program
   .command('config')

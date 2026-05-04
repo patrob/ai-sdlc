@@ -10,6 +10,7 @@ Agent-first SDLC workflow manager with configurable AI providers. A Kanban-style
 - **AI-powered agents** for each workflow stage (refine, research, plan, implement, review)
 - **Configurable AI provider** selection via `.ai-sdlc.json` or `AI_SDLC_PROVIDER`
 - **/grill-me intake** to clarify raw feature requests before they enter the backlog
+- **Interactive TUI** with slash commands for adding stories and running workflow actions
 - **Full SDLC automation** with `--auto --story` - takes a story from idea to reviewed code
 - **Epic processing** with `--epic` - parallel execution of related stories with dependency resolution
 - **TDD Mode** - Optional Test-Driven Development with Red-Green-Refactor cycles
@@ -37,6 +38,9 @@ ai-sdlc grill-me "Customers need a better way to manage API keys"
 # View your board
 ai-sdlc status
 
+# Work from an interactive slash-command TUI
+ai-sdlc tui
+
 # Run the full SDLC for a story
 ai-sdlc run --auto --story implement-user-authentication
 ```
@@ -49,6 +53,7 @@ ai-sdlc run --auto --story implement-user-authentication
 | `ai-sdlc status` | View stories in Kanban board |
 | `ai-sdlc add "title"` | Add a new story to backlog |
 | `ai-sdlc grill-me "<request>"` | Clarify a feature request with `/grill-me` and add it as a story |
+| `ai-sdlc tui` | Open the interactive slash-command TUI |
 | `ai-sdlc run` | Process next recommended action |
 | `ai-sdlc run --auto` | Process all pending actions |
 | `ai-sdlc run --auto --story <id>` | Full SDLC for one story |
@@ -62,6 +67,22 @@ ai-sdlc run --auto --story implement-user-authentication
 | `ai-sdlc config [key] [value]` | View/set configuration |
 | `ai-sdlc import <issue-url>` | Import a GitHub Issue as a new story |
 | `ai-sdlc link <story-id> <issue-url>` | Link an existing story to a GitHub Issue |
+
+## Interactive TUI
+
+Use `ai-sdlc tui` for day-to-day story intake and workflow execution from one prompt:
+
+```text
+ai-sdlc> /status --active
+ai-sdlc> /add Add billing usage alerts
+ai-sdlc> /grill-me Customers need API key rotation
+ai-sdlc> /work S-0001
+ai-sdlc> /run --auto --story S-0001
+ai-sdlc> /details S-0001
+ai-sdlc> /exit
+```
+
+`/work [story-id]` is a shortcut for full SDLC automation. Without a story ID, it runs pending workflow actions in auto mode.
 
 ## Workflow Phases
 

@@ -1280,6 +1280,8 @@ export interface IPCMessage {
 export interface ProcessOrchestratorOptions {
   /** Maximum number of concurrent child processes (default: 1) */
   concurrency: number;
+  /** Per-story watchdog timeout in milliseconds (default: timeouts.agentTimeout / 600000) */
+  storyTimeout?: number;
   /** Milliseconds before SIGKILL after SIGTERM (default: 10000) */
   shutdownTimeout?: number;
   /** Base path for worktrees (default: .ai-sdlc/worktrees) */

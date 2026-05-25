@@ -41,6 +41,11 @@ vi.mock('./process-manager.js', () => ({
 
 vi.mock('./config.js', () => ({
   getSdlcRoot: vi.fn().mockReturnValue('/tmp/test-project'),
+  DEFAULT_TIMEOUTS: {
+    agentTimeout: 600000,
+    buildTimeout: 120000,
+    testTimeout: 300000,
+  },
 }));
 
 // Store mock implementation so we can control it per test
@@ -264,6 +269,55 @@ describe('Orchestrator', () => {
       expect(results).toHaveLength(2);
       expect(results[0].success).toBe(false);
       expect(results[1].success).toBe(true);
+    });
+
+    it('should time out a hung child and report timeout failure', async () => {
+      const mockProc = createMockChildProcess();
+      mockSpawn.mockReturnValue(mockProc);
+
+      orchestrator = new Orchestrator({
+        concurrency: 1,
+        storyTimeout: 20,
+        shutdownTimeout: 10,
+      });
+
+      const stories = [createMockStory('S-001', 'Hung Story')];
+      const executePromise = orchestrator.execute(stories);
+
+      setTimeout(() => {
+        mockProc.emit('close', null, 'SIGKILL');
+      }, 50);
+
+      const results = await executePromise;
+
+      expect(mockProc.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(mockProc.kill).toHaveBeenCalledWith('SIGKILL');
+      expect(results).toHaveLength(1);
+      expect(results[0].success).toBe(false);
+      expect(results[0].error).toContain('timed out');
+    });
+
+    it('should apply default timeout when storyTimeout is not configured', async () => {
+      const mockProc = createMockChildProcess();
+      mockSpawn.mockReturnValue(mockProc);
+
+      orchestrator = new Orchestrator({
+        concurrency: 1,
+        shutdownTimeout: 10,
+      });
+
+      const stories = [createMockStory('S-001', 'Fast Story')];
+      const executePromise = orchestrator.execute(stories);
+
+      setTimeout(() => {
+        mockProc.emit('close', 0, null);
+      }, 10);
+
+      const results = await executePromise;
+
+      expect(mockProc.kill).not.toHaveBeenCalled();
+      expect(results).toHaveLength(1);
+      expect(results[0].success).toBe(true);
     });
   });
 

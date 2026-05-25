@@ -319,6 +319,28 @@ describe('Orchestrator', () => {
       expect(results).toHaveLength(1);
       expect(results[0].success).toBe(true);
     });
+
+    it('should send periodic health checks', async () => {
+      vi.useFakeTimers();
+      const mockProc = createMockChildProcess();
+      (mockProc as any).connected = true;
+      mockSpawn.mockReturnValue(mockProc);
+
+      orchestrator = new Orchestrator({
+        ...defaultOptions,
+        healthCheckIntervalMs: 100,
+        healthMissThreshold: 2,
+      });
+
+      const executePromise = orchestrator.execute([createMockStory('S-001', 'Health Story')]);
+      await vi.advanceTimersByTimeAsync(220);
+
+      expect(mockProc.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'health_check', storyId: 'S-001' }));
+
+      mockProc.emit('close', 0, null);
+      await executePromise;
+      vi.useRealTimers();
+    });
   });
 
   describe('IPC communication', () => {

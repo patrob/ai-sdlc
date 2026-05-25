@@ -116,6 +116,8 @@ export interface AgentConfig {
   consensus?: ConsensusRequirement;
   /** Maximum iterations for consensus-seeking (default: 3) */
   maxIterations?: number;
+  /** Max agents to run concurrently in a parallel group (default: unbounded) */
+  parallelismLimit?: number;
   /** Nested agent configurations (for groups) */
   agents?: AgentConfig[];
 }

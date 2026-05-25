@@ -217,6 +217,12 @@ export class Orchestrator {
       let timedOut = false;
       let timeoutError: string | undefined;
       let timeoutKillTimer: NodeJS.Timeout | undefined;
+      let healthCheckTimer: NodeJS.Timeout | undefined;
+      const healthCheckIntervalMs = this.options.healthCheckIntervalMs ?? 5000;
+      const healthMissThreshold = this.options.healthMissThreshold ?? 2;
+      let pendingHealthResponses = 0;
+      let consecutiveHealthMisses = 0;
+      const healthWarnings: string[] = [];
       let settled = false;
 
       const finish = (result: ProcessExecutionResult): void => {
@@ -226,8 +232,33 @@ export class Orchestrator {
         if (timeoutKillTimer) {
           clearTimeout(timeoutKillTimer);
         }
+        if (healthCheckTimer) {
+          clearInterval(healthCheckTimer);
+        }
         resolve(result);
       };
+
+      healthCheckTimer = setInterval(() => {
+        if (settled || !proc.connected || typeof proc.send !== 'function') {
+          return;
+        }
+
+        if (pendingHealthResponses > 0) {
+          consecutiveHealthMisses++;
+          if (consecutiveHealthMisses >= healthMissThreshold) {
+            const warning = `Missed ${consecutiveHealthMisses} consecutive health response(s)`;
+            healthWarnings.push(warning);
+            console.warn(`⚠️  [${storyId}] ${warning}`);
+          }
+        }
+
+        pendingHealthResponses++;
+        proc.send({
+          type: 'health_check',
+          storyId,
+          timestamp: Date.now(),
+        });
+      }, healthCheckIntervalMs);
 
       const watchdogTimer = setTimeout(() => {
         timedOut = true;
@@ -276,6 +307,8 @@ export class Orchestrator {
             break;
           case 'health_response':
             // Child responded to health check
+            pendingHealthResponses = Math.max(0, pendingHealthResponses - 1);
+            consecutiveHealthMisses = 0;
             console.log(`  [${storyId}] Health check OK`);
             break;
           case 'error':
@@ -309,6 +342,9 @@ export class Orchestrator {
           signal,
           duration,
           error: success ? undefined : timeoutError || stderr || stdout || `Process exited with code ${code}`,
+          ...(success && healthWarnings.length > 0
+            ? { error: `Completed with health warnings: ${healthWarnings.join('; ')}` }
+            : {}),
         });
       });
 

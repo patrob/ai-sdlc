@@ -23,7 +23,7 @@ import type {
 } from '../types/index.js';
 import { GitWorktreeService } from './worktree.js';
 import { ProcessManager } from './process-manager.js';
-import { getSdlcRoot } from './config.js';
+import { getSdlcRoot, DEFAULT_TIMEOUTS } from './config.js';
 
 /**
  * Multi-Process Orchestrator
@@ -175,6 +175,9 @@ export class Orchestrator {
     startTime: number
   ): Promise<ProcessExecutionResult> {
     return new Promise((resolve) => {
+      const storyTimeout = this.options.storyTimeout ?? DEFAULT_TIMEOUTS.agentTimeout;
+      const killAfterMs = this.options.shutdownTimeout || 10000;
+
       // Spawn agent-executor as child process entry point
       // Determine the path to agent-executor (could be in dist/ or src/ depending on build state)
       const currentFilePath = fileURLToPath(import.meta.url);
@@ -211,6 +214,40 @@ export class Orchestrator {
       // Capture stdout/stderr
       let stdout = '';
       let stderr = '';
+      let timedOut = false;
+      let timeoutError: string | undefined;
+      let timeoutKillTimer: NodeJS.Timeout | undefined;
+      let settled = false;
+
+      const finish = (result: ProcessExecutionResult): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(watchdogTimer);
+        if (timeoutKillTimer) {
+          clearTimeout(timeoutKillTimer);
+        }
+        resolve(result);
+      };
+
+      const watchdogTimer = setTimeout(() => {
+        timedOut = true;
+        timeoutError = `Story timed out after ${Math.max(1, Math.ceil(storyTimeout / 1000))} seconds`;
+        console.error(`⏰ [${storyId}] ${timeoutError}`);
+
+        try {
+          proc.kill('SIGTERM');
+        } catch {
+          // Process may have already exited
+        }
+
+        timeoutKillTimer = setTimeout(() => {
+          try {
+            proc.kill('SIGKILL');
+          } catch {
+            // Process may have already exited
+          }
+        }, killAfterMs);
+      }, storyTimeout);
 
       proc.stdout?.on('data', (data) => {
         stdout += data.toString();
@@ -257,7 +294,7 @@ export class Orchestrator {
         this.children.delete(storyId);
 
         const duration = Date.now() - startTime;
-        const success = code === 0;
+        const success = !timedOut && code === 0;
 
         if (success) {
           console.log(`✅ [${storyId}] Completed successfully (${duration}ms)`);
@@ -265,13 +302,13 @@ export class Orchestrator {
           console.error(`❌ [${storyId}] Failed with code ${code} (${duration}ms)`);
         }
 
-        resolve({
+        finish({
           storyId,
           success,
           exitCode: code,
           signal,
           duration,
-          error: success ? undefined : stderr || `Process exited with code ${code}`,
+          error: success ? undefined : timeoutError || stderr || stdout || `Process exited with code ${code}`,
         });
       });
 
@@ -280,7 +317,7 @@ export class Orchestrator {
         this.children.delete(storyId);
         console.error(`❌ [${storyId}] Process error: ${err.message}`);
 
-        resolve({
+        finish({
           storyId,
           success: false,
           exitCode: null,

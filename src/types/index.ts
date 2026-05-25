@@ -1288,6 +1288,10 @@ export interface ProcessOrchestratorOptions {
   worktreeBasePath?: string;
   /** Keep worktrees after execution (default: false) */
   keepWorktrees?: boolean;
+  /** Interval for parent->child health checks in ms (default: 5000) */
+  healthCheckIntervalMs?: number;
+  /** Consecutive missed health responses before warning (default: 2) */
+  healthMissThreshold?: number;
 }
 
 /**

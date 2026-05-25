@@ -249,7 +249,12 @@ export class PhaseExecutor {
 
     if (composition === 'parallel') {
       // Execute all agents in parallel
-      const outputs = await this.executeAgentsParallel(nestedAgents, context, options);
+      const outputs = await this.executeAgentsParallel(
+        nestedAgents,
+        context,
+        options,
+        groupConfig.parallelismLimit
+      );
 
       // Handle consensus if required
       if (consensus === 'required') {
@@ -265,7 +270,7 @@ export class PhaseExecutor {
             return this.executeAgentsParallel(nestedAgents, context, {
               ...options,
               iterationContext: iterContext,
-            });
+            }, groupConfig.parallelismLimit);
           }
         );
 
@@ -302,13 +307,23 @@ export class PhaseExecutor {
   private async executeAgentsParallel(
     agents: AgentConfig[],
     context: PhaseExecutionContext,
-    options: PhaseExecutorOptions & { iterationContext?: ConsensusIterationContext }
+    options: PhaseExecutorOptions & { iterationContext?: ConsensusIterationContext },
+    parallelismLimit?: number
   ): Promise<AgentOutput[]> {
-    const promises = agents.map(agent =>
-      this.executeSingleAgent(agent, context, options)
-    );
+    const limit = parallelismLimit && parallelismLimit > 0 ? parallelismLimit : agents.length;
+    const outputs: AgentOutput[] = new Array(agents.length);
+    let cursor = 0;
 
-    return Promise.all(promises);
+    const worker = async (): Promise<void> => {
+      while (cursor < agents.length) {
+        const currentIndex = cursor++;
+        outputs[currentIndex] = await this.executeSingleAgent(agents[currentIndex], context, options);
+      }
+    };
+
+    const workerCount = Math.min(limit, agents.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    return outputs;
   }
 
   /**

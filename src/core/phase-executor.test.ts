@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { PhaseExecutor, createPhaseExecutor, executePhase } from './phase-executor.js';
+import { runRefinementAgent } from '../agents/refinement.js';
 import type { WorkflowConfig, PhaseConfig } from '../types/workflow-config.js';
 
 // Mock dependencies
@@ -180,6 +181,42 @@ Test story content`);
 
       expect(result.success).toBe(true);
       expect(result.outputs.length).toBe(2);
+    });
+
+    it('should enforce parallelism limit for parallel groups', async () => {
+      let inFlight = 0;
+      let peak = 0;
+      vi.mocked(runRefinementAgent).mockImplementation(async () => {
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        await new Promise(resolve => setTimeout(resolve, 10));
+        inFlight--;
+        return {
+          success: true,
+          story: { frontmatter: { id: 'S-001' }, content: 'Story' },
+          changesMade: ['ok'],
+        } as any;
+      });
+
+      const config: WorkflowConfig = {
+        version: '1.0',
+        phases: {
+          refine: {
+            agents: [{
+              id: 'parallel-group',
+              composition: 'parallel',
+              parallelismLimit: 2,
+              agents: Array.from({ length: 6 }, (_, i) => ({ id: `a-${i}`, role: 'story_refiner' as const })),
+            }],
+          },
+        },
+      };
+
+      const executor = new PhaseExecutor(tempDir, config);
+      const result = await executor.execute('refine', { phase: 'refine', storyPath, sdlcRoot: tempDir });
+      expect(result.success).toBe(true);
+      expect(result.outputs).toHaveLength(6);
+      expect(peak).toBeLessThanOrEqual(2);
     });
 
     it('should execute sequential agents', async () => {

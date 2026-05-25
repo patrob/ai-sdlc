@@ -9,7 +9,7 @@ import { detectProjects, formatDetectedProjects, getPrimaryProject } from '../co
 import { initializeKanban, kanbanExists, assessState, getBoardStats, findStoryBySlug, findStoriesByStatus } from '../core/kanban.js';
 import { createStory, parseStory, resetRPIVCycle, isAtMaxRetries, unblockStory, getStory, findStoryById, updateStoryField, writeStory, sanitizeStoryId, autoCompleteStoryAfterReview, incrementImplementationRetryCount, resetImplementationRetryCount, getEffectiveMaxImplementationRetries, isAtMaxImplementationRetries, updateStoryStatus } from '../core/story.js';
 import { GitWorktreeService, WorktreeStatus, getLastCompletedPhase, getNextPhase } from '../core/worktree.js';
-import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext, WorktreeInfo, PreFlightResult } from '../types/index.js';
+import { Story, Action, ActionType, KanbanFolder, WorkflowExecutionState, CompletedActionRecord, ReviewResult, ReviewDecision, ReworkContext, WorktreeInfo, PreFlightResult, ProcessExecutionResult } from '../types/index.js';
 import { getThemedChalk } from '../core/theme.js';
 import {
   saveWorkflowState,
@@ -32,6 +32,7 @@ import type { SerializedStory, StatusJsonOutput } from '../types/index.js';
 import { detectConflicts } from '../core/conflict-detector.js';
 import { getLogger } from '../core/logger.js';
 import { createStoryFromFeatureRequest } from './feature-request.js';
+import { Orchestrator } from '../core/orchestrator.js';
 
 /**
  * Branch divergence threshold for warnings
@@ -1185,18 +1186,8 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
         return { success: true }; // No error, just nothing to do
       }
 
-      // Limit to available stories
-      const storiesToRun = readyStories.slice(0, Math.min(concurrency, readyStories.length));
-      console.log(c.info(`🚀 Running ${storiesToRun.length} stories concurrently (concurrency: ${concurrency})`));
-
-      // Create orchestrator and execute
-      const orchestrator = new Orchestrator({
-        concurrency,
-        shutdownTimeout: 10000,
-        keepWorktrees: options.keepWorktrees,
-      });
-
-      const results = await orchestrator.execute(storiesToRun);
+      console.log(c.info(`🚀 Running ${readyStories.length} ready stories with concurrency ${concurrency}`));
+      const results = await runConcurrentStoryQueue(readyStories, concurrency, sdlcRoot, options.keepWorktrees, c);
 
       // Report results
       const succeeded = results.filter((r) => r.success).length;
@@ -2750,6 +2741,102 @@ async function executeAction(action: Action, sdlcRoot: string): Promise<ActionEx
     // Always close logger, even if action fails or throws
     storyLogger?.close();
   }
+}
+
+export function selectConflictSafeBatch(stories: Story[], concurrency: number, sdlcRoot: string): {
+  selectedStories: Story[];
+  deferredStories: Story[];
+  lowSeverityWarnings: string[];
+} {
+  const queue = [...stories];
+  const selectedStories: Story[] = [];
+  const deferredStories: Story[] = [];
+  const lowSeverityWarnings: string[] = [];
+  const workingDir = path.dirname(path.normalize(sdlcRoot));
+
+  while (queue.length > 0 && selectedStories.length < concurrency) {
+    const candidate = queue.shift()!;
+    const candidateSet = [...selectedStories, candidate];
+    const result = detectConflicts(candidateSet, workingDir, 'main');
+
+    const conflictsForCandidate = result.conflicts.filter((conflict) => {
+      const involvesCandidate = conflict.storyA === candidate.frontmatter.id || conflict.storyB === candidate.frontmatter.id;
+      const involvesSelected = selectedStories.some(
+        (story) => story.frontmatter.id === conflict.storyA || story.frontmatter.id === conflict.storyB
+      );
+      return involvesCandidate && involvesSelected;
+    });
+
+    if (conflictsForCandidate.some((conflict) => conflict.severity === 'high')) {
+      deferredStories.push(candidate);
+      continue;
+    }
+
+    for (const conflict of conflictsForCandidate) {
+      if (conflict.severity === 'low') {
+        lowSeverityWarnings.push(`${conflict.storyA} ↔ ${conflict.storyB}`);
+      }
+    }
+
+    selectedStories.push(candidate);
+  }
+
+  return {
+    selectedStories,
+    deferredStories: [...deferredStories, ...queue],
+    lowSeverityWarnings,
+  };
+}
+
+export async function runConcurrentStoryQueue(
+  readyStories: Story[],
+  concurrency: number,
+  sdlcRoot: string,
+  keepWorktrees: boolean | undefined,
+  c: ReturnType<typeof getThemedChalk>
+): Promise<ProcessExecutionResult[]> {
+  const queue = [...readyStories];
+  const allResults: ProcessExecutionResult[] = [];
+
+  while (queue.length > 0) {
+    let selectedStories: Story[];
+    let deferredStories: Story[];
+    let lowSeverityWarnings: string[];
+
+    try {
+      const batch = selectConflictSafeBatch(queue, concurrency, sdlcRoot);
+      selectedStories = batch.selectedStories;
+      deferredStories = batch.deferredStories;
+      lowSeverityWarnings = batch.lowSeverityWarnings;
+    } catch (error) {
+      console.log(c.warning(`⚠️  Conflict detection failed; running batch without gate (${error instanceof Error ? error.message : String(error)})`));
+      selectedStories = queue.slice(0, Math.min(concurrency, queue.length));
+      deferredStories = queue.slice(selectedStories.length);
+      lowSeverityWarnings = [];
+    }
+
+    if (selectedStories.length === 0) {
+      selectedStories = queue.slice(0, 1);
+      deferredStories = queue.slice(1);
+    }
+
+    if (lowSeverityWarnings.length > 0) {
+      console.log(c.warning(`⚠️  Low-severity overlaps allowed in batch: ${lowSeverityWarnings.join(', ')}`));
+    }
+
+    const orchestrator = new Orchestrator({
+      concurrency,
+      shutdownTimeout: 10000,
+      keepWorktrees,
+    });
+    const results = await orchestrator.execute(selectedStories);
+    allResults.push(...results);
+
+    queue.length = 0;
+    queue.push(...deferredStories);
+  }
+
+  return allResults;
 }
 
 /**

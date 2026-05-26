@@ -2,7 +2,9 @@
 
 > **Alpha Release**: Expect breaking changes. Report issues at [GitHub Issues](https://github.com/patrob/ai-sdlc/issues)
 
-Agent-first SDLC workflow manager with configurable AI providers. A Kanban-style board with AI-powered workflow automation for software development stories.
+**Model-agnostic story-to-PR orchestration with guardrails for engineering teams.**
+
+AI SDLC helps teams move from raw request to review-ready code through a repeatable Kanban workflow (refine → research → plan → implement → review), with configurable AI providers and human checkpoints.
 
 ## Features
 

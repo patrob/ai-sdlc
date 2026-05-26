@@ -1,6 +1,6 @@
-# Contributing to agentic-workflow
+# Contributing to ai-sdlc
 
-Thank you for your interest in contributing to agentic-workflow! We welcome contributions from the community, whether they're bug fixes, new features, documentation improvements, or other enhancements.
+Thank you for your interest in contributing to ai-sdlc! We welcome contributions from the community, whether they're bug fixes, new features, documentation improvements, or other enhancements.
 
 ## Getting Started
 
@@ -13,8 +13,8 @@ Thank you for your interest in contributing to agentic-workflow! We welcome cont
 
 1. **Fork and clone the repository**
    ```bash
-   git clone https://github.com/your-username/agentic-workflow.git
-   cd agentic-workflow
+   git clone https://github.com/patrob/ai-sdlc.git
+   cd ai-sdlc
    ```
 
 2. **Install dependencies**
@@ -141,4 +141,4 @@ When reviewing others' code:
 - Reach out to maintainers via GitHub discussions for questions
 - Check existing documentation and closed issues for answers
 
-Thank you for contributing to agentic-workflow!
+Thank you for contributing to ai-sdlc!

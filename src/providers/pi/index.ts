@@ -15,7 +15,9 @@
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { AgentEvent, AgentMessage, ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
-import type { Api, Model, Usage } from '@earendil-works/pi-ai';
+import type { Api, AssistantMessage, Model, Usage } from '@earendil-works/pi-ai';
+import { AgentTimeoutError } from '../../core/agent-errors.js';
+import { DEFAULT_TIMEOUTS } from '../../core/config.js';
 import type {
   IAuthenticator,
   IProvider,
@@ -141,15 +143,19 @@ function toTokenUsage(usage: Usage): TokenUsage {
   };
 }
 
+/** Assistant messages from a Pi transcript. */
+function assistantMessages(messages: AgentMessage[]): AssistantMessage[] {
+  return messages.filter(
+    (m): m is AssistantMessage => (m as { role?: string }).role === 'assistant'
+  );
+}
+
 function extractAssistantText(messages: AgentMessage[]): string {
   const parts: string[] = [];
-  for (const message of messages) {
-    const m = message as { role?: string; content?: Array<{ type: string; text?: string }> };
-    if (m.role === 'assistant' && Array.isArray(m.content)) {
-      for (const block of m.content) {
-        if (block.type === 'text' && block.text) {
-          parts.push(block.text);
-        }
+  for (const message of assistantMessages(messages)) {
+    for (const block of message.content) {
+      if (block.type === 'text' && block.text) {
+        parts.push(block.text);
       }
     }
   }
@@ -212,8 +218,9 @@ export class PiAgenticProvider implements IProvider {
 
     options.onProgress?.({ type: 'session_start', sessionId: `pi-${this.name}-${startedAt}` });
 
+    const timeoutMs = options.timeout ?? DEFAULT_TIMEOUTS.agentTimeout;
     try {
-      await this.withTimeout(agent.prompt(options.prompt), options.timeout, () => agent.abort());
+      await this.withTimeout(agent.prompt(options.prompt), timeoutMs, () => agent.abort());
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       options.onProgress?.({ type: 'error', message });
@@ -223,10 +230,7 @@ export class PiAgenticProvider implements IProvider {
       await env.cleanup();
     }
 
-    let response = texts.join('');
-    if (!response) {
-      response = extractAssistantText(agent.state.messages);
-    }
+    const response = texts.join('') || extractAssistantText(agent.state.messages);
     if (!response && agent.state.errorMessage) {
       options.onProgress?.({ type: 'error', message: agent.state.errorMessage });
       throw new Error(agent.state.errorMessage);
@@ -286,10 +290,7 @@ export class PiAgenticProvider implements IProvider {
         options.onProgress?.({ type: 'tool_end', toolName: event.toolName, result: event.result });
         break;
       case 'agent_end': {
-        const assistants = event.messages.filter(
-          (m): m is AgentMessage & { role: 'assistant'; usage: Usage; model: string } =>
-            (m as { role?: string }).role === 'assistant'
-        );
+        const assistants = assistantMessages(event.messages);
         const last = assistants[assistants.length - 1];
         if (last?.usage) {
           setUsage(last.usage, last.model);
@@ -319,7 +320,7 @@ export class PiAgenticProvider implements IProvider {
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
         onTimeout();
-        reject(new Error(`Pi provider "${this.name}" query timed out after ${timeoutMs}ms`));
+        reject(new AgentTimeoutError(timeoutMs));
       }, timeoutMs);
     });
     try {

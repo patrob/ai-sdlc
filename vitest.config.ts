@@ -10,13 +10,9 @@ export default defineConfig({
     pool: 'forks',
     // Enable file parallelism for faster execution
     fileParallelism: true,
-    poolOptions: {
-      forks: {
-        // Use more workers for parallel execution (up to CPU count)
-        minForks: 4,
-        maxForks: 8,
-      },
-    },
+    // vitest 4: poolOptions.forks.minForks/maxForks were replaced by the
+    // top-level maxWorkers option (minWorkers was removed)
+    maxWorkers: 8,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

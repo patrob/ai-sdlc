@@ -87,7 +87,11 @@ describe('WorkflowRunner', () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    // vitest 4: restoreAllMocks() no longer resets vi.fn()/automock
+    // implementations (only vi.spyOn spies), so use resetAllMocks() to drop
+    // per-test implementation overrides (e.g. hasCustomAgents/PhaseExecutor)
+    // before re-applying the defaults below.
+    vi.resetAllMocks();
 
     // Default mocks
     vi.mocked(config.getSdlcRoot).mockReturnValue(mockSdlcRoot);
@@ -338,9 +342,13 @@ describe('WorkflowRunner', () => {
         outputs: [],
         summary: 'Done',
       });
-      vi.mocked(phaseExecutor.PhaseExecutor).mockImplementation(() => ({
-        execute: mockExecute,
-      }) as any);
+      // vitest 4 requires mocked classes to be constructible — use a regular
+      // `function` (not an arrow function) so `new PhaseExecutor()` works.
+      vi.mocked(phaseExecutor.PhaseExecutor).mockImplementation(function () {
+        return {
+          execute: mockExecute,
+        };
+      } as any);
 
       const action: Action = { ...mockAction, type: 'refine' };
       vi.mocked(kanban.assessState).mockResolvedValue({

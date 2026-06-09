@@ -34,11 +34,15 @@ vi.mock('../core/kanban.js', () => ({
 }));
 
 // Mock worktree service
+// NOTE: vitest 4 requires mocked classes to be constructible — use a regular
+// `function` (not an arrow function) so `new GitWorktreeService()` works.
 vi.mock('../core/worktree.js', () => ({
-  GitWorktreeService: vi.fn().mockImplementation(() => ({
-    create: vi.fn(() => '/test/worktree/S-001-test'),
-    remove: vi.fn(),
-  })),
+  GitWorktreeService: vi.fn(function () {
+    return {
+      create: vi.fn(() => '/test/worktree/S-001-test'),
+      remove: vi.fn(),
+    };
+  }),
 }));
 
 // Mock theme
@@ -55,9 +59,11 @@ vi.mock('../core/theme.js', () => ({
 
 // Mock story logger
 vi.mock('../core/story-logger.js', () => ({
-  StoryLogger: vi.fn().mockImplementation(() => ({
-    log: vi.fn(),
-  })),
+  StoryLogger: vi.fn(function () {
+    return {
+      log: vi.fn(),
+    };
+  }),
 }));
 
 // Mock progress dashboard

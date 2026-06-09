@@ -8,12 +8,9 @@ export default defineConfig({
     exclude: ['tests/integration/fixtures/**', 'node_modules/**'],
     pool: 'forks',
     fileParallelism: true,
-    poolOptions: {
-      forks: {
-        minForks: 2,
-        maxForks: 6,
-      },
-    },
+    // vitest 4: poolOptions.forks.minForks/maxForks were replaced by the
+    // top-level maxWorkers option (minWorkers was removed)
+    maxWorkers: 6,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary', 'html'],

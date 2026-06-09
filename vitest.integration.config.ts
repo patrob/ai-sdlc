@@ -24,12 +24,8 @@ export default defineConfig({
     pool: 'forks',
     // Enable file parallelism - each test file uses isolated fixture dirs
     fileParallelism: true,
-    poolOptions: {
-      forks: {
-        // Use more workers for parallel integration tests
-        minForks: 2,
-        maxForks: 6,
-      },
-    },
+    // vitest 4: poolOptions.forks.minForks/maxForks were replaced by the
+    // top-level maxWorkers option (minWorkers was removed)
+    maxWorkers: 6,
   },
 });

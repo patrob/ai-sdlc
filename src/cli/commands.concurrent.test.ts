@@ -8,10 +8,14 @@ vi.mock('../core/conflict-detector.js', () => ({
   detectConflicts: (...args: unknown[]) => detectConflictsMock(...args),
 }));
 
+// NOTE: vitest 4 requires mocked classes to be constructible — use a regular
+// `function` (not an arrow function) so `new Orchestrator()` works.
 vi.mock('../core/orchestrator.js', () => ({
-  Orchestrator: vi.fn().mockImplementation(() => ({
-    execute: (...args: unknown[]) => executeMock(...args),
-  })),
+  Orchestrator: vi.fn(function () {
+    return {
+      execute: (...args: unknown[]) => executeMock(...args),
+    };
+  }),
 }));
 
 import { runConcurrentStoryQueue, selectConflictSafeBatch } from './commands.js';

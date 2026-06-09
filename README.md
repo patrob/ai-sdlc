@@ -248,7 +248,9 @@ Configure ai-sdlc behavior via a `.ai-sdlc.json` file in your project root. If n
 
 ## Authentication
 
-Configure credentials for the selected AI provider. Built-ins are `claude`, `openai`, `codex`, `openrouter`, `copilot`, `mock`, and `dry-run`.
+Configure credentials for the selected AI provider. Built-ins are `claude`, `openai`, `codex`, `openrouter`, `ollama`, `copilot`, `mock`, and `dry-run`.
+
+The non-Claude LLM providers (`openai`, `codex`, `openrouter`, `ollama`, `copilot`) are powered by the [Pi](https://github.com/badlogic/pi-mono) agentic engine, giving each a real tool-using, file-editing agent loop (not just text completions). See `docs/spikes/pi-evaluation.md`.
 
 For the default Claude provider, set:
 
@@ -272,12 +274,14 @@ Credential env vars:
 | Provider | Credentials |
 |----------|-------------|
 | `claude` | `ANTHROPIC_API_KEY` or `claude login` |
-| `openai` / `codex` | `OPENAI_API_KEY` |
+| `openai` | `OPENAI_API_KEY` |
+| `codex` | OAuth (Sign in with ChatGPT) or `OPENAI_API_KEY` |
 | `openrouter` | `OPENROUTER_API_KEY` |
-| `copilot` | `COPILOT_API_KEY`, `GITHUB_TOKEN`, or `GH_TOKEN` |
+| `ollama` | none (local; set `OLLAMA_BASE_URL` to override `http://localhost:11434/v1`) |
+| `copilot` | OAuth, or `COPILOT_API_KEY` / `GITHUB_TOKEN` / `GH_TOKEN` |
 | `mock` / `dry-run` | none |
 
-`AI_SDLC_PROVIDER` overrides `.ai-sdlc.json` for one-off runs; `AI_SDLC_MODEL` or provider-specific model env vars override defaults for HTTP providers.
+`AI_SDLC_PROVIDER` overrides `.ai-sdlc.json` for one-off runs; `AI_SDLC_MODEL` or provider-specific model env vars (e.g. `AI_SDLC_OPENAI_MODEL`) override the default model.
 
 ## Releasing
 

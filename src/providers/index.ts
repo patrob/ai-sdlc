@@ -28,13 +28,14 @@ export { ProviderRegistry } from './registry.js';
 export { ClaudeProvider } from './claude/index.js';
 export { ClaudeAuthenticator } from './claude/authenticator.js';
 
-// Export OpenAI-compatible HTTP providers
+// Export the Pi agentic engine that powers the non-Claude providers
 export {
-  OpenAIProvider,
-  CodexProvider,
-  OpenRouterProvider,
-  CopilotProvider,
-} from './openai-compatible-provider.js';
+  PiAgenticProvider,
+  PiAuthenticator,
+  createPiProvider,
+  PI_PROVIDER_SETTINGS,
+} from './pi/index.js';
+export type { PiProviderSettings, PiProviderDeps } from './pi/index.js';
 export { registerBuiltInProviders } from './built-ins.js';
 
 // Export mock and dry-run providers

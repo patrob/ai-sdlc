@@ -20,6 +20,7 @@ describe('registerBuiltInProviders', () => {
       'copilot',
       'dry-run',
       'mock',
+      'ollama',
       'openai',
       'openrouter',
     ]);

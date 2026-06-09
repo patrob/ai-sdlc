@@ -16,7 +16,7 @@ export interface ProviderSelectionConfig {
  * ```typescript
  * // Register providers
  * ProviderRegistry.register('claude', () => new ClaudeProvider());
- * ProviderRegistry.register('openai', () => new OpenAIProvider());
+ * ProviderRegistry.register('openai', () => createPiProvider('openai'));
  *
  * // Get provider by name
  * const claude = ProviderRegistry.get('claude');

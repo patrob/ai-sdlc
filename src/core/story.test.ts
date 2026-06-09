@@ -855,7 +855,12 @@ Test content
     expect(fs.existsSync(lockPath)).toBe(false);
   });
 
-  it('should release lock even on write error', async () => {
+  // chmod 0o444 cannot make a file unwritable for the root user, so the
+  // forced-write-error precondition is unreachable when the suite runs as root
+  // (e.g. in some CI/container environments). Skip there rather than assert a
+  // rejection that cannot occur.
+  const runningAsRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+  it.skipIf(runningAsRoot)('should release lock even on write error', async () => {
     const storyPath = createTestStory();
     const story = parseStory(storyPath);
 

@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import { loadConfig, saveConfig } from '../../src/core/config.js';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { loadConfig } from '../../src/core/config.js';
 
 describe('Configuration Security Tests', () => {
   let tempDir: string;

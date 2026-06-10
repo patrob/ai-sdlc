@@ -1,10 +1,11 @@
 import ora from 'ora';
 import * as readline from 'readline';
+
 import { getSdlcRoot, loadConfig } from '../../core/config.js';
 import { kanbanExists } from '../../core/kanban.js';
-import { getStory, findStoryById, writeStory } from '../../core/story.js';
+import { findStoryById, getStory, writeStory } from '../../core/story.js';
 import { getThemedChalk } from '../../core/theme.js';
-import { parseGitHubIssueUrl, isGhAvailable } from '../../services/gh-cli.js';
+import { isGhAvailable,parseGitHubIssueUrl } from '../../services/gh-cli.js';
 import { createTicketProvider } from '../../services/ticket-provider/index.js';
 
 /**

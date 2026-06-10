@@ -1,19 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
-import * as path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
+  buildSingleTestCommand,
+  clearCommandCache,
+  detectPackageManager,
+  detectTechStack,
   discoverCommands,
   discoverFromMakefile,
   discoverFromPackageJson,
-  buildSingleTestCommand,
-  parseCommand,
-  detectPackageManager,
-  detectTechStack,
-  getStackDefaultCommands,
-  clearCommandCache,
-  getTestCommand,
   getBuildCommand,
   getLintCommand,
+  getStackDefaultCommands,
+  getTestCommand,
+  parseCommand,
 } from './command-discovery.js';
 
 // Mock fs module

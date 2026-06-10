@@ -9,9 +9,9 @@
  * ships with.
  */
 
-import path from 'path';
-import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool, AgentToolResult, ExecutionEnv } from '@earendil-works/pi-agent-core';
+import { Type } from '@earendil-works/pi-ai';
+import path from 'path';
 
 /** Structural form of Pi's `Result` (declared locally to avoid barrel name clashes). */
 type PiResult<T> = { ok: true; value: T } | { ok: false; error: { message?: string } };

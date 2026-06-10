@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { assessState } from '../../src/core/kanban.js';
 import { parseStory } from '../../src/core/story.js';
-import { BLOCKED_DIR, STORIES_FOLDER } from '../../src/types/index.js';
+import { STORIES_FOLDER } from '../../src/types/index.js';
 
 describe.sequential('Kanban - Block on Max Review Retries Integration', () => {
   let testDir: string;

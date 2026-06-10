@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { RustErrorClassifier } from './rust-error-classifier.js';
+import { describe, expect,it } from 'vitest';
+
 import type { ParsedError } from './error-classifier-types.js';
+import { RustErrorClassifier } from './rust-error-classifier.js';
 
 describe('RustErrorClassifier', () => {
   const classifier = new RustErrorClassifier();

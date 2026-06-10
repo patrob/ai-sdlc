@@ -1,6 +1,6 @@
 import { execSync } from 'child_process';
-import { platform, homedir } from 'os';
 import { readFileSync, statSync } from 'fs';
+import { homedir,platform } from 'os';
 import path from 'path';
 
 interface KeychainCredentials {

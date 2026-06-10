@@ -1,15 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'fs';
+import * as properLockfile from 'proper-lockfile';
+import { beforeEach,describe, expect, it, vi } from 'vitest';
+
+import { type Config,type Story } from '../types/index.js';
+import { DEFAULT_CONFIG } from './config.js';
 import {
+  getEffectiveMaxImplementationRetries,
   getImplementationRetryCount,
+  incrementImplementationRetryCount,
   isAtMaxImplementationRetries,
   resetImplementationRetryCount,
-  incrementImplementationRetryCount,
-  getEffectiveMaxImplementationRetries,
 } from './story.js';
-import { Story, Config } from '../types/index.js';
-import { DEFAULT_CONFIG } from './config.js';
-import * as properLockfile from 'proper-lockfile';
 
 // Mock fs to prevent actual file writes
 vi.mock('fs');

@@ -1,20 +1,20 @@
-import { getApiKey, getCredentialType, CredentialType } from './auth.js';
-import { loadConfig } from './config.js';
 import type {
-  ProviderProgressEvent as NewProviderProgressEvent,
-  ProviderProgressCallback as NewProviderProgressCallback,
-  ProviderQueryOptions as NewProviderQueryOptions,
   IProvider,
+  ProviderProgressCallback as NewProviderProgressCallback,
+  ProviderProgressEvent as NewProviderProgressEvent,
+  ProviderQueryOptions as NewProviderQueryOptions,
 } from '../providers/index.js';
 import { ProviderRegistry } from '../providers/index.js';
+import { type CredentialType,getApiKey, getCredentialType } from './auth.js';
+import { loadConfig } from './config.js';
 
 // Re-export error classes and utilities from agent-errors module
 export {
   AgentTimeoutError,
   AuthenticationError,
+  calculateBackoff,
   classifyApiError,
   shouldRetry,
-  calculateBackoff,
 } from './agent-errors.js';
 
 /**

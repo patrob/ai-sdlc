@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import { findStoriesByEpic, findStoriesBySprint, findStoriesByTeam, getUniqueLabels, getGroupings } from '../../src/core/kanban.js';
+import path from 'path';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
+import { findStoriesByEpic, findStoriesBySprint, findStoriesByTeam, getGroupings,getUniqueLabels } from '../../src/core/kanban.js';
 
 describe('Grouping Queries Integration', () => {
   let tempDir: string;

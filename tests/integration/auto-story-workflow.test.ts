@@ -2,15 +2,15 @@
  * Integration tests for --auto --story full SDLC workflow
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
 import { run } from '../../src/cli/commands.js';
 import { getSdlcRoot } from '../../src/core/config.js';
-import { createStory, parseStory, updateStory } from '../../src/core/story.js';
-import { clearWorkflowState } from '../../src/core/workflow-state.js';
 import { initializeKanban } from '../../src/core/kanban.js';
+import { createStory } from '../../src/core/story.js';
 import { STORIES_FOLDER } from '../../src/types/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -58,7 +58,8 @@ describe.sequential('--auto --story Full SDLC Workflow', () => {
           story: story.frontmatter.id,
           step: 'research',
         });
-      } catch (error) {
+       
+      } catch (_error) {
         errorThrown = true;
       }
 
@@ -187,7 +188,8 @@ describe.sequential('--auto --story Full SDLC Workflow', () => {
       const sdlcRoot = getSdlcRoot();
 
       // Create test story
-      const story = await createStory('Test Story', sdlcRoot);
+       
+      const _story = await createStory('Test Story', sdlcRoot);
 
       // Run with --auto --story (this would normally execute agents)
       // For testing purposes, we'd mock the agents or use dry-run
@@ -293,7 +295,8 @@ describe.sequential('--auto --story Full SDLC Workflow', () => {
 describe.sequential('Phase Skipping Logic', () => {
   it('should generate correct action sequence for fresh story', async () => {
     // Test the generateFullSDLCActions function logic
-    const story = {
+
+    const _story = {
       path: '/test/backlog/test.md',
       slug: 'test',
       frontmatter: {
@@ -317,7 +320,8 @@ describe.sequential('Phase Skipping Logic', () => {
   });
 
   it('should generate correct action sequence for partially complete story', async () => {
-    const story = {
+
+    const _story = {
       path: '/test/ready/test.md',
       slug: 'test',
       frontmatter: {

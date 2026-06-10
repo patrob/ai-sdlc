@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { detectTestDuplicationPatterns } from '../../src/agents/test-pattern-detector.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { describe, expect, it } from 'vitest';
+
+import { detectTestDuplicationPatterns } from '../../src/agents/test-pattern-detector.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

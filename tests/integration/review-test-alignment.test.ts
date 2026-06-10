@@ -7,13 +7,14 @@
  * 3. Approves correctly aligned tests
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { hasTestFiles, getSourceCodeChanges } from '../../src/agents/review.js';
 import { spawnSync } from 'child_process';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
+import path from 'path';
 import { fileURLToPath } from 'url';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { getSourceCodeChanges,hasTestFiles } from '../../src/agents/review.js';
 
 // Mock child_process at module level for ESM compatibility
 vi.mock('child_process', () => ({

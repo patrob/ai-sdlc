@@ -1,4 +1,4 @@
-import { StoryStatus } from '../../types/index.js';
+import { type StoryStatus } from '../../types/index.js';
 
 /**
  * Represents a ticket from an external ticketing system.

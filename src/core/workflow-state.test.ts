@@ -2,21 +2,22 @@
  * Tests for workflow state persistence
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
+import { type WorkflowExecutionState } from '../types/workflow-state.js';
 import {
-  saveWorkflowState,
-  loadWorkflowState,
-  validateWorkflowState,
-  clearWorkflowState,
-  getStateFilePath,
-  generateWorkflowId,
   calculateStoryHash,
+  clearWorkflowState,
+  generateWorkflowId,
+  getStateFilePath,
   hasWorkflowState,
+  loadWorkflowState,
   migrateGlobalWorkflowState,
+  saveWorkflowState,
+  validateWorkflowState,
 } from './workflow-state.js';
-import { WorkflowExecutionState } from '../types/workflow-state.js';
 
 const TEST_SDLC_ROOT = path.join(process.cwd(), '.test-workflow-state');
 
@@ -46,7 +47,7 @@ describe('workflow-state', () => {
     // Clean up test directory
     try {
       await fs.promises.rm(TEST_SDLC_ROOT, { recursive: true, force: true });
-    } catch (error) {
+    } catch (_error) {
       // Ignore cleanup errors
     }
   });

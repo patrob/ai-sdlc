@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createTicketProvider, NullTicketProvider, GitHubTicketProvider } from '../index.js';
-import { Config } from '../../../types/index.js';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { type Config } from '../../../types/index.js';
+import { createTicketProvider, GitHubTicketProvider,NullTicketProvider } from '../index.js';
 
 describe('createTicketProvider', () => {
   let consoleWarnSpy: any;

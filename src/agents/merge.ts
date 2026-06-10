@@ -1,8 +1,8 @@
-import { parseStory, updateStoryField } from '../core/story.js';
 import { loadConfig } from '../core/config.js';
 import { getEventBus } from '../core/event-bus.js';
-import { ghPRChecks, ghPRMerge, extractPRNumber } from '../services/gh-cli.js';
-import { AgentResult, MergeConfig } from '../types/index.js';
+import { parseStory, updateStoryField } from '../core/story.js';
+import { extractPRNumber,ghPRChecks, ghPRMerge } from '../services/gh-cli.js';
+import { type AgentResult, type MergeConfig } from '../types/index.js';
 
 /**
  * Poll PR checks and auto-merge when all pass.
@@ -12,7 +12,7 @@ import { AgentResult, MergeConfig } from '../types/index.js';
  */
 export async function runMergeAgent(
   storyPath: string,
-  sdlcRoot: string
+  _sdlcRoot: string
 ): Promise<AgentResult> {
   const story = parseStory(storyPath);
   const config = loadConfig();

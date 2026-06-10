@@ -1,15 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect,it } from 'vitest';
+
+import { type ErrorFingerprint } from '../types/index.js';
 import {
-  normalizeErrorOutput,
-  generateErrorFingerprint,
-  extractErrorPreview,
   checkForIdenticalErrors,
-  updateErrorHistory,
-  getMostCommonError,
   clearErrorHistory,
   DEFAULT_IDENTICAL_ERROR_THRESHOLD,
+  extractErrorPreview,
+  generateErrorFingerprint,
+  getMostCommonError,
+  normalizeErrorOutput,
+  updateErrorHistory,
 } from './error-fingerprint.js';
-import { ErrorFingerprint } from '../types/index.js';
 
 describe('normalizeErrorOutput', () => {
   it('should return empty string for empty input', () => {

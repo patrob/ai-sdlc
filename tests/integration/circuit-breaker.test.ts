@@ -1,18 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   createStory,
-  parseStory,
   getTotalRecoveryAttempts,
-  isAtGlobalRecoveryLimit,
   incrementTotalRecoveryAttempts,
+  isAtGlobalRecoveryLimit,
   moveToBlocked,
+  parseStory,
   unblockStory,
   writeStory,
 } from '../../src/core/story.js';
-import { STORIES_FOLDER, STORY_FILENAME } from '../../src/types/index.js';
+import { STORIES_FOLDER } from '../../src/types/index.js';
 
 describe('Global Recovery Circuit Breaker Integration', () => {
   let tempDir: string;

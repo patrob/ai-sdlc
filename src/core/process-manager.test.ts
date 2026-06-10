@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ProcessManager } from './process-manager.js';
+import { type ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
-import { ChildProcess } from 'child_process';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { ProcessManager } from './process-manager.js';
 
 function createMockChildProcess(pid: number): ChildProcess {
   const mock = new EventEmitter() as ChildProcess & EventEmitter;

@@ -11,8 +11,8 @@
  * and improved testability across the agent subsystem.
  */
 
-import { IProvider, ProviderCapabilities } from '../providers/types.js';
-import { AgentResult } from '../types/index.js';
+import { type IProvider, type ProviderCapabilities } from '../providers/types.js';
+import { type AgentResult } from '../types/index.js';
 import type { AgentOptions } from './research.js';
 
 // Re-export AgentResult and AgentOptions for convenience

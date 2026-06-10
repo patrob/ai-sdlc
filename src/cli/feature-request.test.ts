@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { clarifyFeatureRequest, createStoryFromFeatureRequest } from './feature-request.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { parseStory } from '../core/story.js';
-import type { IProvider, IAuthenticator, ProviderCapabilities, ProviderQueryOptions } from '../providers/types.js';
+import type { IAuthenticator, IProvider, ProviderCapabilities, ProviderQueryOptions } from '../providers/types.js';
+import { clarifyFeatureRequest, createStoryFromFeatureRequest } from './feature-request.js';
 
 class TestProvider implements IProvider {
   readonly name = 'test';

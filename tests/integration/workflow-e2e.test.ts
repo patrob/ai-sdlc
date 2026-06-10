@@ -13,15 +13,17 @@
  * - Git: Real git commands in temp repository (passthrough in mock)
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
+ 
+import { execSync as realExecSync } from 'child_process';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import { execSync as realExecSync, spawnSync as realSpawnSync } from 'child_process';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it,vi } from 'vitest';
+
 import { STORIES_FOLDER } from '../../src/types/index.js';
 
 // Use vi.hoisted to define mocks at the hoisted level (before vi.mock runs)
-const { mockExecSync, mockSpawnSync, mockSpawn, capturedGhCommand, testDirRef, implementationDone } = vi.hoisted(() => {
+const { mockExecSync, mockExecFileSync, mockSpawnSync, mockSpawn, capturedGhCommand, testDirRef, implementationDone } = vi.hoisted(() => {
   // Store captured gh commands and test directory in refs that can be mutated
   const capturedGhCommand = { value: '' };
   const testDirRef = { value: '' };
@@ -57,6 +59,21 @@ const { mockExecSync, mockSpawnSync, mockSpawn, capturedGhCommand, testDirRef, i
 
     // Pass through git commands and others to real implementation
     return hoistedRealExecSync(command, options);
+  });
+
+  const mockExecFileSync = vi.fn((file: string, args?: readonly string[], _options?: any) => {
+    // Handle gh pr create via execFileSync
+    if (file === 'gh' && args && args[0] === 'pr' && args[1] === 'create') {
+      // Capture the gh pr create command for test verification
+      // args format: ['pr', 'create', '--title', title, '--body', body, ...]
+      capturedGhCommand.value = `gh pr create --title ${args[3]} --body ${args[5]}`;
+      if (args.includes('--draft')) {
+        capturedGhCommand.value += ' --draft';
+      }
+      return 'https://github.com/test/repo/pull/123';
+    }
+    // For other commands, just return empty string
+    return '';
   });
 
   // Track if implementation has happened (set by mock agent during implement phase)
@@ -105,12 +122,13 @@ const { mockExecSync, mockSpawnSync, mockSpawn, capturedGhCommand, testDirRef, i
     return mockProcess;
   });
 
-  return { mockExecSync, mockSpawnSync, mockSpawn, capturedGhCommand, testDirRef, implementationDone };
+  return { mockExecSync, mockExecFileSync, mockSpawnSync, mockSpawn, capturedGhCommand, testDirRef, implementationDone };
 });
 
 // Mock child_process at module level BEFORE any imports that use it
 vi.mock('child_process', () => ({
   execSync: mockExecSync,
+  execFileSync: mockExecFileSync,
   spawnSync: mockSpawnSync,
   spawn: mockSpawn,
 }));

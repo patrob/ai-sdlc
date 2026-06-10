@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as cp from 'child_process';
 import * as fs from 'fs';
 import * as readline from 'readline';
-import * as cp from 'child_process';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock modules
 vi.mock('fs');
@@ -124,7 +124,7 @@ describe('worktree cleanup on move-to-done', () => {
       vi.spyOn(fs, 'existsSync').mockReturnValue(true);
 
       // When user declines, no removal should occur
-      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync');
+      const _spawnSyncSpy = vi.spyOn(cp, 'spawnSync');
 
       // Verify readline prompts for confirmation
       expect(mockReadline.question).not.toHaveBeenCalled(); // Not called yet, just testing mock setup

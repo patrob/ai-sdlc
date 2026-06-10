@@ -1,17 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { loadConfig } from '../../src/core/config.js';
 import {
-  labelMatchesPattern,
   findStoriesByLabel,
   findStoriesByLabels,
   findStoriesByPattern,
-  getUniqueLabels,
   getGroupings,
+  getUniqueLabels,
+  labelMatchesPattern,
 } from '../../src/core/kanban.js';
-import { Story, StoryStatus } from '../../src/types/index.js';
-import { loadConfig } from '../../src/core/config.js';
+import { type StoryStatus } from '../../src/types/index.js';
 
 describe('labelMatchesPattern', () => {
   describe('exact matches', () => {

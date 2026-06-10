@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect,it } from 'vitest';
+
 import {
-  parseTypeScriptErrors,
+  classifyAndSortErrors,
+  classifyError,
   isTestFile,
   isTypeDefinitionFile,
-  classifyError,
-  classifyAndSortErrors,
+  parseTypeScriptErrors,
   type TypeScriptError,
 } from './error-classifier.js';
 

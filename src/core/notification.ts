@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { NotificationConfig, NotificationChannelType } from '../types/index.js';
-import { getEventBus, SDLCEvent } from './event-bus.js';
+
+import { type NotificationChannelType,type NotificationConfig } from '../types/index.js';
 
 /**
  * Notification event types for human-in-the-loop workflows

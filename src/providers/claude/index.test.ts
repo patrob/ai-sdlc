@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ClaudeProvider } from './index.js';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { ProviderQueryOptions } from '../types.js';
+import { ClaudeProvider } from './index.js';
 
 // Mock the Claude SDK
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({

@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { normalizeEpicId, discoverEpicStories } from '../../src/cli/epic-processor.js';
+import { describe, expect,it } from 'vitest';
+
 import { groupStoriesByPhase, validateDependencies } from '../../src/cli/dependency-resolver.js';
-import { Story } from '../../src/types/index.js';
+import {normalizeEpicId } from '../../src/cli/epic-processor.js';
+import { type Story } from '../../src/types/index.js';
 
 /**
  * Integration tests for epic processing with --epic flag

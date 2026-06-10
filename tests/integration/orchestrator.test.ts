@@ -1,15 +1,16 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { runImplementationOrchestrator } from '../../src/agents/orchestrator.js';
 import * as fs from 'fs';
-import * as path from 'path';
 import { mkdtempSync } from 'fs';
-import { tmpdir } from 'os';
 import { rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import * as path from 'path';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { runImplementationOrchestrator } from '../../src/agents/orchestrator.js';
 
 // Mock single-task agent to control execution
 vi.mock('../../src/agents/single-task.js');
 import { runSingleTaskAgent } from '../../src/agents/single-task.js';
-import { AgentTaskResult, ImplementationTask } from '../../src/types/index.js';
+import { type AgentTaskResult } from '../../src/types/index.js';
 
 // Mock git operations
 vi.mock('child_process', async () => {

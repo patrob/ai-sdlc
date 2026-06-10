@@ -1,4 +1,4 @@
-import { Story } from '../types/index.js';
+import { type Story } from '../types/index.js';
 
 /**
  * Result of dependency validation

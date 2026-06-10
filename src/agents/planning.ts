@@ -1,10 +1,11 @@
-import { parseStory, updateStoryField, writeSectionContent } from '../core/story.js';
+import path from 'path';
+
 import { runAgentQuery } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
-import { Story, AgentResult } from '../types/index.js';
-import path from 'path';
-import { AgentOptions } from './research.js';
+import { parseStory, updateStoryField, writeSectionContent } from '../core/story.js';
 import type { IProvider } from '../providers/types.js';
+import { type AgentResult,type Story } from '../types/index.js';
+import { type AgentOptions } from './research.js';
 
 /**
  * System prompt for the planning agent

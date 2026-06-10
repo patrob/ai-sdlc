@@ -1,10 +1,11 @@
-import { Story, ProjectConfig } from '../types/index.js';
-import { loadConfig } from '../core/config.js';
 import { spawn, spawnSync } from 'child_process';
-import { ProcessManager } from '../core/process-manager.js';
 import { existsSync, readdirSync } from 'fs';
 import path from 'path';
+
+import { loadConfig } from '../core/config.js';
+import { ProcessManager } from '../core/process-manager.js';
 import { detectProjects, getPrimaryProject } from '../core/stack-detector.js';
+import { type ProjectConfig,type Story } from '../types/index.js';
 
 export interface VerificationResult {
   passed: boolean;

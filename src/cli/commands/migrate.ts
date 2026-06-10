@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { StoryStatus } from '../../types/index.js';
-import { parseStory, writeStory, generateStoryId } from '../../core/story.js';
+
+import { generateStoryId,parseStory, writeStory } from '../../core/story.js';
+import { type StoryStatus } from '../../types/index.js';
 
 export interface MigrationItem {
   oldPath: string;
@@ -27,7 +28,9 @@ export async function migrateToFolderPerStory(
   const errors: string[] = [];
 
   const migratedFile = path.join(sdlcRoot, '.migrated');
-  if (fs.existsSync(migratedFile)) {
+  let alreadyMigrated = false;
+  try { fs.readFileSync(migratedFile); alreadyMigrated = true; } catch { alreadyMigrated = false; }
+  if (alreadyMigrated) {
     return {
       dryRun: options.dryRun || false,
       migrations: [],
@@ -37,7 +40,9 @@ export async function migrateToFolderPerStory(
   }
 
   const workflowState = path.join(sdlcRoot, '.workflow-state.json');
-  if (fs.existsSync(workflowState)) {
+  let workflowStateExists = false;
+  try { fs.readFileSync(workflowState); workflowStateExists = true; } catch { workflowStateExists = false; }
+  if (workflowStateExists) {
     warnings.push('Active workflow checkpoint found. It will be invalidated after migration.');
   }
 
@@ -135,8 +140,10 @@ export async function migrateToFolderPerStory(
     }
   }
 
-  if (fs.existsSync(workflowState)) {
-    const state = JSON.parse(fs.readFileSync(workflowState, 'utf-8'));
+  let workflowStateRaw: string | undefined;
+  try { workflowStateRaw = fs.readFileSync(workflowState, 'utf-8'); } catch { workflowStateRaw = undefined; }
+  if (workflowStateRaw !== undefined) {
+    const state = JSON.parse(workflowStateRaw);
     state.invalidated = true;
     state.invalidatedReason = 'Story paths changed during migration';
     fs.writeFileSync(workflowState, JSON.stringify(state, null, 2));

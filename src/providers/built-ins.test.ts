@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ProviderRegistry } from './registry.js';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
 import { registerBuiltInProviders } from './built-ins.js';
+import { ProviderRegistry } from './registry.js';
 
 describe('registerBuiltInProviders', () => {
   beforeEach(() => {

@@ -4,11 +4,12 @@
  * Tests concurrent story execution with real child processes
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Orchestrator } from '../../src/core/orchestrator.js';
-import type { Story, ProcessOrchestratorOptions } from '../../src/types/index.js';
+import { existsSync,mkdirSync, rmSync } from 'fs';
 import path from 'path';
-import { mkdirSync, rmSync, existsSync } from 'fs';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
+import { Orchestrator } from '../../src/core/orchestrator.js';
+import type { ProcessOrchestratorOptions,Story } from '../../src/types/index.js';
 
 describe('Orchestrator Integration', () => {
   const testDir = path.join(process.cwd(), 'tests', 'tmp', 'orchestrator-test');
@@ -68,7 +69,8 @@ describe('Orchestrator Integration', () => {
   });
 
   it('should respect concurrency limit in options', () => {
-    const stories = [
+     
+    const _stories = [
       createMockStory('S-001', 'Story 1'),
       createMockStory('S-002', 'Story 2'),
       createMockStory('S-003', 'Story 3'),

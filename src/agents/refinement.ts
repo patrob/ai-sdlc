@@ -1,10 +1,11 @@
-import { parseStory, writeStory, updateStoryStatus } from '../core/story.js';
-import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
-import type { IProvider } from '../providers/types.js';
-import { getLogger } from '../core/logger.js';
-import { Story, AgentResult } from '../types/index.js';
 import path from 'path';
-import { AgentOptions } from './research.js';
+
+import {runAgentQuery } from '../core/client.js';
+import { getLogger } from '../core/logger.js';
+import { parseStory, updateStoryStatus,writeStory } from '../core/story.js';
+import type { IProvider } from '../providers/types.js';
+import { type AgentResult } from '../types/index.js';
+import { type AgentOptions } from './research.js';
 
 const REFINEMENT_SYSTEM_PROMPT = `You are a product refinement specialist. Your job is to take raw story ideas from the backlog and transform them into well-defined, actionable user stories.
 

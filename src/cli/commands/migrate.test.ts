@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import { migrateToFolderPerStory } from './migrate.js';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { parseStory } from '../../core/story.js';
+import { migrateToFolderPerStory } from './migrate.js';
 
 describe('Migration Command', () => {
   let testDir: string;
@@ -369,7 +370,7 @@ reviews_complete: false
 
       fs.writeFileSync(path.join(backlogDir, '01-test.md'), storyContent);
 
-      const result = await migrateToFolderPerStory(testDir, { backup: false, force: true });
+      const _result = await migrateToFolderPerStory(testDir, { backup: false, force: true });
 
       const migratedFile = path.join(testDir, '.migrated');
       expect(fs.existsSync(migratedFile)).toBe(true);

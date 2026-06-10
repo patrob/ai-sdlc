@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { runRefinementAgent } from './refinement.js';
-import * as story from '../core/story.js';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as client from '../core/client.js';
 import * as logger from '../core/logger.js';
-import { Story } from '../types/index.js';
+import * as story from '../core/story.js';
+import { type Story } from '../types/index.js';
+import { runRefinementAgent } from './refinement.js';
 
 // Mock dependencies
 vi.mock('../core/story.js');

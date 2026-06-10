@@ -19,6 +19,7 @@ export const formatData = (data: any): string => {
 };
 
 // Internal helper (not exported)
-function internalHelper() {
+ 
+function _internalHelper() {
   return 'internal';
 }

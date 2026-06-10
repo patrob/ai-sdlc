@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { BatchResult } from '../../src/cli/batch-processor.js';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+ 
 
 // Mock external dependencies
 vi.mock('../../src/core/config.js');
@@ -9,14 +10,15 @@ vi.mock('../../src/core/theme.js');
 
 describe('Batch Processing Integration Tests', () => {
   let mockConfig: any;
-  let mockKanban: any;
+   
+  let _mockKanban: any;
   let mockStory: any;
   let mockTheme: any;
 
   beforeEach(async () => {
     // Setup mocks
     mockConfig = await import('../../src/core/config.js');
-    mockKanban = await import('../../src/core/kanban.js');
+    _mockKanban = await import('../../src/core/kanban.js');
     mockStory = await import('../../src/core/story.js');
     mockTheme = await import('../../src/core/theme.js');
 

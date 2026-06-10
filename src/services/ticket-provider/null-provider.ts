@@ -1,5 +1,5 @@
-import { StoryStatus } from '../../types/index.js';
-import { Ticket, TicketFilter, NewTicket, TicketProvider } from './types.js';
+import { type StoryStatus } from '../../types/index.js';
+import { type NewTicket, type Ticket, type TicketFilter, type TicketProvider } from './types.js';
 
 /**
  * No-op ticket provider for local-only mode.

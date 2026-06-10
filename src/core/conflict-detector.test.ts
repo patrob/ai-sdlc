@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { spawnSync, SpawnSyncReturns } from 'child_process';
-import { ConflictDetectorService, detectConflicts } from './conflict-detector.js';
-import { Story } from '../types/index.js';
+import { spawnSync, type SpawnSyncReturns } from 'child_process';
 import fs from 'fs';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { type Story } from '../types/index.js';
+import { ConflictDetectorService, detectConflicts } from './conflict-detector.js';
 
 // Mock modules
 vi.mock('child_process');
@@ -157,7 +158,7 @@ describe('ConflictDetectorService', () => {
         // Story 2: git status returns nothing
         mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = service.detectConflicts([story1, story2]);
+        const _result = service.detectConflicts([story1, story2]);
 
         expect(mockSpawnSync).toHaveBeenCalledWith(
           'git',
@@ -257,7 +258,7 @@ describe('ConflictDetectorService', () => {
         // Story 2: git status returns nothing
         mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
 
-        const result = service.detectConflicts([story1, story2]);
+        const _result = service.detectConflicts([story1, story2]);
 
         expect(mockSpawnSync).toHaveBeenCalledWith(
           'git',

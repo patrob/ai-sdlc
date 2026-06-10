@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { DEFAULT_CONFIG, loadConfig, DEFAULT_DAEMON_CONFIG, DEFAULT_TIMEOUTS, validateImplementationConfig, DEFAULT_WORKTREE_CONFIG, validateWorktreeBasePath, getWorktreeConfig, DEFAULT_AI_PROVIDER_CONFIG } from './config.js';
-import { Config, TDDConfig, WorktreeConfig } from '../types/index.js';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
+import { type Config } from '../types/index.js';
+import { DEFAULT_AI_PROVIDER_CONFIG,DEFAULT_CONFIG, DEFAULT_DAEMON_CONFIG, DEFAULT_WORKTREE_CONFIG, getWorktreeConfig, loadConfig, validateImplementationConfig, validateWorktreeBasePath } from './config.js';
 
 describe('config - TDD configuration', () => {
   describe('AI provider config defaults', () => {
@@ -651,7 +652,7 @@ describe('config - Worktree configuration', () => {
 
     afterEach(() => {
       if (fs.existsSync(tempDir)) {
-        fs.rmdirSync(tempDir, { recursive: true });
+        fs.rmSync(tempDir, { recursive: true, force: true });
       }
     });
 
@@ -702,7 +703,7 @@ describe('config - Worktree configuration', () => {
 
     afterEach(() => {
       if (fs.existsSync(tempDir)) {
-        fs.rmdirSync(tempDir, { recursive: true });
+        fs.rmSync(tempDir, { recursive: true, force: true });
       }
     });
 

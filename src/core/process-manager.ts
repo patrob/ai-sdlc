@@ -1,4 +1,4 @@
-import { ChildProcess } from 'child_process';
+import { type ChildProcess } from 'child_process';
 
 export class ProcessManager {
   private static instance: ProcessManager | null = null;

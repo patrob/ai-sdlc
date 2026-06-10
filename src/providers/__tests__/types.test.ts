@@ -1,11 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect,it } from 'vitest';
+
 import type {
-  IProvider,
   IAuthenticator,
+  IProvider,
   ProviderCapabilities,
-  ProviderQueryOptions,
-  ProviderProgressEvent,
   ProviderProgressCallback,
+  ProviderProgressEvent,
+  ProviderQueryOptions,
 } from '../index.js';
 
 describe('Provider Type Definitions', () => {

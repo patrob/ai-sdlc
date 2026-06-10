@@ -25,20 +25,20 @@ export * from './types.js';
 export { ProviderRegistry } from './registry.js';
 
 // Export Claude provider
-export { ClaudeProvider } from './claude/index.js';
 export { ClaudeAuthenticator } from './claude/authenticator.js';
+export { ClaudeProvider } from './claude/index.js';
 
 // Export the Pi agentic engine that powers the non-Claude providers
+export { registerBuiltInProviders } from './built-ins.js';
+export type { PiProviderDeps,PiProviderSettings } from './pi/index.js';
 export {
-  PiAgenticProvider,
-  PiAuthenticator,
   createPiProvider,
   PI_PROVIDER_SETTINGS,
+  PiAgenticProvider,
+  PiAuthenticator,
 } from './pi/index.js';
-export type { PiProviderSettings, PiProviderDeps } from './pi/index.js';
-export { registerBuiltInProviders } from './built-ins.js';
 
 // Export mock and dry-run providers
-export { MockProvider, MockAuthenticator } from './mock-provider.js';
-export type { MockProviderOptions, RecordedCall } from './mock-provider.js';
 export { DryRunProvider } from './dry-run-provider.js';
+export type { MockProviderOptions, RecordedCall } from './mock-provider.js';
+export { MockAuthenticator,MockProvider } from './mock-provider.js';

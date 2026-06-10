@@ -1,7 +1,8 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { glob } from 'glob';
-import { ReviewIssue } from '../types/index.js';
+import * as path from 'path';
+
+import { type ReviewIssue } from '../types/index.js';
 
 /**
  * Extract function names from file content using regex patterns

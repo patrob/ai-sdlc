@@ -8,18 +8,19 @@
  */
 
 import fs from 'fs';
-import path from 'path';
 import yaml from 'js-yaml';
+import path from 'path';
+
 import {
-  WorkflowConfig,
-  PhaseConfig,
-  AgentConfig,
-  AgentRole,
-  WorkflowConfigError,
-  WorkflowConfigValidation,
+  type AgentConfig,
+  type AgentRole,
+  type CompositionMode,
+  type ConsensusRequirement,
   DEFAULT_WORKFLOW_CONFIG,
-  CompositionMode,
-  ConsensusRequirement,
+  type PhaseConfig,
+  type WorkflowConfig,
+  type WorkflowConfigError,
+  type WorkflowConfigValidation,
 } from '../types/workflow-config.js';
 
 /**

@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { PythonErrorClassifier } from './python-error-classifier.js';
+import { describe, expect,it } from 'vitest';
+
 import type { ParsedError } from './error-classifier-types.js';
+import { PythonErrorClassifier } from './python-error-classifier.js';
 
 describe('PythonErrorClassifier', () => {
   const classifier = new PythonErrorClassifier();

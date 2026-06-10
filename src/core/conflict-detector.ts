@@ -1,11 +1,12 @@
 import { spawnSync } from 'child_process';
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
+
 import {
-  Story,
-  ConflictAnalysis,
-  ConflictDetectionResult,
-  ConflictSeverity,
+  type ConflictAnalysis,
+  type ConflictDetectionResult,
+  type ConflictSeverity,
+  type Story,
 } from '../types/index.js';
 import { sanitizeStoryId } from './story.js';
 
@@ -44,7 +45,7 @@ function validateBranchName(branchName: string): void {
  * @param projectRoot - Project root directory (unused but kept for API consistency)
  * @throws Error if worktree path is invalid
  */
-function validateWorktreePath(worktreePath: string, projectRoot: string): void {
+function validateWorktreePath(worktreePath: string, _projectRoot: string): void {
   if (!worktreePath) {
     throw new Error('Worktree path cannot be empty');
   }
@@ -453,7 +454,7 @@ export class ConflictDetectorService {
     highCount: number,
     mediumCount: number,
     lowCount: number,
-    safe: boolean
+    _safe: boolean
   ): string {
     if (highCount > 0) {
       return `Found ${highCount} high-severity conflict(s) - recommend sequential execution`;

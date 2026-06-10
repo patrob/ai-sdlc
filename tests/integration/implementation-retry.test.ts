@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, type Mock,vi } from 'vitest';
 
 // Create mock functions using vi.hoisted() so they're available during vi.mock hoisting
 const { mockSpawnSync, mockExecSync } = vi.hoisted(() => ({
@@ -28,8 +28,8 @@ vi.mock('child_process', () => ({
 
 // Import the functions we need to test after setting up mocks
 import { runImplementationAgent } from '../../src/agents/implementation.js';
-import { parseStory } from '../../src/core/story.js';
 import { loadConfig } from '../../src/core/config.js';
+import { parseStory } from '../../src/core/story.js';
 
 describe('Implementation Retry Integration Tests', () => {
   let tempDir: string;

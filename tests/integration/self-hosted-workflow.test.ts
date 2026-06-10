@@ -8,15 +8,17 @@
  * exercised through the real workflow runner.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { STORIES_FOLDER } from '../../src/types/index.js';
 
 const {
   capturedGhCommand,
   mockExecSync,
+  mockExecFileSync,
   mockRunAgentQuery,
   mockSpawn,
   mockSpawnSync,
@@ -55,6 +57,21 @@ const {
     return hoistedRealExecSync(command, options);
   });
 
+  const mockExecFileSync = vi.fn((file: string, args?: readonly string[], _options?: any) => {
+    // Handle gh pr create via execFileSync
+    if (file === 'gh' && args && args[0] === 'pr' && args[1] === 'create') {
+      // Capture the gh pr create command for test verification
+      // args format: ['pr', 'create', '--title', title, '--body', body, ...]
+      capturedGhCommand.value = `gh pr create --title ${args[3]} --body ${args[5]}`;
+      if (args.includes('--draft')) {
+        capturedGhCommand.value += ' --draft';
+      }
+      return 'https://github.com/patrob/ai-sdlc/pull/9001';
+    }
+    // For other commands, just return empty string
+    return '';
+  });
+
   const mockSpawnSync = vi.fn((command: string, args?: readonly string[], options?: any) =>
     hoistedRealSpawnSync(command, args, options)
   );
@@ -66,6 +83,7 @@ const {
   return {
     capturedGhCommand,
     mockExecSync,
+    mockExecFileSync,
     mockRunAgentQuery: vi.fn(),
     mockSpawn,
     mockSpawnSync,
@@ -75,6 +93,7 @@ const {
 
 vi.mock('child_process', () => ({
   execSync: mockExecSync,
+  execFileSync: mockExecFileSync,
   spawn: mockSpawn,
   spawnSync: mockSpawnSync,
 }));

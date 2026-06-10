@@ -1,14 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import {
-  registerFauxProvider,
   fauxAssistantMessage,
   fauxToolCall,
+  registerFauxProvider,
 } from '@earendil-works/pi-ai';
-import { createPiProvider, PiAgenticProvider, PI_PROVIDER_SETTINGS } from './index.js';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
 import type { ProviderProgressEvent } from '../types.js';
+import { createPiProvider, PI_PROVIDER_SETTINGS,PiAgenticProvider } from './index.js';
 
 /**
  * These tests exercise the real Pi agent loop offline via Pi's faux provider —

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof import('fs')>('fs');
@@ -17,15 +17,16 @@ vi.mock('fs', async () => {
 });
 
 import * as fs from 'fs';
+
 import {
   ConsoleNotificationChannel,
   FileNotificationChannel,
-  NotificationService,
-  validateNotificationConfig,
   getNotificationService,
   initNotificationService,
+  type Notification,
+  NotificationService,
   resetNotificationService,
-  Notification,
+  validateNotificationConfig,
 } from './notification.js';
 
 describe('ConsoleNotificationChannel', () => {

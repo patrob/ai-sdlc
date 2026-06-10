@@ -1,4 +1,4 @@
-import { Story, StoryExecutionStatus } from '../types/index.js';
+import { type Story, type StoryExecutionStatus } from '../types/index.js';
 
 /**
  * Progress information for a single story
@@ -41,7 +41,7 @@ export function createDashboard(epicId: string, phases: Story[][]): DashboardSta
   const stories = new Map<string, StoryProgress>();
 
   // Initialize all stories in queued state
-  phases.forEach((phase, phaseIndex) => {
+  phases.forEach((phase, _phaseIndex) => {
     phase.forEach(story => {
       stories.set(story.frontmatter.id, {
         storyId: story.frontmatter.id,

@@ -16,7 +16,8 @@
  */
 
 import { createHash } from 'crypto';
-import { ErrorFingerprint } from '../types/index.js';
+
+import { type ErrorFingerprint } from '../types/index.js';
 
 /**
  * Result of checking for identical errors
@@ -54,7 +55,7 @@ export const DEFAULT_IDENTICAL_ERROR_THRESHOLD = 3;
 export function normalizeErrorOutput(errorOutput: string): string {
   if (!errorOutput) return '';
 
-  let normalized = errorOutput
+  const normalized = errorOutput
     // Remove ANSI CSI sequences (colors, styles)
     .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
     // Remove ANSI OSC sequences (hyperlinks, window titles)
@@ -120,7 +121,7 @@ export function extractErrorPreview(errorOutput: string): string {
   if (!errorOutput) return '';
 
   // Remove ANSI codes for readable preview
-  let cleaned = errorOutput
+  const cleaned = errorOutput
     .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
     .replace(/\x1B\][^\x07\x1B]*(\x07|\x1B\\)/g, '')
     .replace(/\x1B/g, '');

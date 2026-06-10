@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { createRequire } from 'module';
-import { init, status, add, run, details, unblock, approve, feedback, migrate, listWorktrees, addWorktree, removeWorktree, importIssue, linkIssue } from './cli/commands.js';
-import { startTui, checkTuiProviderConfiguration } from './cli/tui.js';
-import { loadConfig, saveConfig, DEFAULT_LOGGING_CONFIG, getSdlcRoot } from './core/config.js';
-import { loadWorkflowConfig, WorkflowConfigLoader } from './core/workflow-config.js';
-import { getThemedChalk } from './core/theme.js';
-import { ThemePreference, LogConfig } from './types/index.js';
-import { initLogger, getLogger } from './core/logger.js';
-import { getLatestLogPath, readLastLines, tailLog } from './core/story-logger.js';
-import { setupGlobalCleanupHandlers } from './core/process-manager.js';
-import { registerBuiltInProviders } from './providers/index.js';
 import fs from 'fs';
+import { createRequire } from 'module';
 import path from 'path';
+
+import { add, addWorktree, approve, details, feedback, importIssue, init, linkIssue,listWorktrees, migrate, removeWorktree, run, status, unblock } from './cli/commands.js';
+import { checkTuiProviderConfiguration,startTui } from './cli/tui.js';
+import { DEFAULT_LOGGING_CONFIG, getSdlcRoot,loadConfig, saveConfig } from './core/config.js';
+import { getLogger,initLogger } from './core/logger.js';
+import { setupGlobalCleanupHandlers } from './core/process-manager.js';
+import { getLatestLogPath, readLastLines, tailLog } from './core/story-logger.js';
+import { getThemedChalk } from './core/theme.js';
+import { WorkflowConfigLoader } from './core/workflow-config.js';
+import { registerBuiltInProviders } from './providers/index.js';
+import { type LogConfig,type ThemePreference } from './types/index.js';
 
 // Register AI providers
 registerBuiltInProviders();

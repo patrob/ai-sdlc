@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+
 import {
+  extractionStrategies,
   extractStructuredResponse,
   extractStructuredResponseSync,
-  extractionStrategies,
-  ExtractionResult,
 } from './llm-utils.js';
 
 // Mock the logger
@@ -29,7 +29,7 @@ const ReviewSchema = z.object({
   ),
 });
 
-type ReviewResponse = z.infer<typeof ReviewSchema>;
+type _ReviewResponse = z.infer<typeof ReviewSchema>;
 
 describe('llm-utils', () => {
   describe('extractStructuredResponseSync', () => {

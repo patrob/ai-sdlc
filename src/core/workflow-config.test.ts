@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
+import path from 'path';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
 import {
-  WorkflowConfigLoader,
-  loadWorkflowConfig,
   getPhaseConfig,
   hasCustomAgents,
   isPhaseEnabled,
+  loadWorkflowConfig,
+  WorkflowConfigLoader,
 } from './workflow-config.js';
-import { DEFAULT_WORKFLOW_CONFIG } from '../types/workflow-config.js';
 
 describe('WorkflowConfigLoader', () => {
   let tempDir: string;

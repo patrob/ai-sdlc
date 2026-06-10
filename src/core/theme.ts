@@ -1,5 +1,6 @@
-import chalk, { ChalkInstance } from 'chalk';
-import { Config, ThemePreference, ThemeColors } from '../types/index.js';
+import chalk from 'chalk';
+
+import { type Config, type ThemeColors,type ThemePreference } from '../types/index.js';
 import { loadConfig } from './config.js';
 
 /**

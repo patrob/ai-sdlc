@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { GoErrorClassifier } from './go-error-classifier.js';
+import { describe, expect,it } from 'vitest';
+
 import type { ParsedError } from './error-classifier-types.js';
+import { GoErrorClassifier } from './go-error-classifier.js';
 
 describe('GoErrorClassifier', () => {
   const classifier = new GoErrorClassifier();

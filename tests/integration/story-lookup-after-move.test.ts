@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import { createStory, getStory, updateStoryStatus, markStoryComplete } from '../../src/core/story.js';
+import path from 'path';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
+import { createStory, getStory, markStoryComplete,updateStoryStatus } from '../../src/core/story.js';
 import { STORIES_FOLDER } from '../../src/types/index.js';
 
 // Use describe.sequential to prevent race conditions with shared testDir variable

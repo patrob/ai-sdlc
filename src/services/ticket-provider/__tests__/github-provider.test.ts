@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GitHubTicketProvider } from '../github-provider.js';
-import * as ghCli from '../../gh-cli.js';
+import { beforeEach,describe, expect, it, vi } from 'vitest';
+
 import type { GitHubIssue } from '../../gh-cli.js';
+import * as ghCli from '../../gh-cli.js';
+import { GitHubTicketProvider } from '../github-provider.js';
 
 vi.mock('../../gh-cli.js');
 

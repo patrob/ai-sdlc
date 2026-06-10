@@ -1,10 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
 import {
-  parseTuiInput,
-  TuiSession,
-  formatTuiHelp,
   completeTuiInput,
+  formatTuiHelp,
+  parseTuiInput,
   type TuiCommandHandlers,
+  TuiSession,
 } from './tui.js';
 
 function createHandlers(): TuiCommandHandlers {

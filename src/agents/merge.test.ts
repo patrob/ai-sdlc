@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies before imports
 vi.mock('../core/story.js', () => ({
@@ -20,11 +20,11 @@ vi.mock('../services/gh-cli.js', () => ({
   extractPRNumber: vi.fn(),
 }));
 
-import { runMergeAgent } from './merge.js';
-import { parseStory, updateStoryField } from '../core/story.js';
 import { loadConfig } from '../core/config.js';
 import { getEventBus } from '../core/event-bus.js';
-import { ghPRChecks, ghPRMerge, extractPRNumber } from '../services/gh-cli.js';
+import { parseStory, updateStoryField } from '../core/story.js';
+import { extractPRNumber,ghPRChecks, ghPRMerge } from '../services/gh-cli.js';
+import { runMergeAgent } from './merge.js';
 
 const mockParseStory = vi.mocked(parseStory);
 const mockUpdateStoryField = vi.mocked(updateStoryField);

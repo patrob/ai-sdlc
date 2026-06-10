@@ -1,14 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Story, ActionType, KanbanFolder } from '../types/index.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { getThemedChalk } from '../core/theme.js';
-import { getPhaseInfo, calculatePhaseProgress, truncateForTerminal, sanitizeStorySlug, determineWorktreeMode, escapeShellArg } from './commands.js';
+import { type ActionType, type KanbanFolder,type Story } from '../types/index.js';
+import { calculatePhaseProgress, determineWorktreeMode, escapeShellArg,getPhaseInfo, sanitizeStorySlug, truncateForTerminal } from './commands.js';
 
 describe('CLI Commands - Phase Helpers', () => {
-  let originalEnv: NodeJS.ProcessEnv;
+  let _originalEnv: NodeJS.ProcessEnv;
   let colors: any;
 
   beforeEach(() => {
-    originalEnv = { ...process.env };
+    _originalEnv = { ...process.env };
     delete process.env.NO_COLOR;
     colors = getThemedChalk();
   });

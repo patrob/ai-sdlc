@@ -1,12 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect,it } from 'vitest';
+
 import {
-  extractFunctionNames,
-  isLegitimateTestUtility,
-  findProductionFile,
   analyzeTestFile,
   detectTestDuplicationPatterns,
+  extractFunctionNames,
+  findProductionFile,
+  isLegitimateTestUtility,
 } from './test-pattern-detector.js';
-import path from 'path';
 
 describe('extractFunctionNames', () => {
   it('should extract function declarations with Test suffix', () => {

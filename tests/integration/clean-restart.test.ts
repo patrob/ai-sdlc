@@ -1,12 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { run } from '../../src/cli/commands.js';
 import * as cp from 'child_process';
 import * as fs from 'fs';
-import * as story from '../../src/core/story.js';
-import * as kanban from '../../src/core/kanban.js';
-import * as workflowState from '../../src/core/workflow-state.js';
 import ora from 'ora';
 import * as readline from 'readline';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { run } from '../../src/cli/commands.js';
+import * as kanban from '../../src/core/kanban.js';
+import * as story from '../../src/core/story.js';
+import * as workflowState from '../../src/core/workflow-state.js';
 
 // Mock dependencies
 vi.mock('child_process');
@@ -408,10 +409,11 @@ branch refs/heads/ai-sdlc/S-0064-test-clean-restart
       });
 
       // Mock readline to respond "y" twice (first for cleanup, second for remote deletion)
-      let callCount = 0;
+
+      let _callCount = 0;
       const mockRl = {
         question: vi.fn((prompt, callback) => {
-          callCount++;
+          _callCount++;
           callback('y');
         }),
         close: vi.fn(),

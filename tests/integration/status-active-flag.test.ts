@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { status } from '../../src/cli/commands.js';
 import { getSdlcRoot } from '../../src/core/config.js';
 import { initializeKanban } from '../../src/core/kanban.js';
@@ -214,7 +215,8 @@ reviews_complete: true
 
   describe.sequential('Edge Cases', () => {
     it('should handle empty board with 0 done stories', async () => {
-      const sdlcRoot = getSdlcRoot();
+
+      const _sdlcRoot = getSdlcRoot();
 
       // No stories created - empty board
 

@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect,it } from 'vitest';
+
 import { DryRunProvider } from './dry-run-provider.js';
 import { MockAuthenticator } from './mock-provider.js';
 import type { ProviderProgressEvent } from './types.js';

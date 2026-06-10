@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawnSync } from 'child_process';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
+import path from 'path';
+import { afterAll,beforeAll, describe, expect, it } from 'vitest';
+
 import { ConflictDetectorService } from '../../src/core/conflict-detector.js';
-import { Story } from '../../src/types/index.js';
+import { type Story } from '../../src/types/index.js';
 
 /**
  * Integration tests for ConflictDetectorService using real git operations.
@@ -19,7 +20,8 @@ describe('ConflictDetectorService Integration', () => {
     if (testDir && fs.existsSync(testDir)) {
       try {
         fs.rmSync(testDir, { recursive: true, force: true });
-      } catch (err) {
+       
+      } catch (_err) {
         // Ignore cleanup errors on exit
       }
     }

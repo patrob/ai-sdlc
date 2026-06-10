@@ -21,11 +21,12 @@
  */
 
 import path from 'path';
-import { IAgent, AgentContext, AgentResult } from './types.js';
-import { IProvider, ProviderCapabilities } from '../providers/types.js';
+
 import { getLogger } from '../core/logger.js';
-import { Story } from '../types/index.js';
 import { parseStory } from '../core/story.js';
+import { type IProvider, type ProviderCapabilities } from '../providers/types.js';
+import { type Story } from '../types/index.js';
+import { type AgentContext, type AgentResult,type IAgent } from './types.js';
 
 /**
  * Abstract base class for all agents.
@@ -232,7 +233,7 @@ export abstract class BaseAgent implements IAgent {
    * @param context - Execution context
    * @protected
    */
-  protected async beforeExecute(context: AgentContext): Promise<void> {
+  protected async beforeExecute(_context: AgentContext): Promise<void> {
     // Default: no-op
     // Subclasses can override
   }
@@ -253,9 +254,9 @@ export abstract class BaseAgent implements IAgent {
    * @protected
    */
   protected async afterExecute(
-    context: AgentContext,
-    story: Story,
-    changesMade: string[]
+    _context: AgentContext,
+    _story: Story,
+    _changesMade: string[]
   ): Promise<void> {
     // Default: no-op
     // Subclasses can override

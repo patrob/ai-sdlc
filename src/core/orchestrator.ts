@@ -15,15 +15,16 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
 import type {
-  ProcessOrchestratorOptions,
-  ProcessExecutionResult,
   ChildProcessInfo,
+  ProcessExecutionResult,
+  ProcessOrchestratorOptions,
   Story,
 } from '../types/index.js';
-import { GitWorktreeService } from './worktree.js';
+import { DEFAULT_TIMEOUTS,getSdlcRoot } from './config.js';
 import { ProcessManager } from './process-manager.js';
-import { getSdlcRoot, DEFAULT_TIMEOUTS } from './config.js';
+import { GitWorktreeService } from './worktree.js';
 
 /**
  * Multi-Process Orchestrator
@@ -217,6 +218,7 @@ export class Orchestrator {
       let timedOut = false;
       let timeoutError: string | undefined;
       let timeoutKillTimer: NodeJS.Timeout | undefined;
+      // eslint-disable-next-line prefer-const -- assigned after closure definition that references it
       let healthCheckTimer: NodeJS.Timeout | undefined;
       const healthCheckIntervalMs = this.options.healthCheckIntervalMs ?? 5000;
       const healthMissThreshold = this.options.healthMissThreshold ?? 2;
@@ -381,7 +383,7 @@ export class Orchestrator {
       try {
         process.kill(info.pid, 'SIGTERM');
         console.log(`  [${storyId}] Sent SIGTERM`);
-      } catch (error) {
+      } catch (_error) {
         // Process may already be dead
       }
     }
@@ -401,7 +403,7 @@ export class Orchestrator {
         try {
           process.kill(info.pid, 'SIGKILL');
           console.log(`  [${storyId}] Sent SIGKILL`);
-        } catch (error) {
+        } catch (_error) {
           // Process may already be dead
         }
       }

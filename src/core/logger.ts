@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { LogConfig } from '../types/index.js';
+import pino from 'pino';
+
+import type { LogConfig } from '../types/index.js';
 
 /**
  * Log entry structure for JSON Lines format
@@ -267,3 +269,18 @@ export function getLogger(): Logger {
   }
   return globalLogger;
 }
+
+/**
+ * Structured pino logger for observability.
+ *
+ * Writes to STDERR (fd 2) so it never pollutes the CLI's stdout/TUI.
+ * Defaults to 'silent' so there is zero behavior change unless
+ * LOG_LEVEL is set in the environment.
+ */
+export const pinoLogger = pino(
+  {
+    level: process.env.LOG_LEVEL ?? 'silent',
+    base: undefined, // omit pid/hostname fields
+  },
+  pino.destination({ fd: 2 }), // STDERR
+);

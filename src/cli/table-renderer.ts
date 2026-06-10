@@ -1,27 +1,27 @@
-import Table from 'cli-table3';
 import type { TableConstructorOptions } from 'cli-table3';
-import { Story } from '../types/index.js';
-import { ThemeColors } from '../types/index.js';
-import {
-  truncateText,
-  formatLabels,
-  getTerminalWidth,
-  shouldUseCompactView as shouldUseCompact,
-  getColumnWidths,
-  sanitizeInput,
-  ColumnWidths,
-  getKanbanColumnWidth,
-  padColumnToHeight,
-  isWorktreeStory,
-  getWorktreeIndicator,
-} from './formatting.js';
-import { getStoryFlags, formatStatus } from './story-utils.js';
+import Table from 'cli-table3';
 import stringWidth from 'string-width';
+
+import { type Story } from '../types/index.js';
+import { type ThemeColors } from '../types/index.js';
+import {
+  type ColumnWidths,
+  formatLabels,
+  getColumnWidths,
+  getKanbanColumnWidth,
+  getTerminalWidth,
+  getWorktreeIndicator,
+  isWorktreeStory,
+  sanitizeInput,
+  shouldUseCompactView as shouldUseCompact,
+  truncateText,
+} from './formatting.js';
+import { formatStatus,getStoryFlags } from './story-utils.js';
 
 /**
  * Create table configuration with themed colors
  */
-function createTableConfig(themedChalk: ThemeColors): TableConstructorOptions {
+function createTableConfig(_themedChalk: ThemeColors): TableConstructorOptions {
   return {
     head: ['Story ID', 'Title', 'Status', 'Labels', 'Flags'],
     style: {
@@ -112,14 +112,14 @@ export function renderStoryTable(stories: Story[], themedChalk: ThemeColors): st
       try {
         const row = formatStoryRow(story, columnWidths, themedChalk);
         table.push(row);
-      } catch (error) {
+      } catch (_error) {
         // Log error but continue rendering other stories
         console.error(themedChalk.error('Error rendering story, skipping...'));
       }
     }
 
     return table.toString();
-  } catch (error) {
+  } catch (_error) {
     // Fallback to error message if table rendering fails completely
     return themedChalk.error('Error rendering stories. Please check story data format.');
   }
@@ -258,7 +258,7 @@ export function formatKanbanStoryEntry(
     const truncated = truncateText(content, columnWidth);
 
     return truncated;
-  } catch (error) {
+  } catch (_error) {
     return themedChalk.error('(error)');
   }
 }
@@ -340,7 +340,7 @@ export function renderKanbanBoard(
     }
 
     return lines.join('\n');
-  } catch (error) {
+  } catch (_error) {
     return themedChalk.error('Error rendering kanban board. Please check data format.');
   }
 }

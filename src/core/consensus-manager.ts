@@ -9,13 +9,13 @@
  */
 
 import {
-  AgentOutput,
-  Concern,
-  ConsensusResult,
+  type AgentOutput,
+  type Concern,
+  type ConsensusResult,
   DEFAULT_MAX_ITERATIONS,
 } from '../types/workflow-config.js';
-import { mergeAgentOutputs, MergedResult, findSharedConcerns } from './result-merger.js';
 import { getLogger } from './logger.js';
+import { findSharedConcerns,mergeAgentOutputs, type MergedResult } from './result-merger.js';
 
 /**
  * Options for consensus seeking

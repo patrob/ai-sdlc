@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Use vi.hoisted to define mock before vi.mock factory runs (handles hoisting)
 const { mockRunAgentQuery } = vi.hoisted(() => ({
@@ -28,12 +28,7 @@ vi.mock('../../src/core/logger.js', () => ({
 // Import the functions we need to test after setting up mocks
 import {
   runResearchAgent,
-  shouldPerformWebResearch,
-  evaluateFAR,
-  sanitizeWebResearchContent,
-  sanitizeForLogging,
-  sanitizeCodebaseContext
-} from '../../src/agents/research.js';
+  shouldPerformWebResearch} from '../../src/agents/research.js';
 import { parseStory } from '../../src/core/story.js';
 
 describe('Research Web Integration Tests', () => {

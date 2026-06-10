@@ -1,5 +1,6 @@
-import { z, ZodSchema } from 'zod';
 import yaml from 'js-yaml';
+import { z, type ZodSchema } from 'zod';
+
 import { getLogger } from './logger.js';
 
 /**

@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+ 
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { getThemedChalk } from '../../src/core/theme.js';
-import { Story, ActionType } from '../../src/types/index.js';
+import { type ActionType,type Story } from '../../src/types/index.js';
 
 describe('Workflow UI Integration Tests', () => {
   let originalEnv: NodeJS.ProcessEnv;

@@ -2,19 +2,20 @@
  * Unit tests for task progress tracking
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { type TaskProgress } from '../types/index.js';
 import {
-  parseProgressTable,
   generateProgressTable,
-  readStoryFile,
-  writeStoryFile,
+  getCurrentTask,
+  getPendingTasks,
   getTaskProgress,
   initializeTaskProgress,
+  parseProgressTable,
+  readStoryFile,
   updateTaskProgress,
-  getPendingTasks,
-  getCurrentTask,
+  writeStoryFile,
 } from './task-progress.js';
-import { TaskProgress, TaskStatus } from '../types/index.js';
 
 // Mock fs and write-file-atomic
 vi.mock('fs', () => ({

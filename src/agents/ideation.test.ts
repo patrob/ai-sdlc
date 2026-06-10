@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
+import { type Story } from '../types/index.js';
 import { findPotentialDuplicates, shouldDecompose } from './ideation.js';
-import { Story } from '../types/index.js';
 
 function makeStory(id: string, title: string): Story {
   return {

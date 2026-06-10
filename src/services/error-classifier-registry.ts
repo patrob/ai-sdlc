@@ -1,9 +1,9 @@
 import type { TechStack } from '../types/index.js';
 import type { IErrorClassifier } from './error-classifier-types.js';
-import { TypeScriptErrorClassifier } from './typescript-error-classifier.js';
-import { PythonErrorClassifier } from './python-error-classifier.js';
 import { GoErrorClassifier } from './go-error-classifier.js';
+import { PythonErrorClassifier } from './python-error-classifier.js';
 import { RustErrorClassifier } from './rust-error-classifier.js';
+import { TypeScriptErrorClassifier } from './typescript-error-classifier.js';
 
 /**
  * Registry for language-specific error classifiers.

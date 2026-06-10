@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, statSync } from 'fs';
 import path from 'path';
-import { TechStack, ProjectConfig } from '../types/index.js';
+
+import { type ProjectConfig,type TechStack } from '../types/index.js';
 
 /**
  * Stack detection configuration for each supported technology.
@@ -203,10 +204,10 @@ const SUBDIRECTORY_PATTERNS = [
 function markerExists(dir: string, marker: string): boolean {
   if (marker.includes('*')) {
     // Handle glob pattern
-    const pattern = marker.replace('*', '');
+    const pattern = marker.replaceAll('*', '');
     try {
       const files = readdirSync(dir);
-      return files.some(f => f.endsWith(pattern) || f.startsWith(pattern.replace('*', '')));
+      return files.some(f => f.endsWith(pattern) || f.startsWith(pattern.replaceAll('*', '')));
     } catch {
       return false;
     }

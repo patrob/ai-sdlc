@@ -1,11 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as story from '../core/story.js';
 import {
-  parseStoryIdList,
   deduplicateStoryIds,
+  parseStoryIdList,
   validateStoryIdFormat,
   validateStoryIds,
 } from './batch-validator.js';
-import * as story from '../core/story.js';
 
 // Mock story module
 vi.mock('../core/story.js');

@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import type { TDDTestCycle, TDDConfig } from './index';
+import { describe, expect,it } from 'vitest';
+
+import type { TDDConfig,TDDTestCycle } from './index';
 
 describe('TDD Type Definitions', () => {
   describe('TDDTestCycle interface', () => {

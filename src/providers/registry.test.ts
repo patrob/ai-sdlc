@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { ProviderRegistry } from './registry.js';
-import type { IProvider, IAuthenticator, ProviderCapabilities } from './types.js';
+import type { IAuthenticator, IProvider, ProviderCapabilities } from './types.js';
 
 describe('ProviderRegistry', () => {
   // Helper to create mock providers

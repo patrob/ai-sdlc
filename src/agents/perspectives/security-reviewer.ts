@@ -12,9 +12,9 @@
  * @module agents/perspectives/security-reviewer
  */
 
-import { parseStory, readSectionContent } from '../../core/story.js';
 import { runAgentQuery } from '../../core/client.js';
 import { getLogger } from '../../core/logger.js';
+import { parseStory, readSectionContent } from '../../core/story.js';
 import type { IProvider } from '../../providers/types.js';
 import type { Story } from '../../types/index.js';
 import type { AgentOutput, Concern, ConcernSeverity } from '../../types/workflow-config.js';

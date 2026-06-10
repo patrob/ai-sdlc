@@ -5,8 +5,9 @@
  * This is a test fixture that will be copied during integration tests.
  * The production counterpart is production.ts in the same directory.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { parseStory, loadConfig, formatData } from './production.js';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
+import { formatData,loadConfig, parseStory } from './production.js';
 
 // LEGITIMATE: Factory function creating test data
 function createMockStory() {
@@ -35,7 +36,8 @@ function assertValidStory(story: any) {
 }
 
 // LEGITIMATE: Mock builder
-function mockUser(overrides?: any) {
+ 
+function _mockUser(overrides?: any) {
   return {
     id: 'user-1',
     name: 'Test User',
@@ -44,7 +46,8 @@ function mockUser(overrides?: any) {
 }
 
 // LEGITIMATE: Test data builder
-function withDefaults(config?: any) {
+ 
+function _withDefaults(config?: any) {
   return {
     enabled: true,
     retries: 3,

@@ -1,12 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Story } from '../types/index.js';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
+import { type Story } from '../types/index.js';
 import {
-  renderStoryTable,
-  renderCompactView,
-  shouldUseCompactView,
-  renderStories,
-  renderKanbanBoard,
   formatKanbanStoryEntry,
+  renderCompactView,
+  renderKanbanBoard,
+  renderStories,
+  renderStoryTable,
+  shouldUseCompactView,
   shouldUseKanbanLayout,
 } from './table-renderer.js';
 

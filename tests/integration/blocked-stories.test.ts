@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import { createStory, updateStoryStatus, parseStory, writeStory, unblockStory, appendReviewHistory, findStoryById } from '../../src/core/story.js';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { assessState } from '../../src/core/kanban.js';
-import { BLOCKED_DIR, STORIES_FOLDER, ReviewDecision, ReviewSeverity } from '../../src/types/index.js';
+import { appendReviewHistory, createStory, findStoryById,parseStory, unblockStory, updateStoryStatus, writeStory } from '../../src/core/story.js';
+import { ReviewDecision, ReviewSeverity,STORIES_FOLDER } from '../../src/types/index.js';
 
 describe.sequential('Blocked Stories Integration', () => {
   let testDir: string;
@@ -369,7 +370,7 @@ describe.sequential('Blocked Stories Integration', () => {
 
   it('should not process stories from blocked folder on daemon watch', async () => {
     // Create a story and set it to blocked status
-    let story = await createStory('Blocked Test', sdlcRoot, {
+    const story = await createStory('Blocked Test', sdlcRoot, {
       type: 'feature',
       labels: ['test'],
     });
@@ -399,16 +400,19 @@ describe.sequential('Blocked Stories Integration', () => {
     // In new architecture, status is in frontmatter, not folder location
 
     // Create stories with different statuses
-    const backlogStory = await createStory('Backlog Story', sdlcRoot, { type: 'feature' });
+     
+    const _backlogStory = await createStory('Backlog Story', sdlcRoot, { type: 'feature' });
 
-    let readyStory = await createStory('Ready Story', sdlcRoot, { type: 'feature' });
-    readyStory = await updateStoryStatus(readyStory, 'ready');
+    let _readyStory = await createStory('Ready Story', sdlcRoot, { type: 'feature' });
 
-    let inProgressStory = await createStory('In Progress Story', sdlcRoot, { type: 'feature' });
-    inProgressStory = await updateStoryStatus(inProgressStory, 'in-progress');
+    _readyStory = await updateStoryStatus(_readyStory, 'ready');
+
+    let _inProgressStory = await createStory('In Progress Story', sdlcRoot, { type: 'feature' });
+
+    _inProgressStory = await updateStoryStatus(_inProgressStory, 'in-progress');
 
     // Create a blocked story
-    let blockedStory = await createStory('Blocked Story', sdlcRoot, { type: 'feature' });
+    const blockedStory = await createStory('Blocked Story', sdlcRoot, { type: 'feature' });
     blockedStory.frontmatter.status = 'blocked';
     blockedStory.frontmatter.blocked_reason = 'Testing';
     blockedStory.frontmatter.blocked_at = new Date().toISOString();
@@ -418,9 +422,12 @@ describe.sequential('Blocked Stories Integration', () => {
     const assessment = await assessState(sdlcRoot);
 
     // Verify that backlog, ready, and in-progress stories could have actions
-    const backlogItems = assessment.backlogItems;
-    const readyItems = assessment.readyItems;
-    const inProgressItems = assessment.inProgressItems;
+     
+    const _backlogItems = assessment.backlogItems;
+
+    const _readyItems = assessment.readyItems;
+
+    const _inProgressItems = assessment.inProgressItems;
 
     // Verify assessment includes non-blocked stories
     expect(assessment.recommendedActions).toBeDefined();

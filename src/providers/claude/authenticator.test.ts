@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ClaudeAuthenticator } from './authenticator.js';
+import { beforeEach,describe, expect, it, vi } from 'vitest';
+
 import * as auth from '../../core/auth.js';
+import { ClaudeAuthenticator } from './authenticator.js';
 
 vi.mock('../../core/auth.js', () => ({
   configureAgentSdkAuth: vi.fn(),

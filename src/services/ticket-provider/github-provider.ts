@@ -1,15 +1,15 @@
-import { StoryStatus } from '../../types/index.js';
-import { Ticket, TicketFilter, NewTicket, TicketProvider } from './types.js';
+import { type StoryStatus } from '../../types/index.js';
 import {
-  ghIssueView,
-  ghIssueList,
-  ghIssueCreate,
   ghIssueComment,
+  ghIssueCreate,
+  ghIssueList,
   ghIssueStateChange,
+  ghIssueView,
   ghLinkIssueToPR,
   type GitHubIssue,
   type IssueFilter,
 } from '../gh-cli.js';
+import { type NewTicket, type Ticket, type TicketFilter, type TicketProvider } from './types.js';
 
 /**
  * GitHub-specific configuration for the ticket provider.

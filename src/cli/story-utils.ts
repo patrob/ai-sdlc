@@ -1,4 +1,4 @@
-import { Story, ThemeColors } from '../types/index.js';
+import { type Story, type ThemeColors } from '../types/index.js';
 
 /**
  * Get story flags for display
@@ -8,7 +8,7 @@ import { Story, ThemeColors } from '../types/index.js';
  * @param c - Themed chalk instance
  * @returns Formatted flags string (e.g., "[RPIV!]")
  */
-export function getStoryFlags(story: Story, c: ThemeColors): string {
+export function getStoryFlags(story: Story, _c: ThemeColors): string {
   const flags: string[] = [];
 
   if (story.frontmatter.research_complete) flags.push('R');

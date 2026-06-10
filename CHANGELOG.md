@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed - BREAKING
 
+- **Node.js >= 22.19.0 now required** (previously >= 18). The new Pi agent engine (`@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`) requires Node 22.19+.
+- **Non-Claude providers swapped to the Pi agentic engine**: `openai`, `codex`, `openrouter`, `copilot` (and the new `ollama`) are now powered by `PiAgenticProvider`, giving each a real tool-using, file-editing agent loop (read/write/edit/list/bash in the working directory) instead of single-shot text completions. Provider names, env vars, and `.ai-sdlc.json` configuration are unchanged.
 - **Status command output format**: The `status` command now displays stories in a uniform table format with columns for Story ID, Title, Status, Labels, and Flags. The previous column-based kanban view has been replaced.
   - ⚠️ **Breaking Change**: Scripts or tools that parse the status command output will need to be updated.
   - Titles are now truncated with '...' suffix for better readability (responsive 30-60 chars based on terminal width)
@@ -17,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`ollama` provider**: local, OpenAI-compatible, no API key required. Defaults to `http://localhost:11434/v1`; override with `OLLAMA_BASE_URL`, select models with `AI_SDLC_OLLAMA_MODEL`.
+- **OAuth support for `codex` and `copilot`** via the Pi engine ("Sign in with ChatGPT" / GitHub OAuth), with API keys still supported as fallback.
 - **Story ID column** in status output (first column) for quick story identification
 - **Unicode table borders** for better visual hierarchy and professional appearance
 - **Responsive column widths** based on terminal width for optimal display
@@ -41,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Fixed two high-severity `minimatch` ReDoS advisories in production dependencies (GHSA-3ppc-4f35-3m26, GHSA-7r86-cg39-jmmj); production `npm audit` is clean
+- Upgraded `vitest` to v4 to clear dev-only advisories in the vite/esbuild/vitest chain
 - Fixed ReDoS vulnerability in ANSI code stripping with bounded quantifiers
 - Added protection against terminal escape sequence injection
 - Implemented prototype pollution prevention in label processing

@@ -38,7 +38,11 @@ describe('ClaudeProvider', () => {
 
   beforeEach(() => {
     provider = new ClaudeProvider();
-    vi.clearAllMocks();
+    // vitest 4: restoreAllMocks() no longer resets vi.fn() implementations
+    // (only vi.spyOn spies), so use resetAllMocks() to restore the factory
+    // implementations (e.g. configureAgentSdkAuth → configured: true) after a
+    // test overrides them with mockReturnValue.
+    vi.resetAllMocks();
   });
 
   afterEach(() => {

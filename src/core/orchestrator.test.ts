@@ -20,13 +20,17 @@ function createMockChildProcess(): ChildProcess {
 }
 
 // Mock dependencies
+// NOTE: vitest 4 requires mocked classes to be constructible — use a regular
+// `function` (not an arrow function) so `new GitWorktreeService()` works.
 vi.mock('./worktree.js', () => ({
-  GitWorktreeService: vi.fn().mockImplementation(() => ({
-    getWorktreePath: (storyId: string, slug: string) => `/tmp/worktrees/${storyId}-${slug}`,
-    getBranchName: (storyId: string, slug: string) => `ai-sdlc/${storyId}-${slug}`,
-    create: vi.fn().mockResolvedValue('/tmp/worktrees/test'),
-    remove: vi.fn().mockResolvedValue(undefined),
-  })),
+  GitWorktreeService: vi.fn(function () {
+    return {
+      getWorktreePath: (storyId: string, slug: string) => `/tmp/worktrees/${storyId}-${slug}`,
+      getBranchName: (storyId: string, slug: string) => `ai-sdlc/${storyId}-${slug}`,
+      create: vi.fn().mockResolvedValue('/tmp/worktrees/test'),
+      remove: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('./process-manager.js', () => ({

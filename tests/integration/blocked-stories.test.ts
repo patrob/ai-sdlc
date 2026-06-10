@@ -334,8 +334,18 @@ describe.sequential('Blocked Stories Integration', () => {
       poReviewPassed: false,
     });
 
-    // Make the story file read-only to trigger write error
-    fs.chmodSync(story.path, 0o444);
+    // Force the blocking write (writeStory) to fail so the catch/fallback
+    // path in assessState is exercised. We do NOT use fs.chmod here: the test
+    // suite can run as root (e.g. in CI containers), and root bypasses file
+    // permission bits, so a read-only file would still be writable.
+    //
+    // Instead we pre-create the proper-lockfile lock path ("<story>.lock") as
+    // a regular FILE. writeStory() acquires a lock by calling mkdir on that
+    // path; mkdir over an existing non-directory fails with EEXIST for every
+    // user (root included), so lock acquisition - and therefore the write -
+    // fails deterministically regardless of uid.
+    const lockPath = `${story.path}.lock`;
+    fs.writeFileSync(lockPath, '');
 
     // Call assessState - should catch error and fall back
     const assessment = await assessState(sdlcRoot);
@@ -353,8 +363,8 @@ describe.sequential('Blocked Stories Integration', () => {
 
     errorSpy.mockRestore();
 
-    // Restore file permissions
-    fs.chmodSync(story.path, 0o644);
+    // Remove the lock file so afterEach cleanup is unobstructed
+    fs.rmSync(lockPath, { force: true });
   });
 
   it('should not process stories from blocked folder on daemon watch', async () => {

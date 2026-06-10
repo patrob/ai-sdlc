@@ -50,6 +50,8 @@
   ],
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.12",
+    "@earendil-works/pi-agent-core": "^0.79.0",
+    "@earendil-works/pi-ai": "^0.79.0",
     "chalk": "^5.3.0",
     "chokidar": "^4.0.0",
     "cli-table3": "^0.6.5",
@@ -68,12 +70,12 @@
     "@types/node": "^20.0.0",
     "@types/proper-lockfile": "^4.1.4",
     "@types/write-file-atomic": "^4.0.3",
-    "@vitest/coverage-v8": "^1.6.1",
+    "@vitest/coverage-v8": "^4.1.8",
     "tsx": "^4.0.0",
     "typescript": "^5.3.0",
-    "vitest": "^1.0.0"
+    "vitest": "^4.1.8"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.19.0"
   }
 }

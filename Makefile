@@ -1,4 +1,4 @@
-.PHONY: build test test-integration lint clean publish publish-dry verify
+.PHONY: build test test-integration coverage lint clean publish publish-dry verify
 
 build:
 	npm run build
@@ -8,6 +8,9 @@ test:
 
 test-integration:
 	npm run test:integration
+
+coverage:
+	npm run test:coverage
 
 lint:
 	npm run lint

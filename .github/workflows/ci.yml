@@ -31,6 +31,26 @@ jobs:
       - run: npm test
       - run: npm run test:integration
 
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Generate coverage report (cobertura)
+        run: npm run test:coverage
+      - name: Upload cobertura coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-coverage
+          path: coverage/cobertura-coverage.xml
+          if-no-files-found: error
+
   publish-alpha:
     if: github.ref == 'refs/heads/main'
     needs: test

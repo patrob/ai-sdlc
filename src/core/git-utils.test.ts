@@ -1,16 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { spawnSync, SpawnSyncReturns } from 'child_process';
+import { spawnSync, type SpawnSyncReturns } from 'child_process';
+import { beforeEach,describe, expect, it, vi } from 'vitest';
+
 import {
-  isCleanWorkingDirectory,
-  hasUntrackedFiles,
-  isOnProtectedBranch,
-  isLocalBehindRemote,
-  validateGitState,
+  type CleanWorkingDirectoryOptions,
   getBaseBranch,
   getMergeBase,
+  type GitValidationOptions,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   GitValidationResult,
-  GitValidationOptions,
-  CleanWorkingDirectoryOptions,
+  hasUntrackedFiles,
+  isCleanWorkingDirectory,
+  isLocalBehindRemote,
+  isOnProtectedBranch,
+  validateGitState,
 } from './git-utils.js';
 
 vi.mock('child_process', () => ({

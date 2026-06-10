@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { CostTracker, getCostTracker, initCostTracker, resetCostTracker } from './cost-tracker.js';
+import { beforeEach,describe, expect, it } from 'vitest';
+
 import type { TokenUsage } from '../providers/types.js';
+import { CostTracker, getCostTracker, initCostTracker, resetCostTracker } from './cost-tracker.js';
 
 function makeUsage(input: number, output: number): TokenUsage {
   return { inputTokens: input, outputTokens: output, totalTokens: input + output };

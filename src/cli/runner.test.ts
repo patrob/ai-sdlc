@@ -1,17 +1,18 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { WorkflowRunner, runWorkflow, RunOptions } from './runner.js';
-import * as config from '../core/config.js';
-import * as kanban from '../core/kanban.js';
-import * as story from '../core/story.js';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as implementation from '../agents/implementation.js';
+import * as planning from '../agents/planning.js';
 import * as refinement from '../agents/refinement.js';
 import * as research from '../agents/research.js';
-import * as planning from '../agents/planning.js';
-import * as implementation from '../agents/implementation.js';
 import * as review from '../agents/review.js';
 import * as rework from '../agents/rework.js';
+import * as config from '../core/config.js';
+import * as kanban from '../core/kanban.js';
 import * as phaseExecutor from '../core/phase-executor.js';
+import * as story from '../core/story.js';
 import * as workflowConfig from '../core/workflow-config.js';
-import { Action, StateAssessment, ReviewDecision, Story } from '../types/index.js';
+import { type Action, ReviewDecision, type StateAssessment, type Story } from '../types/index.js';
+import { type RunOptions,runWorkflow, WorkflowRunner } from './runner.js';
 
 // Mock all dependencies
 vi.mock('../core/config.js');

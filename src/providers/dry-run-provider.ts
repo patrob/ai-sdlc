@@ -1,5 +1,5 @@
-import type { IProvider, IAuthenticator, ProviderCapabilities, ProviderQueryOptions } from './types.js';
 import { MockAuthenticator } from './mock-provider.js';
+import type { IAuthenticator, IProvider, ProviderCapabilities, ProviderQueryOptions } from './types.js';
 
 export class DryRunProvider implements IProvider {
   readonly name = 'dry-run';

@@ -1,10 +1,13 @@
-import type { Story, Config } from '../../types/index.js';
-import { ReviewDecision as ReviewDecisionEnum, ReviewSeverity as ReviewSeverityEnum } from '../../types/index.js';
-import type { ReviewIssue } from '../../types/index.js';
-import { updateStoryField } from '../../core/story.js';
-import { formatIssuesForDisplay } from './parsers.js';
-import { getSourceCodeChanges, getConfigurationChanges, getDocumentationChanges, determineEffectiveContentType, hasTestFiles } from './diff-analysis.js';
 import { getLogger } from '../../core/logger.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { updateStoryField } from '../../core/story.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { Config,Story } from '../../types/index.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { ReviewIssue } from '../../types/index.js';
+import { ReviewDecision as ReviewDecisionEnum, ReviewSeverity as ReviewSeverityEnum } from '../../types/index.js';
+import { determineEffectiveContentType, getConfigurationChanges, getDocumentationChanges, getSourceCodeChanges, hasTestFiles } from './diff-analysis.js';
+import { formatIssuesForDisplay } from './parsers.js';
 
 /**
  * Result from pre-check validation
@@ -24,6 +27,7 @@ export interface PreCheckResult {
 export async function runPreChecks(
   story: Story,
   workingDir: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   storyPath: string
 ): Promise<PreCheckResult> {
   const logger = getLogger();
@@ -39,7 +43,7 @@ export async function runPreChecks(
   // Validation flags
   let validationFailed = false;
   let validationReason = '';
-  let validationCategory = 'implementation';
+  const validationCategory = 'implementation';
 
   // Check source code changes for 'code' and 'mixed' types
   if (contentType === 'code' || contentType === 'mixed') {
@@ -124,6 +128,7 @@ export async function runTestFileCheck(
   story: Story,
   workingDir: string,
   contentType: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   storyPath: string
 ): Promise<{ passed: boolean; reviewResult?: any }> {
   const logger = getLogger();

@@ -1,4 +1,4 @@
-import { Config, DaemonConfig, TDDConfig, WorktreeConfig, EpicConfig, MergeConfig, ImplementationConfig, PlanReviewConfig, LogConfig, RetryConfig, NotificationConfig, TicketingConfig, AIProviderConfig, TimeoutConfig } from '../../types/index.js';
+import { type AIProviderConfig, type Config, type DaemonConfig, type EpicConfig, type ImplementationConfig, type LogConfig, type MergeConfig, type NotificationConfig, type PlanReviewConfig, type RetryConfig, type TDDConfig, type TicketingConfig, type TimeoutConfig,type WorktreeConfig } from '../../types/index.js';
 
 export const CONFIG_FILENAME = '.ai-sdlc.json';
 

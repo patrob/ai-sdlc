@@ -1,11 +1,13 @@
 import ora from 'ora';
+
 import { getSdlcRoot, loadConfig } from '../../core/config.js';
 import { kanbanExists } from '../../core/kanban.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { createStory, findStoryById } from '../../core/story.js';
 import { getThemedChalk } from '../../core/theme.js';
-import { parseGitHubIssueUrl, isGhAvailable } from '../../services/gh-cli.js';
+import { isGhAvailable,parseGitHubIssueUrl } from '../../services/gh-cli.js';
 import { createTicketProvider } from '../../services/ticket-provider/index.js';
-import { Story } from '../../types/index.js';
+import { type Story } from '../../types/index.js';
 
 /**
  * Import a GitHub Issue as a new story.

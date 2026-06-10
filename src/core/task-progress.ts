@@ -8,7 +8,8 @@
 import fs from 'fs';
 import path from 'path';
 import writeFileAtomic from 'write-file-atomic';
-import { TaskProgress, TaskStatus } from '../types/index.js';
+
+import { type TaskProgress, type TaskStatus } from '../types/index.js';
 
 const TASK_PROGRESS_SECTION = '## Task Progress';
 

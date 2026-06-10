@@ -9,51 +9,56 @@
  */
 
 import path from 'path';
-import {
-  WorkflowConfig,
-  PhaseConfig,
-  AgentConfig,
-  AgentOutput,
-  PhaseExecutionContext,
-  PhaseExecutionResult,
-  DEFAULT_WORKFLOW_CONFIG,
-  DEFAULT_COMPOSITION,
-  DEFAULT_CONSENSUS,
-  DEFAULT_MAX_ITERATIONS,
-  ConsensusResult,
-  Concern,
-} from '../types/workflow-config.js';
-import { loadWorkflowConfig, getPhaseConfig, hasCustomAgents } from './workflow-config.js';
-import { mergeAgentOutputs, MergedResult } from './result-merger.js';
-import {
-  ConsensusManager,
-  ConsensusIterationContext,
-  formatConcernsForIteration,
-} from './consensus-manager.js';
-import { getLogger } from './logger.js';
-import { getEventBus } from './event-bus.js';
-import { loadConfig } from './config.js';
-import type { IProvider } from '../providers/types.js';
-import { ProviderRegistry } from '../providers/registry.js';
 
+import { runImplementationAgent } from '../agents/implementation.js';
 // Import perspective reviewers
 import {
-  runTechLeadReviewer,
-  runSecurityReviewer,
   runProductOwnerReviewer,
+  runSecurityReviewer,
+  runTechLeadReviewer,
 } from '../agents/perspectives/index.js';
-
+import { runPlanReviewAgent } from '../agents/plan-review.js';
+import { runPlanningAgent } from '../agents/planning.js';
 // Import standard agents
 import { runRefinementAgent } from '../agents/refinement.js';
 import { runResearchAgent } from '../agents/research.js';
-import { runPlanningAgent } from '../agents/planning.js';
-import { runPlanReviewAgent } from '../agents/plan-review.js';
-import { runImplementationAgent } from '../agents/implementation.js';
 import { runReviewAgent } from '../agents/review.js';
+import { ProviderRegistry } from '../providers/registry.js';
+import type { IProvider } from '../providers/types.js';
+import {
+  type AgentConfig,
+  type AgentOutput,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  Concern,
+  type ConsensusResult,
+  DEFAULT_COMPOSITION,
+  DEFAULT_CONSENSUS,
+  DEFAULT_MAX_ITERATIONS,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  DEFAULT_WORKFLOW_CONFIG,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  PhaseConfig,
+  type PhaseExecutionContext,
+  type PhaseExecutionResult,
+  type WorkflowConfig,
+} from '../types/workflow-config.js';
+import { loadConfig } from './config.js';
+import {
+  type ConsensusIterationContext,
+  ConsensusManager,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  formatConcernsForIteration,
+} from './consensus-manager.js';
+import { getEventBus } from './event-bus.js';
+import { getLogger } from './logger.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { mergeAgentOutputs, MergedResult } from './result-merger.js';
+import { getPhaseConfig, hasCustomAgents,loadWorkflowConfig } from './workflow-config.js';
 
 /**
  * Map of agent roles to their executor functions
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type AgentExecutorFn = (
   storyPath: string,
   sdlcRoot: string,

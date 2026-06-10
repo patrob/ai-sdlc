@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { Logger, LogEntry, initLogger, getLogger } from './logger.js';
-import { LogConfig } from '../types/index.js';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { type LogConfig } from '../types/index.js';
+import { getLogger,initLogger, type LogEntry, Logger } from './logger.js';
 
 vi.mock('fs');
 

@@ -1,9 +1,10 @@
-import { parseStory } from '../core/story.js';
-import { findAllStories } from '../core/kanban.js';
 import { runAgentQuery } from '../core/client.js';
-import type { IProvider } from '../providers/types.js';
+import { findAllStories } from '../core/kanban.js';
 import { getLogger } from '../core/logger.js';
-import { Story } from '../types/index.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { parseStory } from '../core/story.js';
+import type { IProvider } from '../providers/types.js';
+import { type Story } from '../types/index.js';
 
 const IDEATION_SYSTEM_PROMPT = `You are an AI product ideation specialist. You help refine story ideas by:
 

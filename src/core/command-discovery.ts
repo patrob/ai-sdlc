@@ -11,8 +11,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { loadConfig } from './config.js';
+
 import type { TechStack } from '../types/index.js';
+import { loadConfig } from './config.js';
 
 /**
  * Commands discovered from project configuration

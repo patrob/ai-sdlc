@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { detectTestDuplicationPatterns } from '../../src/agents/test-pattern-detector.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { detectTestDuplicationPatterns } from '../../src/agents/test-pattern-detector.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

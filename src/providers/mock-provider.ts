@@ -1,4 +1,4 @@
-import type { IProvider, IAuthenticator, ProviderCapabilities, ProviderQueryOptions } from './types.js';
+import type { IAuthenticator, IProvider, ProviderCapabilities, ProviderQueryOptions } from './types.js';
 
 export interface MockProviderOptions {
   /** Queue of responses to return in order. Cycles back to start when exhausted. */

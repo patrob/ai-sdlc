@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { validateReviewConfig, loadConfig } from './config.js';
-import { ReviewConfig } from '../types/index.js';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
+import { type ReviewConfig } from '../types/index.js';
+import { loadConfig,validateReviewConfig } from './config.js';
 
 describe('review config validation', () => {
   // Store original env vars

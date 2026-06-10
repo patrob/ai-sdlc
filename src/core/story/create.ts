@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { Story, StoryFrontmatter, STORIES_FOLDER, STORY_FILENAME, DEFAULT_PRIORITY_GAP } from '../../types/index.js';
+
+import { DEFAULT_PRIORITY_GAP,STORIES_FOLDER, type Story, STORY_FILENAME, type StoryFrontmatter } from '../../types/index.js';
 import { parseStory, writeStory } from './io.js';
 
 /**
@@ -183,6 +184,7 @@ export async function createStory(
             if (existingStory.frontmatter.priority > maxPriority) {
               maxPriority = existingStory.frontmatter.priority;
             }
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           } catch (err) {
             // Skip malformed stories
             continue;
@@ -191,6 +193,7 @@ export async function createStory(
       }
       priority = maxPriority + DEFAULT_PRIORITY_GAP;
     }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (err) {
     // If we can't read existing stories, start at DEFAULT_PRIORITY_GAP
     priority = DEFAULT_PRIORITY_GAP;

@@ -1,16 +1,18 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  type AgentTaskResult,
+  type ImplementationTask,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  OrchestratorResult,
+  type TaskProgress,
+} from '../types/index.js';
 import {
   buildTaskContext,
   evaluateTaskResult,
   getNextTask,
   runImplementationOrchestrator,
 } from './orchestrator.js';
-import {
-  ImplementationTask,
-  TaskProgress,
-  AgentTaskResult,
-  OrchestratorResult,
-} from '../types/index.js';
 
 // Mock dependencies
 vi.mock('../core/task-parser.js');
@@ -19,16 +21,17 @@ vi.mock('./single-task.js');
 vi.mock('child_process');
 vi.mock('fs');
 
+import { spawnSync } from 'child_process';
+import * as fs from 'fs';
+
 import { parseImplementationTasks } from '../core/task-parser.js';
 import {
   getTaskProgress,
-  updateTaskProgress,
   initializeTaskProgress,
   readStoryFile,
+  updateTaskProgress,
 } from '../core/task-progress.js';
 import { runSingleTaskAgent } from './single-task.js';
-import { spawnSync } from 'child_process';
-import * as fs from 'fs';
 
 describe('orchestrator', () => {
   beforeEach(() => {

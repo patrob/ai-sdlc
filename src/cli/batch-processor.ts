@@ -1,5 +1,6 @@
-import { Story } from '../types/index.js';
 import * as readline from 'readline';
+
+import { type Story } from '../types/index.js';
 
 /**
  * Result summary for batch processing operation

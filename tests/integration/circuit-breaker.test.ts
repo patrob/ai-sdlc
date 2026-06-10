@@ -1,17 +1,20 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
+import path from 'path';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   createStory,
-  parseStory,
   getTotalRecoveryAttempts,
-  isAtGlobalRecoveryLimit,
   incrementTotalRecoveryAttempts,
+  isAtGlobalRecoveryLimit,
   moveToBlocked,
+  parseStory,
   unblockStory,
   writeStory,
 } from '../../src/core/story.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { STORIES_FOLDER, STORY_FILENAME } from '../../src/types/index.js';
 
 describe('Global Recovery Circuit Breaker Integration', () => {

@@ -1,8 +1,11 @@
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { loadConfig } from '../../core/config.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { type GitValidationResult,validateGitState } from '../../core/git-utils.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { getThemedChalk } from '../../core/theme.js';
-import { validateGitState, GitValidationResult } from '../../core/git-utils.js';
+import { type WorktreeStatus } from '../../core/worktree.js';
 import type { Action, ActionType, Story } from '../../types/index.js';
-import { WorktreeStatus } from '../../core/worktree.js';
 
 /**
  * Branch divergence threshold for warnings

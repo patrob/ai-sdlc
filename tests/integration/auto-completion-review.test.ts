@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { autoCompleteStoryAfterReview, parseStory, writeStory } from '../../src/core/story.js';
-import { ReviewDecision, ReviewResult, Config } from '../../src/types/index.js';
+import { type Config,ReviewDecision, type ReviewResult } from '../../src/types/index.js';
 
 describe('Auto-completion after review approval - Integration', () => {
   let tempDir: string;
@@ -253,7 +254,7 @@ This is a test story for integration testing.
       const config = createMockConfig(true);
       const reviewResult = createMockReviewResult(ReviewDecision.APPROVED);
 
-      let story = parseStory(storyPath);
+      const story = parseStory(storyPath);
 
       // Set an invalid path that will cause writeStory to fail
       story.path = '/nonexistent/directory/that/does/not/exist/story.md';

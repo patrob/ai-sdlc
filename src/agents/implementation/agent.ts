@@ -2,21 +2,24 @@
  * Main implementation agent orchestrator
  */
 
-import path from 'path';
 import { spawnSync } from 'child_process';
-import { Story, AgentResult } from '../../types/index.js';
+import path from 'path';
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { AgentProgressCallback, runAgentQuery } from '../../core/client.js';
-import type { IProvider } from '../../providers/types.js';
-import { getLogger } from '../../core/logger.js';
-import { parseStory, updateStoryStatus, updateStoryField, getEffectiveMaxImplementationRetries } from '../../core/story.js';
 import { loadConfig } from '../../core/config.js';
-import { AgentOptions } from '../research.js';
+import { getLogger } from '../../core/logger.js';
+import { getEffectiveMaxImplementationRetries,parseStory, updateStoryField, updateStoryStatus } from '../../core/story.js';
+import type { IProvider } from '../../providers/types.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { type AgentResult,Story } from '../../types/index.js';
+import { type AgentOptions } from '../research.js';
+import { verifyImplementation } from '../verification.js';
+import { validateBranchName,validateWorkingDir } from './retry.js';
+import { truncateTestOutput } from './retry.js';
 import { attemptImplementationWithRetries } from './retry-attempt.js';
-import { validateWorkingDir, validateBranchName } from './retry.js';
 import { runTDDImplementation } from './tdd.js';
 import { commitIfAllTestsPass } from './test-runners.js';
-import { verifyImplementation } from '../verification.js';
-import { truncateTestOutput } from './retry.js';
 
 /**
  * Implementation Agent

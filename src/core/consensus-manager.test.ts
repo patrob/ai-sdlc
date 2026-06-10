@@ -1,10 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+import type { AgentOutput, Concern, ConsensusIterationContext } from '../types/workflow-config.js';
 import {
-  ConsensusManager,
   checkConsensus,
+  ConsensusManager,
   formatConcernsForIteration,
 } from './consensus-manager.js';
-import type { AgentOutput, Concern, ConsensusIterationContext } from '../types/workflow-config.js';
 
 const createOutput = (
   agentId: string,
@@ -73,6 +74,7 @@ describe('ConsensusManager', () => {
         createOutput('agent2', true),
       ];
 
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       let iterationCount = 0;
       const executor = vi.fn().mockImplementation(async () => {
         iterationCount++;

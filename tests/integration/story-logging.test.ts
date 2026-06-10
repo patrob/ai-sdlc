@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
-import path from 'path';
-import { StoryLogger, getLatestLogPath, readLastLines } from '../../src/core/story-logger.js';
-import { STORIES_FOLDER } from '../../src/types/index.js';
 import os from 'os';
+import path from 'path';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { getLatestLogPath, readLastLines,StoryLogger } from '../../src/core/story-logger.js';
+import { STORIES_FOLDER } from '../../src/types/index.js';
 
 describe('Story Logging Integration', () => {
   let tempDir: string;

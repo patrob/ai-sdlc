@@ -1,4 +1,4 @@
-import { Story, Config } from '../../types/index.js';
+import { type Config,type Story } from '../../types/index.js';
 import { writeStory } from './io.js';
 
 /**

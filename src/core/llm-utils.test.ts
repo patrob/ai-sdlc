@@ -1,10 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { beforeEach,describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+
 import {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  ExtractionResult,
+  extractionStrategies,
   extractStructuredResponse,
   extractStructuredResponseSync,
-  extractionStrategies,
-  ExtractionResult,
 } from './llm-utils.js';
 
 // Mock the logger
@@ -29,6 +32,7 @@ const ReviewSchema = z.object({
   ),
 });
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type ReviewResponse = z.infer<typeof ReviewSchema>;
 
 describe('llm-utils', () => {

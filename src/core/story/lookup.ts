@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { Story, StoryStatus, STORIES_FOLDER, STORY_FILENAME, BLOCKED_DIR } from '../../types/index.js';
+
+import { BLOCKED_DIR,STORIES_FOLDER, type Story, STORY_FILENAME, type StoryStatus } from '../../types/index.js';
 import { parseStory, writeStory } from './io.js';
 
 /**
@@ -162,6 +163,7 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
           return { ...story, path: canonicalPath };
         }
       }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (err) {
       // If reading directory fails, fall through to fallback search
     }
@@ -186,6 +188,7 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
         if (story.frontmatter.id?.toLowerCase() === storyId.toLowerCase()) {
           return { ...story, path: canonicalPath };
         }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (err) {
         continue;
       }
@@ -205,6 +208,7 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
         if (story.frontmatter.id?.toLowerCase() === storyId.toLowerCase()) {
           return { ...story, path: canonicalPath };
         }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (err) {
         continue;
       }

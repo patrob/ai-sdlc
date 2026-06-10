@@ -1,13 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { PassThrough } from 'stream';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   createDefaultTuiCommandHandlers,
   startTui,
-  TuiSession,
   type TuiCommandHandlers,
+  TuiSession,
 } from '../../src/cli/tui.js';
 import { getSdlcRoot } from '../../src/core/config.js';
 import { initializeKanban } from '../../src/core/kanban.js';

@@ -1,5 +1,5 @@
-import { Story, StoryFrontmatter } from '../../types/index.js';
-import { writeStory, parseStory, readSectionContent } from './io.js';
+import { type Story, type StoryFrontmatter } from '../../types/index.js';
+import { parseStory, readSectionContent,writeStory } from './io.js';
 
 /**
  * Update story frontmatter field

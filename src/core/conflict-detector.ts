@@ -1,11 +1,12 @@
 import { spawnSync } from 'child_process';
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
+
 import {
-  Story,
-  ConflictAnalysis,
-  ConflictDetectionResult,
-  ConflictSeverity,
+  type ConflictAnalysis,
+  type ConflictDetectionResult,
+  type ConflictSeverity,
+  type Story,
 } from '../types/index.js';
 import { sanitizeStoryId } from './story.js';
 
@@ -44,6 +45,7 @@ function validateBranchName(branchName: string): void {
  * @param projectRoot - Project root directory (unused but kept for API consistency)
  * @throws Error if worktree path is invalid
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function validateWorktreePath(worktreePath: string, projectRoot: string): void {
   if (!worktreePath) {
     throw new Error('Worktree path cannot be empty');
@@ -453,6 +455,7 @@ export class ConflictDetectorService {
     highCount: number,
     mediumCount: number,
     lowCount: number,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     safe: boolean
   ): string {
     if (highCount > 0) {

@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { groupStoriesByPhase, detectCircularDependencies, validateDependencies } from '../../src/cli/dependency-resolver.js';
-import { Story } from '../../src/types/index.js';
+import { describe, expect,it } from 'vitest';
+
+import { detectCircularDependencies, groupStoriesByPhase, validateDependencies } from '../../src/cli/dependency-resolver.js';
+import { type Story } from '../../src/types/index.js';
 
 /**
  * Helper to create a test story with minimal required fields

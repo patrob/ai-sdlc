@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { detectTerminalTheme, getThemeColors, getThemedChalk } from './theme.js';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
 import { DEFAULT_CONFIG } from './config.js';
+import { detectTerminalTheme, getThemeColors, getThemedChalk } from './theme.js';
 
 describe('theme module', () => {
   // Store original env vars

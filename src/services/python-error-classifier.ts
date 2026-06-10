@@ -1,9 +1,9 @@
 import type { TechStack } from '../types/index.js';
 import type {
+  ClassifiedErrors,
+  ErrorClassification,
   IErrorClassifier,
   ParsedError,
-  ErrorClassification,
-  ClassifiedErrors,
 } from './error-classifier-types.js';
 
 /**

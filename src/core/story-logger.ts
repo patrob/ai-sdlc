@@ -10,11 +10,12 @@
  * - Include IDs in all log entries for easy filtering
  */
 
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
+
+import { type LogLevel,STORIES_FOLDER } from '../types/index.js';
 import { sanitizeStoryId } from './story.js';
-import { STORIES_FOLDER, LogLevel } from '../types/index.js';
 
 const MAX_MESSAGE_LENGTH = 10 * 1024; // 10KB per log entry
 const CORRELATION_ID_ENV_VAR = 'AI_SDLC_CORRELATION_ID';
@@ -341,6 +342,7 @@ export function tailLog(filePath: string): void {
   let lastSize = existingContent.length;
 
   // Watch for changes
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const watcher = fs.watchFile(filePath, { interval: 100 }, (curr) => {
     if (curr.size > lastSize) {
       // File grew - read new content

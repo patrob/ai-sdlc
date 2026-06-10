@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import {
-  mergeAgentOutputs,
-  findSharedConcerns,
-  combineAgentContent,
-} from './result-merger.js';
+import { describe, expect,it } from 'vitest';
+
 import type { AgentOutput, Concern } from '../types/workflow-config.js';
+import {
+  combineAgentContent,
+  findSharedConcerns,
+  mergeAgentOutputs,
+} from './result-merger.js';
 
 const createOutput = (
   agentId: string,

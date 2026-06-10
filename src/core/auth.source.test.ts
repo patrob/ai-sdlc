@@ -1,18 +1,29 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execSync } from 'child_process';
-import { platform, homedir } from 'os';
-import { readFileSync, existsSync, statSync } from 'fs';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { existsSync, readFileSync, statSync } from 'fs';
+import { homedir,platform } from 'os';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  configureAgentSdkAuth,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getApiKey,
   getApiKeySource,
-  isOAuthToken,
-  isDirectApiKey,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getCredentialType,
-  hasApiKey,
-  configureAgentSdkAuth,
-  isTokenExpiringSoon,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getTokenExpirationInfo,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  hasApiKey,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  isDirectApiKey,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  isOAuthToken,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  isTokenExpiringSoon,
 } from './auth.js';
 
 // Mock all the modules we need

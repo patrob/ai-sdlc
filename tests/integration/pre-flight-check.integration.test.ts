@@ -1,13 +1,14 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { run, preFlightConflictCheck } from '../../src/cli/commands.js';
 import * as cp from 'child_process';
 import * as fs from 'fs';
-import * as readline from 'readline';
-import * as story from '../../src/core/story.js';
-import * as kanban from '../../src/core/kanban.js';
-import * as conflictDetector from '../../src/core/conflict-detector.js';
 import ora from 'ora';
-import type { Story, ConflictDetectionResult } from '../../src/types/index.js';
+import * as readline from 'readline';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { preFlightConflictCheck,run } from '../../src/cli/commands.js';
+import * as conflictDetector from '../../src/core/conflict-detector.js';
+import * as kanban from '../../src/core/kanban.js';
+import * as story from '../../src/core/story.js';
+import type { ConflictDetectionResult,Story } from '../../src/types/index.js';
 
 // Mock dependencies
 vi.mock('child_process');

@@ -4,8 +4,9 @@
 
 import { spawn, spawnSync } from 'child_process';
 import path from 'path';
+
+import { buildSingleTestCommand,getTestCommand, parseCommand } from '../../core/command-discovery.js';
 import { ProcessManager } from '../../core/process-manager.js';
-import { parseCommand, getTestCommand, buildSingleTestCommand } from '../../core/command-discovery.js';
 
 /**
  * Run a single test file and return pass/fail result
@@ -137,6 +138,7 @@ export async function runAllTests(
  * Security: Escape shell arguments for safe use in commands
  * For use with execSync when shell execution is required
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function escapeShellArg(arg: string): string {
   // Replace single quotes with '\'' and wrap in single quotes
   return `'${arg.replace(/'/g, "'\\''")}'`;

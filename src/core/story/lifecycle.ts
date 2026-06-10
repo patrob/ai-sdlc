@@ -1,8 +1,9 @@
 import path from 'path';
-import { Story, ReviewAttempt, Config, ReviewResult, ReviewDecision, FailureDiagnostic } from '../../types/index.js';
-import { writeStory, updateStoryStatus, parseStory } from './io.js';
-import { appendToSection } from './fields.js';
+
 import { getMostCommonError } from '../../services/error-fingerprint.js';
+import { type Config, type FailureDiagnostic,type ReviewAttempt, ReviewDecision, type ReviewResult, type Story } from '../../types/index.js';
+import { appendToSection } from './fields.js';
+import { parseStory,updateStoryStatus, writeStory } from './io.js';
 import { sanitizeReasonText } from './lookup.js';
 
 /**

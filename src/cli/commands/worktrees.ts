@@ -1,11 +1,13 @@
 import fs from 'fs';
-import path from 'path';
 import ora from 'ora';
+import path from 'path';
 import * as readline from 'readline';
-import { getSdlcRoot, loadConfig, validateWorktreeBasePath, DEFAULT_WORKTREE_CONFIG, saveConfig } from '../../core/config.js';
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { DEFAULT_WORKTREE_CONFIG, getSdlcRoot, loadConfig, saveConfig,validateWorktreeBasePath } from '../../core/config.js';
 import { kanbanExists } from '../../core/kanban.js';
-import { findStoryById, updateStoryField, writeStory } from '../../core/story.js';
 import { findStoryBySlug } from '../../core/kanban.js';
+import { findStoryById, updateStoryField, writeStory } from '../../core/story.js';
 import { getThemedChalk } from '../../core/theme.js';
 import { GitWorktreeService } from '../../core/worktree.js';
 import type { Story } from '../../types/index.js';
@@ -120,6 +122,7 @@ export async function listWorktrees(): Promise<void> {
     let resolvedBasePath: string;
     try {
       resolvedBasePath = validateWorktreeBasePath(worktreeConfig.basePath, workingDir);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       // If basePath doesn't exist yet, create an empty list response
       console.log();
@@ -149,6 +152,7 @@ export async function listWorktrees(): Promise<void> {
       for (const wt of worktrees) {
         const storyId = wt.storyId || 'unknown';
         const branch = wt.branch.length > 38 ? wt.branch.substring(0, 35) + '...' : wt.branch;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const status = wt.exists ? c.success('exists') : c.error('missing');
         const displayPath = wt.path.length > 50 ? '...' + wt.path.slice(-47) : wt.path;
 

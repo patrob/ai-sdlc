@@ -1,8 +1,10 @@
 import * as fs from 'fs';
 import path from 'path';
-import { Config } from '../../types/index.js';
-import { CONFIG_FILENAME, DEFAULT_CONFIG, DEFAULT_TIMEOUTS, DEFAULT_LOGGING_CONFIG, DEFAULT_RETRY_CONFIG, DEFAULT_DAEMON_CONFIG, DEFAULT_TDD_CONFIG, DEFAULT_WORKTREE_CONFIG, DEFAULT_LOGGING_CONFIG as DEFAULT_LOGGING, DEFAULT_EPIC_CONFIG, DEFAULT_MERGE_CONFIG, DEFAULT_TICKETING_CONFIG, DEFAULT_NOTIFICATION_CONFIG_VALUE, DEFAULT_PLAN_REVIEW_CONFIG, DEFAULT_IMPLEMENTATION_CONFIG } from './defaults.js';
-import { sanitizeUserConfig, validateMergeConfig, validateCostLimitConfig, validateReviewConfig, validateRetryConfig, validateImplementationConfig } from './validators.js';
+
+import { type Config } from '../../types/index.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { CONFIG_FILENAME, DEFAULT_CONFIG, DEFAULT_DAEMON_CONFIG, DEFAULT_EPIC_CONFIG, DEFAULT_IMPLEMENTATION_CONFIG,DEFAULT_LOGGING_CONFIG as DEFAULT_LOGGING, DEFAULT_LOGGING_CONFIG, DEFAULT_MERGE_CONFIG, DEFAULT_NOTIFICATION_CONFIG_VALUE, DEFAULT_PLAN_REVIEW_CONFIG, DEFAULT_RETRY_CONFIG, DEFAULT_TDD_CONFIG, DEFAULT_TICKETING_CONFIG, DEFAULT_TIMEOUTS, DEFAULT_WORKTREE_CONFIG } from './defaults.js';
+import { sanitizeUserConfig, validateCostLimitConfig, validateImplementationConfig,validateMergeConfig, validateRetryConfig, validateReviewConfig } from './validators.js';
 
 /**
  * Get the SDLC root folder path

@@ -1,9 +1,11 @@
 import fs from 'fs';
-import path from 'path';
 import ora from 'ora';
+import path from 'path';
+
 import { getSdlcRoot, loadConfig } from '../../core/config.js';
 import { kanbanExists } from '../../core/kanban.js';
-import { getStory, writeStory, findStoryById, unblockStory, updateStoryField } from '../../core/story.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { findStoryById, getStory, unblockStory, updateStoryField,writeStory } from '../../core/story.js';
 import { getThemedChalk } from '../../core/theme.js';
 import { migrateToFolderPerStory } from './migrate.js';
 

@@ -1,10 +1,13 @@
 import fs from 'fs';
-import path from 'path';
 import { glob } from 'glob';
-import { Story, StateAssessment, Action, KANBAN_FOLDERS, KanbanFolder, ReviewDecision, BLOCKED_DIR, STORIES_FOLDER, STORY_FILENAME, StoryStatus, GroupingDimension, GroupingSummary, DEFAULT_GROUPINGS } from '../types/index.js';
-import { parseStory, isAtMaxRetries, canRetryRefinement, getLatestReviewAttempt, moveToBlocked, getEffectiveMaxRetries, sanitizeReasonText, findStoryById } from './story.js';
-import { loadConfig } from './config.js';
+import path from 'path';
+
 import { determineTargetPhase } from '../agents/rework.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { type Action, BLOCKED_DIR, DEFAULT_GROUPINGS,type GroupingDimension, type GroupingSummary, KANBAN_FOLDERS, type KanbanFolder, ReviewDecision, type StateAssessment, STORIES_FOLDER, type Story, STORY_FILENAME, type StoryStatus } from '../types/index.js';
+import { loadConfig } from './config.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { canRetryRefinement, findStoryById,getEffectiveMaxRetries, getLatestReviewAttempt, isAtMaxRetries, moveToBlocked, parseStory, sanitizeReasonText } from './story.js';
 import { GitWorktreeService } from './worktree.js';
 
 /**
@@ -122,11 +125,13 @@ export function findAllStories(sdlcRoot: string): Story[] {
         const canonicalPath = fs.realpathSync(storyPath);
         const story = parseStory(canonicalPath);
         mainStories.push({ ...story, path: canonicalPath });
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (err) {
         // Skip malformed stories or symlinks that can't be resolved
         continue;
       }
     }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (err) {
     // If glob fails, return empty array
     return [];

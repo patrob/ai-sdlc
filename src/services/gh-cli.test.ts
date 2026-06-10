@@ -1,21 +1,23 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { spawnSync } from 'child_process';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
-  parseGitHubIssueUrl,
-  isGhAvailable,
-  isGhAuthenticated,
-  ghIssueView,
-  ghIssueList,
-  ghIssueCreate,
   ghIssueComment,
-  ghIssueStateChange,
-  ghPRCreate,
-  ghLinkIssueToPR,
-  GhNotInstalledError,
-  GhNotAuthenticatedError,
+  ghIssueCreate,
+  ghIssueList,
   GhIssueNotFoundError,
+  ghIssueStateChange,
+  ghIssueView,
+  ghLinkIssueToPR,
   GhNoAccessError,
+  GhNotAuthenticatedError,
+  GhNotInstalledError,
+  ghPRCreate,
   type GitHubIssue,
+  isGhAuthenticated,
+  isGhAvailable,
+  parseGitHubIssueUrl,
 } from './gh-cli.js';
 
 vi.mock('child_process');

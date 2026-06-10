@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { classifyApiError, shouldRetry, calculateBackoff, AuthenticationError } from './agent-errors.js';
+import { describe, expect,it } from 'vitest';
+
+import { AuthenticationError,calculateBackoff, classifyApiError, shouldRetry } from './agent-errors.js';
 
 describe('classifyApiError', () => {
   it('should classify HTTP 429 as transient', () => {

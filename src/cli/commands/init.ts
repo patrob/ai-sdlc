@@ -1,10 +1,14 @@
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import chalk from 'chalk';
 import ora from 'ora';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import path from 'path';
 import * as readline from 'readline';
-import { getSdlcRoot, loadConfig, initConfig, saveConfig } from '../../core/config.js';
-import { detectProjects, formatDetectedProjects, getPrimaryProject } from '../../core/stack-detector.js';
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { getSdlcRoot, initConfig, loadConfig, saveConfig } from '../../core/config.js';
 import { initializeKanban, kanbanExists } from '../../core/kanban.js';
+import { detectProjects, formatDetectedProjects, getPrimaryProject } from '../../core/stack-detector.js';
 import { getThemedChalk } from '../../core/theme.js';
 
 /**

@@ -1,15 +1,15 @@
 import type { TechStack } from '../types/index.js';
+import {
+  classifyAndSortErrors,
+  classifyError,
+  parseTypeScriptErrors,
+} from './error-classifier.js';
 import type {
+  ClassifiedErrors,
+  ErrorClassification,
   IErrorClassifier,
   ParsedError,
-  ErrorClassification,
-  ClassifiedErrors,
 } from './error-classifier-types.js';
-import {
-  parseTypeScriptErrors,
-  classifyError,
-  classifyAndSortErrors,
-} from './error-classifier.js';
 
 /**
  * TypeScript error classifier wrapping the existing functions

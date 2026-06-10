@@ -1,15 +1,15 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  shouldPerformWebResearch,
-  evaluateFAR,
-  sanitizeWebResearchContent,
-  sanitizeForLogging,
-  sanitizeCodebaseContext,
-  gatherCodebaseContext
-} from './research.js';
-import { Story } from '../types/index.js';
 import fs from 'fs';
 import { glob } from 'glob';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { type Story } from '../types/index.js';
+import {
+  evaluateFAR,
+  gatherCodebaseContext,
+  sanitizeCodebaseContext,
+  sanitizeForLogging,
+  sanitizeWebResearchContent,
+  shouldPerformWebResearch} from './research.js';
 
 describe('shouldPerformWebResearch', () => {
   let mockStory: Story;

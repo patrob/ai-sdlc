@@ -2,11 +2,12 @@
  * Unit tests for Multi-Process Orchestrator
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Orchestrator } from './orchestrator.js';
-import type { Story, ProcessOrchestratorOptions } from '../types/index.js';
-import { ChildProcess, spawn } from 'child_process';
+import { type ChildProcess, spawn } from 'child_process';
 import { EventEmitter } from 'events';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { ProcessOrchestratorOptions,Story } from '../types/index.js';
+import { Orchestrator } from './orchestrator.js';
 
 // Create mock child process
 function createMockChildProcess(): ChildProcess {

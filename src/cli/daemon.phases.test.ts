@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { DaemonRunner } from './daemon.js';
 
 // Mock dependencies
@@ -119,6 +120,7 @@ describe('DaemonRunner', () => {
       const testPath = '/test/.ai-sdlc/backlog/test-story.md';
 
       // Mock processQueue to prevent it from running
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const processQueueSpy = vi.spyOn(daemonAny, 'processQueue' as any)
         .mockImplementation(() => {});
 

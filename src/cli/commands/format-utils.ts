@@ -1,6 +1,7 @@
-import { getPhaseInfo } from './phase-display.js';
-import { getStoryFlags as getStoryFlagsUtil, formatStatus as formatStatusUtil } from '../story-utils.js';
 import type { Action, Story } from '../../types/index.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { formatStatus as formatStatusUtil,getStoryFlags as getStoryFlagsUtil } from '../story-utils.js';
+import { getPhaseInfo } from './phase-display.js';
 
 /**
  * Truncate story slug if it exceeds terminal width

@@ -22,7 +22,7 @@ export interface ExtractedTestOutput {
 export function sanitizeTestOutput(output: string): string {
   if (!output) return '';
 
-  let sanitized = output
+  const sanitized = output
     // Remove ANSI CSI sequences (SGR parameters - colors, styles)
     .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
     // Remove ANSI DCS sequences (Device Control String)

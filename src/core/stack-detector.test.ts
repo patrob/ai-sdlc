@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { detectStack, detectProjects, getDefaultCommands, formatDetectedProjects, getPrimaryProject } from './stack-detector.js';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
-import path from 'path';
+import { existsSync,mkdirSync, rmSync, writeFileSync } from 'fs';
 import os from 'os';
+import path from 'path';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { detectProjects, detectStack, formatDetectedProjects, getDefaultCommands, getPrimaryProject } from './stack-detector.js';
 
 describe('stack-detector', () => {
   let tempDir: string;

@@ -8,10 +8,10 @@
  */
 
 import {
-  AgentOutput,
-  Concern,
-  ConcernSeverity,
-  ConcernCategory,
+  type AgentOutput,
+  type Concern,
+  type ConcernCategory,
+  type ConcernSeverity,
 } from '../types/workflow-config.js';
 
 /**

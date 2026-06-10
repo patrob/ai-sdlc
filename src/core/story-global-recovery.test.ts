@@ -1,13 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'fs';
+import * as properLockfile from 'proper-lockfile';
+import { beforeEach,describe, expect, it, vi } from 'vitest';
+
+import { type Story } from '../types/index.js';
 import {
   getTotalRecoveryAttempts,
+  incrementTotalRecoveryAttempts,
   isAtGlobalRecoveryLimit,
   resetTotalRecoveryAttempts,
-  incrementTotalRecoveryAttempts,
 } from './story.js';
-import { Story } from '../types/index.js';
-import * as properLockfile from 'proper-lockfile';
 
 // Mock fs to prevent actual file writes
 vi.mock('fs');

@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Create mock functions using vi.hoisted() so they're available during vi.mock hoisting
 const { mockSpawnSync, mockRunAgentQuery } = vi.hoisted(() => ({
@@ -22,7 +22,7 @@ vi.mock('child_process', () => ({
 }));
 
 // Import the functions we need to test after setting up mocks
-import { runSingleTaskAgent, buildTaskPrompt } from '../../src/agents/single-task.js';
+import { buildTaskPrompt,runSingleTaskAgent } from '../../src/agents/single-task.js';
 import type { TaskContext } from '../../src/types/index.js';
 
 describe('Single-Task Agent Integration Tests', () => {

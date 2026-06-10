@@ -2,13 +2,14 @@
  * Retry logic and helper utilities for implementation agent
  */
 
-import { createHash } from 'crypto';
 import { spawnSync } from 'child_process';
+import { createHash } from 'crypto';
 import path from 'path';
-import { parseTypeScriptErrors, classifyAndSortErrors } from '../../services/error-classifier.js';
+
+import { classifyAndSortErrors,parseTypeScriptErrors } from '../../services/error-classifier.js';
 import { RECOVERY_STRATEGIES } from './prompts.js';
-import { truncateTestOutput, detectMissingDependencies } from './test-output.js';
 import type { AttemptHistoryEntry } from './retry-attempt.js';
+import { detectMissingDependencies,truncateTestOutput } from './test-output.js';
 
 // Re-export truncateTestOutput for convenience in tdd and other modules
 export { truncateTestOutput } from './test-output.js';
@@ -67,6 +68,7 @@ export function captureCurrentDiffHash(workingDir: string): string {
 
     // Git command failed, return empty hash
     return '';
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (error) {
     // If validation fails or git command fails, return empty hash
     return '';

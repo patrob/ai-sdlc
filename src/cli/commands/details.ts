@@ -1,10 +1,10 @@
 import { getSdlcRoot, loadConfig } from '../../core/config.js';
 import { kanbanExists } from '../../core/kanban.js';
-import { findStoryById } from '../../core/story.js';
 import { findStoryBySlug } from '../../core/kanban.js';
+import { findStoryById } from '../../core/story.js';
 import { getThemedChalk } from '../../core/theme.js';
-import { formatStatus as formatStatusUtil } from '../story-utils.js';
 import type { Story } from '../../types/index.js';
+import { formatStatus as formatStatusUtil } from '../story-utils.js';
 
 /**
  * Format status with appropriate color (wrapper for shared utility)

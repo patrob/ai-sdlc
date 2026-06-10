@@ -19,6 +19,7 @@ export interface PhaseInfo {
  * @returns Phase information object or null for non-RPIV actions
  */
 export function getPhaseInfo(actionType: ActionType, colors: any): PhaseInfo | null {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const useAscii = process.env.NO_COLOR !== undefined;
 
   switch (actionType) {

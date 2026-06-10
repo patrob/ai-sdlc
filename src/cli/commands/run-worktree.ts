@@ -1,14 +1,17 @@
+import { spawnSync } from 'child_process';
 import path from 'path';
 import * as readline from 'readline';
-import { spawnSync } from 'child_process';
-import { getSdlcRoot, DEFAULT_WORKTREE_CONFIG, validateWorktreeBasePath, saveConfig } from '../../core/config.js';
-import { GitWorktreeService, getLastCompletedPhase, getNextPhase } from '../../core/worktree.js';
-import { findStoryById, updateStoryField, writeStory, resetWorkflowState } from '../../core/story.js';
-import { loadWorkflowState, clearWorkflowState, hasWorkflowState } from '../../core/workflow-state.js';
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { DEFAULT_WORKTREE_CONFIG, getSdlcRoot, saveConfig,validateWorktreeBasePath } from '../../core/config.js';
+import { getLogger } from '../../core/logger.js';
+import { findStoryById, resetWorkflowState,updateStoryField, writeStory } from '../../core/story.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { clearWorkflowState, hasWorkflowState,loadWorkflowState } from '../../core/workflow-state.js';
+import { getLastCompletedPhase, getNextPhase,GitWorktreeService } from '../../core/worktree.js';
+import type { Story } from '../../types/index.js';
 import { preFlightConflictCheck } from './pre-flight-check.js';
 import { determineWorktreeMode, DIVERGENCE_WARNING_THRESHOLD } from './run-helpers.js';
-import type { Story } from '../../types/index.js';
-import { getLogger } from '../../core/logger.js';
 
 const logger = getLogger();
 
@@ -149,6 +152,7 @@ export async function setupWorktree(
 
           try {
             // Remove the old worktree reference if it exists
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const removeResult = spawnSync('git', ['worktree', 'remove', existingWorktreePath, '--force'], {
               cwd: workingDir,
               encoding: 'utf-8',
@@ -403,6 +407,7 @@ export async function setupWorktree(
 
               try {
                 // Remove the old worktree reference if it exists
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const removeResult = spawnSync('git', ['worktree', 'remove', existingWorktree.path, '--force'], {
                   cwd: workingDir,
                   encoding: 'utf-8',

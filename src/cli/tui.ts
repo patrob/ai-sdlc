@@ -1,8 +1,9 @@
 import * as readline from 'readline';
-import { add, details, run, status, type RunResult } from './commands.js';
+
 import { loadConfig } from '../core/config.js';
 import { getThemedChalk } from '../core/theme.js';
 import { ProviderRegistry } from '../providers/index.js';
+import { add, details, run, type RunResult,status } from './commands.js';
 
 export interface TuiRunOptions {
   auto?: boolean;

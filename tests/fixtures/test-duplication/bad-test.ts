@@ -5,7 +5,7 @@
  * This is a test fixture that will be copied to bad-test.test.ts during integration tests.
  * The production counterpart is production.ts in the same directory.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect,it } from 'vitest';
 
 // ANTI-PATTERN: Function with Test suffix duplicating production logic
 function parseStoryTest(content: string) {

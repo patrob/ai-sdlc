@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { runAgentQuery, AuthenticationError } from '../../src/core/client.js';
 import { homedir } from 'os';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import path from 'path';
-import { ProviderRegistry, ClaudeProvider } from '../../src/providers/index.js';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AuthenticationError,runAgentQuery } from '../../src/core/client.js';
+import { ClaudeProvider,ProviderRegistry } from '../../src/providers/index.js';
 
 vi.mock('os');
 vi.mock('fs');
@@ -200,6 +202,7 @@ describe('Auth Expiration Integration Tests', () => {
     });
 
     it('should handle malformed expiresAt date gracefully', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
 
       vi.mocked(mockFs.readFileSync).mockReturnValue(JSON.stringify({

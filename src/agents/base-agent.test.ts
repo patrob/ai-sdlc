@@ -9,11 +9,14 @@
  * - Helper methods (runQuery, buildSuccessResult, buildErrorResult)
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { beforeEach,describe, expect, it, vi } from 'vitest';
+
+import { type IProvider, type ProviderCapabilities } from '../providers/types.js';
+import { type Story } from '../types/index.js';
 import { BaseAgent } from './base-agent.js';
-import { AgentContext, AgentResult } from './types.js';
-import { IProvider, ProviderCapabilities } from '../providers/types.js';
-import { Story } from '../types/index.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { type AgentContext, AgentResult } from './types.js';
 
 /**
  * Create a mock IProvider for testing

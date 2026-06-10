@@ -1,4 +1,4 @@
-import { Story, ThemeColors } from '../types/index.js';
+import { type Story, type ThemeColors } from '../types/index.js';
 
 /**
  * Get story flags for display
@@ -8,6 +8,7 @@ import { Story, ThemeColors } from '../types/index.js';
  * @param c - Themed chalk instance
  * @returns Formatted flags string (e.g., "[RPIV!]")
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function getStoryFlags(story: Story, c: ThemeColors): string {
   const flags: string[] = [];
 

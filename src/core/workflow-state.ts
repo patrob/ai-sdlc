@@ -5,18 +5,19 @@
  * enabling the --continue flag to resume workflows after interruption.
  */
 
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 import writeFileAtomic from 'write-file-atomic';
-import {
-  WorkflowExecutionState,
-  WorkflowStateValidationResult,
-  WorkflowStateVersion,
-} from '../types/workflow-state.js';
+
 import { STORIES_FOLDER } from '../types/index.js';
-import { sanitizeStoryId } from './story.js';
+import {
+  type WorkflowExecutionState,
+  type WorkflowStateValidationResult,
+  type WorkflowStateVersion,
+} from '../types/workflow-state.js';
 import { getLogger } from './logger.js';
+import { sanitizeStoryId } from './story.js';
 
 const STATE_FILE_NAME = '.workflow-state.json';
 const CURRENT_VERSION: WorkflowStateVersion = '1.0';
@@ -55,6 +56,7 @@ export function calculateStoryHash(storyPath: string): string {
   try {
     const content = fs.readFileSync(storyPath, 'utf-8');
     return crypto.createHash('sha256').update(content).digest('hex');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (error) {
     // If file doesn't exist or can't be read, return empty hash
     return '';
@@ -223,6 +225,7 @@ export async function clearWorkflowState(sdlcRoot: string, storyId?: string): Pr
     if (fs.existsSync(statePath)) {
       await fs.promises.unlink(statePath);
     }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (error) {
     // Ignore errors if file doesn't exist or can't be deleted
     // This is a cleanup operation, not critical

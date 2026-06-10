@@ -1,10 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import { createStory, updateStoryStatus, parseStory, writeStory, unblockStory, appendReviewHistory, findStoryById } from '../../src/core/story.js';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { assessState } from '../../src/core/kanban.js';
-import { BLOCKED_DIR, STORIES_FOLDER, ReviewDecision, ReviewSeverity } from '../../src/types/index.js';
+import { appendReviewHistory, createStory, findStoryById,parseStory, unblockStory, updateStoryStatus, writeStory } from '../../src/core/story.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { BLOCKED_DIR, ReviewDecision, ReviewSeverity,STORIES_FOLDER } from '../../src/types/index.js';
 
 describe.sequential('Blocked Stories Integration', () => {
   let testDir: string;
@@ -369,7 +371,7 @@ describe.sequential('Blocked Stories Integration', () => {
 
   it('should not process stories from blocked folder on daemon watch', async () => {
     // Create a story and set it to blocked status
-    let story = await createStory('Blocked Test', sdlcRoot, {
+    const story = await createStory('Blocked Test', sdlcRoot, {
       type: 'feature',
       labels: ['test'],
     });
@@ -399,16 +401,19 @@ describe.sequential('Blocked Stories Integration', () => {
     // In new architecture, status is in frontmatter, not folder location
 
     // Create stories with different statuses
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const backlogStory = await createStory('Backlog Story', sdlcRoot, { type: 'feature' });
 
     let readyStory = await createStory('Ready Story', sdlcRoot, { type: 'feature' });
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     readyStory = await updateStoryStatus(readyStory, 'ready');
 
     let inProgressStory = await createStory('In Progress Story', sdlcRoot, { type: 'feature' });
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     inProgressStory = await updateStoryStatus(inProgressStory, 'in-progress');
 
     // Create a blocked story
-    let blockedStory = await createStory('Blocked Story', sdlcRoot, { type: 'feature' });
+    const blockedStory = await createStory('Blocked Story', sdlcRoot, { type: 'feature' });
     blockedStory.frontmatter.status = 'blocked';
     blockedStory.frontmatter.blocked_reason = 'Testing';
     blockedStory.frontmatter.blocked_at = new Date().toISOString();
@@ -418,8 +423,11 @@ describe.sequential('Blocked Stories Integration', () => {
     const assessment = await assessState(sdlcRoot);
 
     // Verify that backlog, ready, and in-progress stories could have actions
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const backlogItems = assessment.backlogItems;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const readyItems = assessment.readyItems;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const inProgressItems = assessment.inProgressItems;
 
     // Verify assessment includes non-blocked stories

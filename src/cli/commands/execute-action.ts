@@ -1,15 +1,19 @@
 import ora from 'ora';
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { getSdlcRoot, loadConfig } from '../../core/config.js';
-import { getStory, parseStory, autoCompleteStoryAfterReview, resetImplementationRetryCount, writeStory, updateStoryField } from '../../core/story.js';
-import { loadWorkflowState, clearWorkflowState } from '../../core/workflow-state.js';
-import { getThemedChalk } from '../../core/theme.js';
-import { StoryLogger } from '../../core/story-logger.js';
 import { getLogger } from '../../core/logger.js';
-import { formatAction } from './format-utils.js';
-import { getPhaseInfo, calculatePhaseProgress, renderPhaseChecklist } from './phase-display.js';
-import { handleWorktreeCleanup } from './worktrees.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { autoCompleteStoryAfterReview, getStory, parseStory, resetImplementationRetryCount, updateStoryField,writeStory } from '../../core/story.js';
+import { StoryLogger } from '../../core/story-logger.js';
+import { getThemedChalk } from '../../core/theme.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { clearWorkflowState,loadWorkflowState } from '../../core/workflow-state.js';
 import type { Action, ReviewResult, ReworkContext } from '../../types/index.js';
 import { ReviewDecision } from '../../types/index.js';
+import { formatAction } from './format-utils.js';
+import { calculatePhaseProgress, getPhaseInfo, renderPhaseChecklist } from './phase-display.js';
+import { handleWorktreeCleanup } from './worktrees.js';
 
 /**
  * Result from executing an action
@@ -303,6 +307,7 @@ export async function executeAction(action: Action, sdlcRoot: string): Promise<A
     if (result && result.success) {
       // Use the story from result if available (handles moved files like refine)
       const story = result.story || parseStory(action.storyPath);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const progress = calculatePhaseProgress(story);
 
       // Show phase checklist

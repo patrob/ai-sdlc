@@ -1,11 +1,13 @@
 import fs from 'fs';
-import path from 'path';
 import { glob } from 'glob';
-import { parseStory, writeStory, updateStoryField, writeSectionContent, readSectionContent } from '../core/story.js';
-import { runAgentQuery, AgentProgressCallback } from '../core/client.js';
-import type { IProvider } from '../providers/types.js';
-import { Story, AgentResult, FARScore } from '../types/index.js';
+import path from 'path';
+
+import { type AgentProgressCallback,runAgentQuery } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { parseStory, readSectionContent,updateStoryField, writeSectionContent, writeStory } from '../core/story.js';
+import type { IProvider } from '../providers/types.js';
+import { type AgentResult, type FARScore,type Story } from '../types/index.js';
 
 const RESEARCH_SYSTEM_PROMPT = `You are a technical research specialist analyzing how to implement a user story by deeply examining the existing codebase.
 
@@ -526,7 +528,7 @@ export function sanitizeWebResearchContent(text: string): string {
   text = text.replace(/\x1B/g, '');
 
   // Remove control characters (0x00-0x08, 0x0B-0x0C, 0x0E-0x1F, 0x7F-0x9F)
-  // eslint-disable-next-line no-control-regex
+   
   text = text.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '');
 
   // Normalize Unicode to prevent homograph attacks and ensure consistent representation

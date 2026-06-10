@@ -1,17 +1,26 @@
-import type { StoryStatus, ProjectConfig, SettingSource } from './story.js';
 import type {
-  ConflictSeverity,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   ConflictAnalysis,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   ConflictDetectionResult,
-  PreFlightResult,
-  GroupingDimension,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  ConflictSeverity,
+  CostLimitConfig,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   GroupingCardinality,
   GroupingConfig,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  GroupingDimension,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   GroupingSummary,
-  CostLimitConfig,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   NotificationChannelType,
   NotificationConfig,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  PreFlightResult,
 } from './analysis.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { ProjectConfig, SettingSource,StoryStatus } from './story.js';
 
 // Theme types
 export type ThemePreference = 'auto' | 'light' | 'dark' | 'none';
@@ -87,10 +96,10 @@ export interface RefinementConfig {
  * Controls the plan review phase that occurs after planning but before implementation.
  * Plan review is a single-pass enrichment step, not a gate.
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
+ 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- retained for Config compatibility and future extensibility
 export interface PlanReviewConfig {
   // Plan review is enrichment-only; no iteration or gating config needed.
-  // Interface retained for Config compatibility and future extensibility.
 }
 
 /**

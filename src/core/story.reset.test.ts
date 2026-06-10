@@ -1,9 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import { moveToBlocked, parseStory, sanitizeReasonText, unblockStory, getStory, writeStory, findStoryById, sanitizeTitle, extractTitleFromContent, createStory, autoCompleteStoryAfterReview } from './story.js';
-import { BLOCKED_DIR, ReviewDecision, ReviewResult, Config } from '../types/index.js';
+import path from 'path';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { BLOCKED_DIR, Config,ReviewDecision, ReviewResult } from '../types/index.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { autoCompleteStoryAfterReview,createStory, extractTitleFromContent, findStoryById, getStory, moveToBlocked, parseStory, sanitizeReasonText, sanitizeTitle, unblockStory, writeStory } from './story.js';
 
 describe('resetWorkflowState', () => {
   let tempDir: string;
@@ -188,7 +191,7 @@ Test content
       implementation_complete: false,
     });
 
-    let story = parseStory(storyPath);
+    const story = parseStory(storyPath);
     await resetWorkflowState(story);
 
     // Re-read from disk to verify persistence
@@ -368,7 +371,7 @@ Test content
   it('should persist changes to disk', async () => {
     const { markPRMerged } = await import('./story.js');
     const storyPath = createTestStoryWithPR();
-    let story = parseStory(storyPath);
+    const story = parseStory(storyPath);
 
     await markPRMerged(story, 'abc123');
 

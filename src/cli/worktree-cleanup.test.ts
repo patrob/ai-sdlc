@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as cp from 'child_process';
 import * as fs from 'fs';
 import * as readline from 'readline';
-import * as cp from 'child_process';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock modules
 vi.mock('fs');
@@ -124,6 +124,7 @@ describe('worktree cleanup on move-to-done', () => {
       vi.spyOn(fs, 'existsSync').mockReturnValue(true);
 
       // When user declines, no removal should occur
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const spawnSyncSpy = vi.spyOn(cp, 'spawnSync');
 
       // Verify readline prompts for confirmation

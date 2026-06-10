@@ -8,27 +8,28 @@
 import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import {
-  ImplementationTask,
-  TaskProgress,
-  TaskStatus,
-  AgentTaskResult,
-  OrchestratorOptions,
-  OrchestratorResult,
-  FailedTaskInfo,
-  TaskContext,
-  FileContent,
-} from '../types/index.js';
+
+import { getLogger } from '../core/logger.js';
 import { parseImplementationTasks } from '../core/task-parser.js';
 import {
   getTaskProgress,
-  updateTaskProgress,
   initializeTaskProgress,
   readStoryFile,
+  updateTaskProgress,
 } from '../core/task-progress.js';
-import { runSingleTaskAgent } from './single-task.js';
 import type { IProvider } from '../providers/types.js';
-import { getLogger } from '../core/logger.js';
+import {
+  type AgentTaskResult,
+  type FailedTaskInfo,
+  type FileContent,
+  type ImplementationTask,
+  type OrchestratorOptions,
+  type OrchestratorResult,
+  type TaskContext,
+  type TaskProgress,
+  type TaskStatus,
+} from '../types/index.js';
+import { runSingleTaskAgent } from './single-task.js';
 
 const logger = getLogger();
 

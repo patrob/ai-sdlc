@@ -1,14 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach,describe, expect, it, vi } from 'vitest';
+
+import { DEFAULT_PLAN_REVIEW_CONFIG } from '../core/config.js';
+import * as storyModule from '../core/story.js';
+import { type Story } from '../types/index.js';
 import {
   buildPlanReviewPrompt,
-  parsePlanReviewResponse,
   formatSuggestions,
+  parsePlanReviewResponse,
   PLAN_REVIEW_SYSTEM_PROMPT,
   runPlanReviewAgent,
 } from './plan-review.js';
-import { DEFAULT_PLAN_REVIEW_CONFIG } from '../core/config.js';
-import * as storyModule from '../core/story.js';
-import { Story } from '../types/index.js';
 
 // Mock external dependencies
 vi.mock('../core/story.js', async () => {

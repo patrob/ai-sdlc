@@ -8,19 +8,17 @@
  */
 
 export {
-  runTechLeadReviewer,
-  TechLeadReviewerOptions,
-  TechLeadReviewResult,
-} from './tech-lead-reviewer.js';
-
+  ProductOwnerReviewerOptions,
+  ProductOwnerReviewResult,
+  runProductOwnerReviewer,
+} from './product-owner-reviewer.js';
 export {
   runSecurityReviewer,
   SecurityReviewerOptions,
   SecurityReviewResult,
 } from './security-reviewer.js';
-
 export {
-  runProductOwnerReviewer,
-  ProductOwnerReviewerOptions,
-  ProductOwnerReviewResult,
-} from './product-owner-reviewer.js';
+  runTechLeadReviewer,
+  TechLeadReviewerOptions,
+  TechLeadReviewResult,
+} from './tech-lead-reviewer.js';

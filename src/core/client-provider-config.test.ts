@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { runAgentQuery } from './client.js';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
 import { ProviderRegistry } from '../providers/registry.js';
 import type { IAuthenticator, IProvider, ProviderCapabilities, ProviderQueryOptions } from '../providers/types.js';
+import { runAgentQuery } from './client.js';
 
 class RecordingProvider implements IProvider {
   readonly name = 'recording';

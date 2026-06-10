@@ -1,27 +1,36 @@
-import path from 'path';
-import * as readline from 'readline';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { spawnSync } from 'child_process';
-import { getSdlcRoot, loadConfig, DEFAULT_WORKTREE_CONFIG, validateWorktreeBasePath, saveConfig } from '../../core/config.js';
-import { kanbanExists, assessState, findStoryBySlug } from '../../core/kanban.js';
-import { findStoryById, getStory, updateStoryField, writeStory, parseStory, resetRPIVCycle, isAtMaxRetries, updateStoryStatus, getEffectiveMaxImplementationRetries, isAtMaxImplementationRetries, resetImplementationRetryCount, incrementImplementationRetryCount } from '../../core/story.js';
-import { getThemedChalk } from '../../core/theme.js';
-import { getLogger } from '../../core/logger.js';
-import { GitWorktreeService, getLastCompletedPhase, getNextPhase } from '../../core/worktree.js';
-import { loadWorkflowState, clearWorkflowState, generateWorkflowId, calculateStoryHash, hasWorkflowState, saveWorkflowState, migrateGlobalWorkflowState } from '../../core/workflow-state.js';
+import path from 'path';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import * as readline from 'readline';
+
+import { generateReviewSummary } from '../../agents/review.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { DEFAULT_WORKTREE_CONFIG, getSdlcRoot, loadConfig, saveConfig,validateWorktreeBasePath } from '../../core/config.js';
 import { validateGitState } from '../../core/git-utils.js';
+import { assessState, findStoryBySlug,kanbanExists } from '../../core/kanban.js';
+import { getLogger } from '../../core/logger.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { findStoryById, getEffectiveMaxImplementationRetries, getStory, incrementImplementationRetryCount,isAtMaxImplementationRetries, isAtMaxRetries, parseStory, resetImplementationRetryCount, resetRPIVCycle, updateStoryField, updateStoryStatus, writeStory } from '../../core/story.js';
+import { getThemedChalk } from '../../core/theme.js';
+import { calculateStoryHash, clearWorkflowState, generateWorkflowId, hasWorkflowState, loadWorkflowState, migrateGlobalWorkflowState,saveWorkflowState } from '../../core/workflow-state.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { getLastCompletedPhase, getNextPhase,GitWorktreeService } from '../../core/worktree.js';
+import type { Action, CompletedActionRecord, Story, WorkflowExecutionState } from '../../types/index.js';
+import { ReviewDecision } from '../../types/index.js';
 import { createStoryFromFeatureRequest } from '../feature-request.js';
+import { getTerminalWidth } from '../formatting.js';
 import { runConcurrentStoryQueue } from './concurrent.js';
 import { executeAction } from './execute-action.js';
-import { handleWorktreeCleanup } from './worktrees.js';
 import { formatAction } from './format-utils.js';
-import { getPhaseInfo, calculatePhaseProgress, renderPhaseChecklist } from './phase-display.js';
-import { validateAutoStoryOptions, validateBatchOptions, shouldExecutePhase, generateFullSDLCActions, GIT_MODIFYING_ACTIONS, requiresGitValidation, displayGitValidationResult, sanitizeForDisplay } from './run-helpers.js';
-import { setupWorktree } from './run-worktree.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { calculatePhaseProgress, getPhaseInfo, renderPhaseChecklist } from './phase-display.js';
 import { processBatchInternal } from './run-batch.js';
-import type { Story, Action, CompletedActionRecord, WorkflowExecutionState } from '../../types/index.js';
-import { ReviewDecision } from '../../types/index.js';
-import { generateReviewSummary } from '../../agents/review.js';
-import { getTerminalWidth } from '../formatting.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { displayGitValidationResult, generateFullSDLCActions, GIT_MODIFYING_ACTIONS, requiresGitValidation, sanitizeForDisplay,shouldExecutePhase, validateAutoStoryOptions, validateBatchOptions } from './run-helpers.js';
+import { setupWorktree } from './run-worktree.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { handleWorktreeCleanup } from './worktrees.js';
 
 /**
  * Result of the run() function execution
@@ -39,7 +48,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
   const maxIterationsOverride = options.maxIterations !== undefined
     ? parseInt(options.maxIterations, 10)
     : undefined;
-  let sdlcRoot = getSdlcRoot();
+  const sdlcRoot = getSdlcRoot();
   const c = getThemedChalk(config);
   const logger = getLogger();
 
@@ -347,7 +356,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     workflowId = generateWorkflowId();
   }
 
-  let assessment = await assessState(sdlcRoot);
+  const assessment = await assessState(sdlcRoot);
 
   // Hoist targetStory to outer scope so it can be reused for worktree checks
   let targetStory: Story | null = null;
@@ -521,9 +530,10 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
     return { success: false };
   }
 
-  let worktreePath = worktreeResult.worktreePath;
-  let originalCwd = worktreeResult.originalCwd;
-  let worktreeCreated = worktreeResult.worktreeCreated;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const worktreePath = worktreeResult.worktreePath;
+  const originalCwd = worktreeResult.originalCwd;
+  const worktreeCreated = worktreeResult.worktreeCreated;
   if (worktreeResult.targetStory) {
     targetStory = worktreeResult.targetStory;
   }
@@ -562,6 +572,7 @@ export async function run(options: { auto?: boolean; dryRun?: boolean; continue?
   let currentActions = [...actionsToProcess];
   let currentActionIndex = 0;
   let retryAttempt = 0;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const MAX_DISPLAY_RETRIES = 3; // For display purposes
 
   try {

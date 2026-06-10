@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { StoryStatus } from '../../types/index.js';
-import { parseStory, writeStory, generateStoryId } from '../../core/story.js';
+
+import { generateStoryId,parseStory, writeStory } from '../../core/story.js';
+import { type StoryStatus } from '../../types/index.js';
 
 export interface MigrationItem {
   oldPath: string;

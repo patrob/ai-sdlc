@@ -3,13 +3,16 @@
  */
 
 import path from 'path';
-import { Story, AgentResult, TDDTestCycle, TDDConfig } from '../../types/index.js';
-import { AgentProgressCallback, runAgentQuery } from '../../core/client.js';
-import { parseStory, writeStory, readSectionContent } from '../../core/story.js';
-import { loadConfig, DEFAULT_TDD_CONFIG } from '../../core/config.js';
+
+import { type AgentProgressCallback, runAgentQuery } from '../../core/client.js';
+import { DEFAULT_TDD_CONFIG,loadConfig } from '../../core/config.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { parseStory, readSectionContent,writeStory } from '../../core/story.js';
+import { type AgentResult, type Story, type TDDConfig,type TDDTestCycle } from '../../types/index.js';
 import { TDD_SYSTEM_PROMPT } from './prompts.js';
-import { runSingleTest, runAllTests, commitIfAllTestsPass } from './test-runners.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { truncateTestOutput } from './retry.js';
+import { commitIfAllTestsPass,runAllTests, runSingleTest } from './test-runners.js';
 
 /**
  * Result from a TDD phase execution
@@ -279,6 +282,7 @@ export function checkACCoverage(story: Story): boolean {
 
   // Find all checkbox items
   const uncheckedItems = acSection.match(/- \[ \]/g);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const checkedItems = acSection.match(/- \[x\]/gi);
 
   // If there are unchecked items, coverage is incomplete

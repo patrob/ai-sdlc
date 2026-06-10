@@ -2,18 +2,20 @@
  * Core retry attempt loop
  */
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import path from 'path';
-import { Story, AgentResult } from '../../types/index.js';
-import { AgentProgressCallback, runAgentQuery } from '../../core/client.js';
-import { parseStory, writeStory, updateStoryField, readSectionContent, moveToBlocked } from '../../core/story.js';
-import { verifyImplementation } from '../verification.js';
-import { getContentTypeGuidance } from './prompts.js';
+
+import { type AgentProgressCallback, runAgentQuery } from '../../core/client.js';
+import { moveToBlocked,parseStory, readSectionContent, updateStoryField, writeStory } from '../../core/story.js';
 import {
   checkForIdenticalErrors,
-  updateErrorHistory,
   DEFAULT_IDENTICAL_ERROR_THRESHOLD,
+  updateErrorHistory,
 } from '../../services/error-fingerprint.js';
-import { captureCurrentDiffHash, extractChangedFiles, buildRetryPrompt } from './retry.js';
+import { type AgentResult,type Story } from '../../types/index.js';
+import { verifyImplementation } from '../verification.js';
+import { getContentTypeGuidance } from './prompts.js';
+import { buildRetryPrompt,captureCurrentDiffHash, extractChangedFiles } from './retry.js';
 
 /**
  * Outcome type for retry attempts

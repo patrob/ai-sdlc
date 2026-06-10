@@ -1,4 +1,5 @@
 import { spawnSync } from 'child_process';
+
 import { getBaseBranch, getMergeBase } from '../../core/git-utils.js';
 import type { ContentType, Story } from '../../types/index.js';
 

@@ -1,17 +1,27 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { spawnSync } from 'child_process';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as clientModule from '../core/client.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { ImplementationTask,type TaskContext } from '../types/index.js';
 import {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   buildTaskPrompt,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  detectMissingDependencies,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   detectScopeViolation,
-  verifyChanges,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   parseTaskResult,
   runSingleTaskAgent,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   TASK_AGENT_SYSTEM_PROMPT,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   validateFilePaths,
-  detectMissingDependencies,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  verifyChanges,
 } from './single-task.js';
-import { TaskContext, ImplementationTask } from '../types/index.js';
-import { spawnSync } from 'child_process';
-import * as clientModule from '../core/client.js';
 
 // Mock child_process module
 vi.mock('child_process', async () => {

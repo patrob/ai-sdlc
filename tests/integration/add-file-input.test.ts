@@ -1,10 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
-import path from 'path';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import ora from 'ora';
 import os from 'os';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { add } from '../../src/cli/commands.js';
 import { parseStory } from '../../src/core/story.js';
-import ora from 'ora';
 
 // Mock ora to capture spinner behavior
 vi.mock('ora', () => {

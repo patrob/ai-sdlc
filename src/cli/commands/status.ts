@@ -1,9 +1,9 @@
 import { getSdlcRoot, loadConfig } from '../../core/config.js';
-import { kanbanExists, assessState, getBoardStats, findStoriesByStatus } from '../../core/kanban.js';
+import { assessState, findStoriesByStatus,getBoardStats, kanbanExists } from '../../core/kanban.js';
 import { getThemedChalk } from '../../core/theme.js';
-import { renderStories, renderKanbanBoard, shouldUseKanbanLayout, KanbanColumn } from '../table-renderer.js';
 import type { SerializedStory, StatusJsonOutput } from '../../types/index.js';
 import type { Story } from '../../types/index.js';
+import { type KanbanColumn,renderKanbanBoard, renderStories, shouldUseKanbanLayout } from '../table-renderer.js';
 import { formatAction } from './format-utils.js';
 
 /**

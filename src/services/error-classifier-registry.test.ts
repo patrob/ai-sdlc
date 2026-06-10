@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach,describe, expect, it } from 'vitest';
+
+import type { TechStack } from '../types/index.js';
 import {
   ErrorClassifierRegistry,
   getErrorClassifierRegistry,
   resetErrorClassifierRegistry,
 } from './error-classifier-registry.js';
-import type { IErrorClassifier, ParsedError, ClassifiedErrors, ErrorClassification } from './error-classifier-types.js';
-import type { TechStack } from '../types/index.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { ClassifiedErrors, ErrorClassification,IErrorClassifier, ParsedError } from './error-classifier-types.js';
 
 describe('ErrorClassifierRegistry', () => {
   describe('register and getClassifier', () => {

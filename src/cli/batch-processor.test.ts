@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect,it } from 'vitest';
+
 import {
+  type BatchProgress,
+  type BatchResult,
   formatBatchProgress,
   formatBatchSummary,
-  BatchProgress,
-  BatchResult,
 } from './batch-processor.js';
 
 describe('batch-processor utilities', () => {

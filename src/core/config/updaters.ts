@@ -1,9 +1,10 @@
 import * as fs from 'fs';
 import path from 'path';
-import { Config, StageGateConfig, RefinementConfig, ReviewConfig, ImplementationConfig, WorktreeConfig } from '../../types/index.js';
-import { loadConfig, saveConfig } from './loader.js';
+
+import { type Config, type ImplementationConfig, type RefinementConfig, type ReviewConfig, type StageGateConfig, type WorktreeConfig } from '../../types/index.js';
 import { DEFAULT_WORKTREE_CONFIG } from './defaults.js';
-import { validateReviewConfig, validateImplementationConfig } from './validators.js';
+import { loadConfig, saveConfig } from './loader.js';
+import { validateImplementationConfig,validateReviewConfig } from './validators.js';
 
 /**
  * Update stage gate configuration

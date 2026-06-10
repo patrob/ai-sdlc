@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { BatchResult } from '../../src/cli/batch-processor.js';
 
 // Mock external dependencies
@@ -9,6 +11,7 @@ vi.mock('../../src/core/theme.js');
 
 describe('Batch Processing Integration Tests', () => {
   let mockConfig: any;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let mockKanban: any;
   let mockStory: any;
   let mockTheme: any;

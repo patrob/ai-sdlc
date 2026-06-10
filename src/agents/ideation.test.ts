@@ -1,6 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { describe, expect, it, vi } from 'vitest';
+
+import { type Story } from '../types/index.js';
 import { findPotentialDuplicates, shouldDecompose } from './ideation.js';
-import { Story } from '../types/index.js';
 
 function makeStory(id: string, title: string): Story {
   return {

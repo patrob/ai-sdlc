@@ -1,36 +1,36 @@
 // Barrel re-exports for src/types modules
+export * from './analysis.js';
+export * from './config.js';
 export * from './story.js';
 export * from './tasks.js';
-export * from './config.js';
-export * from './analysis.js';
 // Note: agents.js is re-exported via explicit list because agents.js's PhaseExecutionResult
 // must shadow the one star-exported from workflow-config.js. Named exports take precedence over
 // export *, so PhaseExecutionResult is included here to ensure the agents.js variant is used.
 export type {
-  StoryExecutionStatus,
-  EpicProcessingOptions,
-  PhaseExecutionResult,
-  EpicSummary,
   AgentResult,
-  FARScore,
-  ReviewResult,
-  ReworkContext,
-  FileContent,
-  TaskContext,
-  SingleTaskAgentOptions,
   AgentTaskResult,
+  ChildProcessInfo,
+  EpicProcessingOptions,
+  EpicSummary,
   FailedTaskInfo,
+  FARScore,
+  FileContent,
+  IPCMessage,
+  IPCMessageType,
   OrchestratorOptions,
   OrchestratorResult,
-  IPCMessageType,
-  IPCMessage,
-  ProcessOrchestratorOptions,
+  PhaseExecutionResult,
   ProcessExecutionResult,
-  ChildProcessInfo,
-  ProcessStatus,
+  ProcessOrchestratorOptions,
   ProcessOrchestratorState,
+  ProcessStatus,
+  ReviewResult,
+  ReworkContext,
   SerializedStory,
+  SingleTaskAgentOptions,
   StatusJsonOutput,
+  StoryExecutionStatus,
+  TaskContext,
 } from './agents.js';
 
 // Export workflow state types

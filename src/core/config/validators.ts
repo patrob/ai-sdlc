@@ -1,4 +1,4 @@
-import { MergeConfig, CostLimitConfig, ReviewConfig, RetryConfig, ImplementationConfig } from '../../types/index.js';
+import { type CostLimitConfig, type ImplementationConfig,type MergeConfig, type RetryConfig, type ReviewConfig } from '../../types/index.js';
 import { DEFAULT_MERGE_CONFIG } from './defaults.js';
 export { sanitizeUserConfig } from './sanitizers.js';
 

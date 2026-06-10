@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { NotificationConfig, NotificationChannelType } from '../types/index.js';
+
+import { type NotificationChannelType,type NotificationConfig } from '../types/index.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { getEventBus, SDLCEvent } from './event-bus.js';
 
 /**

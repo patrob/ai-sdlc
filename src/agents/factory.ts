@@ -28,24 +28,24 @@
  * ```
  */
 
-import { IAgent, AgentContext, AgentResult } from './types.js';
-import { IProvider, ProviderCapabilities } from '../providers/types.js';
 import { ProviderRegistry } from '../providers/registry.js';
-import { runResearchAgent } from './research.js';
-import { runPlanningAgent } from './planning.js';
+import { type IProvider, type ProviderCapabilities } from '../providers/types.js';
 import { runImplementationAgent } from './implementation.js';
-import { runReviewAgent } from './review.js';
-import { runSingleTaskAgent } from './single-task.js';
-import { runReworkAgent } from './rework.js';
-import { runRefinementAgent } from './refinement.js';
 import { runImplementationOrchestrator } from './orchestrator.js';
-import { runStateAssessor } from './state-assessor.js';
-import { runPlanReviewAgent } from './plan-review.js';
 import {
-  runTechLeadReviewer,
-  runSecurityReviewer,
   runProductOwnerReviewer,
+  runSecurityReviewer,
+  runTechLeadReviewer,
 } from './perspectives/index.js';
+import { runPlanReviewAgent } from './plan-review.js';
+import { runPlanningAgent } from './planning.js';
+import { runRefinementAgent } from './refinement.js';
+import { runResearchAgent } from './research.js';
+import { runReviewAgent } from './review.js';
+import { runReworkAgent } from './rework.js';
+import { runSingleTaskAgent } from './single-task.js';
+import { runStateAssessor } from './state-assessor.js';
+import { type AgentContext, type AgentResult,type IAgent } from './types.js';
 
 /**
  * Union type of all built-in agent types.
@@ -116,6 +116,7 @@ class ResearchAgentAdapter extends FunctionAgentAdapter {
     return runResearchAgent(context.storyPath, context.sdlcRoot, context.options, this.provider);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSystemPrompt(context: AgentContext): string {
     return 'Research agent system prompt';
   }
@@ -135,6 +136,7 @@ class PlanningAgentAdapter extends FunctionAgentAdapter {
     return runPlanningAgent(context.storyPath, context.sdlcRoot, context.options, this.provider);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSystemPrompt(context: AgentContext): string {
     return 'Planning agent system prompt';
   }
@@ -154,6 +156,7 @@ class PlanReviewAgentAdapter extends FunctionAgentAdapter {
     return runPlanReviewAgent(context.storyPath, context.sdlcRoot, context.options, this.provider);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSystemPrompt(context: AgentContext): string {
     return 'Plan review agent system prompt';
   }
@@ -173,6 +176,7 @@ class ImplementationAgentAdapter extends FunctionAgentAdapter {
     return runImplementationAgent(context.storyPath, context.sdlcRoot, context.options, this.provider);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSystemPrompt(context: AgentContext): string {
     return 'Implementation agent system prompt';
   }
@@ -193,6 +197,7 @@ class ReviewAgentAdapter extends FunctionAgentAdapter {
     return runReviewAgent(context.storyPath, context.sdlcRoot, context.options as any, this.provider);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSystemPrompt(context: AgentContext): string {
     return 'Review agent system prompt';
   }
@@ -234,6 +239,7 @@ class SingleTaskAgentAdapter extends FunctionAgentAdapter {
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSystemPrompt(context: AgentContext): string {
     return 'Single-task agent system prompt';
   }
@@ -262,6 +268,7 @@ class OrchestratorAgentAdapter extends FunctionAgentAdapter {
     return result as any;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSystemPrompt(context: AgentContext): string {
     return 'Orchestrator agent system prompt';
   }
@@ -288,6 +295,7 @@ class ReworkAgentAdapter extends FunctionAgentAdapter {
     return runReworkAgent(context.storyPath, context.sdlcRoot, reworkContext);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSystemPrompt(context: AgentContext): string {
     return 'Rework agent system prompt';
   }
@@ -325,6 +333,7 @@ class StateAssessorAgentAdapter extends FunctionAgentAdapter {
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSystemPrompt(context: AgentContext): string {
     return 'State assessor agent system prompt';
   }
@@ -344,6 +353,7 @@ class RefinementAgentAdapter extends FunctionAgentAdapter {
     return runRefinementAgent(context.storyPath, context.sdlcRoot, context.options, this.provider);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSystemPrompt(context: AgentContext): string {
     return 'Refinement agent system prompt';
   }
@@ -379,6 +389,7 @@ class TechLeadReviewerAdapter extends FunctionAgentAdapter {
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSystemPrompt(context: AgentContext): string {
     return 'Tech Lead reviewer agent system prompt';
   }
@@ -414,6 +425,7 @@ class SecurityReviewerAdapter extends FunctionAgentAdapter {
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSystemPrompt(context: AgentContext): string {
     return 'Security reviewer agent system prompt';
   }
@@ -449,6 +461,7 @@ class ProductOwnerReviewerAdapter extends FunctionAgentAdapter {
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getSystemPrompt(context: AgentContext): string {
     return 'Product Owner reviewer agent system prompt';
   }

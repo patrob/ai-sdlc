@@ -1,4 +1,4 @@
-import type { TDDTestCycle, ReviewIssue, ReviewIssueSeverity } from '../../types/index.js';
+import type { ReviewIssue, ReviewIssueSeverity,TDDTestCycle } from '../../types/index.js';
 
 /**
  * Validate TDD cycles for completeness

@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as cp from 'child_process';
 import * as fs from 'fs';
 import path from 'path';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock modules before importing the tested module
 vi.mock('child_process');

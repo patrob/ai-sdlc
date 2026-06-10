@@ -1,11 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { run } from '../../src/cli/commands.js';
 import * as cp from 'child_process';
 import * as fs from 'fs';
-import * as readline from 'readline';
-import * as story from '../../src/core/story.js';
-import * as kanban from '../../src/core/kanban.js';
 import ora from 'ora';
+import * as readline from 'readline';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { run } from '../../src/cli/commands.js';
+import * as kanban from '../../src/core/kanban.js';
+import * as story from '../../src/core/story.js';
 
 // Mock dependencies
 vi.mock('child_process');
@@ -73,6 +75,7 @@ vi.mock('../../src/core/client.js', () => ({
 describe('Worktree Resume Integration', () => {
   let mockSpinner: any;
   let mockReadline: any;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let mockConfig: any;
 
   const createMockStory = (overrides: any = {}) => ({

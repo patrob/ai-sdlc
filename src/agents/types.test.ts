@@ -7,14 +7,15 @@
  * - Type safety and inference
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect,it } from 'vitest';
+
+import { type IProvider, type ProviderCapabilities } from '../providers/types.js';
+import { type AgentOptions } from './research.js';
 import {
-  IAgent,
-  AgentContext,
-  AgentResult,
+  type AgentContext,
+  type AgentResult,
+  type IAgent,
 } from './types.js';
-import { AgentOptions } from './research.js';
-import { IProvider, ProviderCapabilities } from '../providers/types.js';
 
 describe('Agent Types', () => {
   describe('AgentContext', () => {
@@ -222,6 +223,7 @@ describe('Agent Types', () => {
           };
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         getSystemPrompt(context: AgentContext): string {
           return 'You are a test agent';
         }

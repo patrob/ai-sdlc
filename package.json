@@ -22,7 +22,8 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:coverage": "vitest run --coverage --config vitest.coverage.config.ts",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit",
+    "lint": "tsc --noEmit && eslint . --max-warnings 0",
+    "deadcode": "knip",
     "prepublishOnly": "npm run lint && npm run build && npm test"
   },
   "keywords": [
@@ -49,30 +50,34 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.12",
-    "@earendil-works/pi-agent-core": "^0.79.0",
-    "@earendil-works/pi-ai": "^0.79.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.141",
+    "@earendil-works/pi-agent-core": "^0.79.1",
+    "@earendil-works/pi-ai": "^0.79.1",
     "chalk": "^5.3.0",
     "chokidar": "^4.0.0",
     "cli-table3": "^0.6.5",
     "commander": "^12.0.0",
     "glob": "^11.0.0",
     "gray-matter": "^4.0.3",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.2.0",
     "ora": "^8.0.0",
+    "pino": "^10.3.1",
     "proper-lockfile": "^4.1.2",
-    "string-width": "^8.1.0",
+    "string-width": "^8.2.1",
     "write-file-atomic": "^5.0.1"
   },
   "devDependencies": {
-    "@types/chokidar": "^2.1.7",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.19.42",
     "@types/proper-lockfile": "^4.1.4",
     "@types/write-file-atomic": "^4.0.3",
     "@vitest/coverage-v8": "^4.1.8",
-    "tsx": "^4.0.0",
+    "eslint": "^10.4.1",
+    "eslint-plugin-simple-import-sort": "^13.0.0",
+    "knip": "^6.16.1",
+    "tsx": "^4.22.4",
     "typescript": "^5.3.0",
+    "typescript-eslint": "^8.61.0",
     "vitest": "^4.1.8"
   },
   "engines": {

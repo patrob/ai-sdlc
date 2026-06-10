@@ -7,14 +7,16 @@
  * - Iteration until agreement
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
-import path from 'path';
-import os from 'os';
 import yaml from 'js-yaml';
-import { PhaseExecutor } from './phase-executor.js';
-import { WorkflowConfigLoader } from './workflow-config.js';
+import os from 'os';
+import path from 'path';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { WorkflowConfig } from '../types/workflow-config.js';
+import { PhaseExecutor } from './phase-executor.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { WorkflowConfigLoader } from './workflow-config.js';
 
 // Mock all the agents
 const mockTechLeadReviewer = vi.fn();

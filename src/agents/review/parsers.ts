@@ -1,5 +1,5 @@
-import { getLogger } from '../../core/logger.js';
 import { extractStructuredResponseSync } from '../../core/llm-utils.js';
+import { getLogger } from '../../core/logger.js';
 import type { ReviewIssue, ReviewIssueSeverity } from '../../types/index.js';
 import { ReviewSeverity } from '../../types/index.js';
 import { ReviewResponseSchema } from './schemas.js';

@@ -1,7 +1,8 @@
 import path from 'path';
-import { Orchestrator } from '../../core/orchestrator.js';
+
 import { detectConflicts } from '../../core/conflict-detector.js';
-import type { Story, ProcessExecutionResult } from '../../types/index.js';
+import { Orchestrator } from '../../core/orchestrator.js';
+import type { ProcessExecutionResult,Story } from '../../types/index.js';
 
 export function selectConflictSafeBatch(stories: Story[], concurrency: number, sdlcRoot: string): {
   selectedStories: Story[];

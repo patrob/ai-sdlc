@@ -1,5 +1,5 @@
+import { configureAgentSdkAuth, type CredentialType,getApiKey, getCredentialType, getTokenExpirationInfo } from '../../core/auth.js';
 import type { IAuthenticator } from '../types.js';
-import { configureAgentSdkAuth, getCredentialType, getApiKey, getTokenExpirationInfo, type CredentialType } from '../../core/auth.js';
 
 /**
  * Authenticator for Claude AI provider

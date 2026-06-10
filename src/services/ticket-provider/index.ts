@@ -1,12 +1,12 @@
-import { Config } from '../../types/index.js';
-import { NullTicketProvider } from './null-provider.js';
+import { type Config } from '../../types/index.js';
 import { GitHubTicketProvider } from './github-provider.js';
-import { TicketProvider } from './types.js';
+import { NullTicketProvider } from './null-provider.js';
+import { type TicketProvider } from './types.js';
 
 // Re-export types
-export * from './types.js';
-export { NullTicketProvider } from './null-provider.js';
 export { GitHubTicketProvider } from './github-provider.js';
+export { NullTicketProvider } from './null-provider.js';
+export * from './types.js';
 
 /**
  * Create a ticket provider based on configuration.

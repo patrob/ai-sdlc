@@ -1,9 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import { moveToBlocked, parseStory, sanitizeReasonText, unblockStory, getStory, writeStory, findStoryById, sanitizeTitle, extractTitleFromContent, createStory, autoCompleteStoryAfterReview } from './story.js';
-import { BLOCKED_DIR, ReviewDecision, ReviewResult, Config } from '../types/index.js';
+import path from 'path';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { BLOCKED_DIR, Config,ReviewDecision, ReviewResult } from '../types/index.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { autoCompleteStoryAfterReview,createStory, extractTitleFromContent, findStoryById, getStory, moveToBlocked, parseStory, sanitizeReasonText, sanitizeTitle, unblockStory, writeStory } from './story.js';
 
 describe('Story ticket fields integration', () => {
   let tempDir: string;
@@ -244,7 +248,7 @@ ticket_provider: linear
   describe('writeStory', () => {
     it('should preserve ticket fields when writing', async () => {
       const storyPath = createTestStoryWithTicketFields();
-      let story = parseStory(storyPath);
+      const story = parseStory(storyPath);
 
       // Verify fields are present before write
       expect(story.frontmatter.ticket_provider).toBe('github');
@@ -263,7 +267,7 @@ ticket_provider: linear
 
     it('should work without ticket fields (backward compatibility)', async () => {
       const storyPath = createTestStoryWithoutTicketFields();
-      let story = parseStory(storyPath);
+      const story = parseStory(storyPath);
 
       // Verify no ticket fields
       expect(story.frontmatter.ticket_provider).toBeUndefined();
@@ -284,7 +288,7 @@ ticket_provider: linear
 
     it('should allow adding ticket fields to existing story', async () => {
       const storyPath = createTestStoryWithoutTicketFields();
-      let story = parseStory(storyPath);
+      const story = parseStory(storyPath);
 
       // Initially no ticket fields
       expect(story.frontmatter.ticket_provider).toBeUndefined();
@@ -308,7 +312,7 @@ ticket_provider: linear
 
     it('should allow updating ticket fields', async () => {
       const storyPath = createTestStoryWithTicketFields();
-      let story = parseStory(storyPath);
+      const story = parseStory(storyPath);
 
       // Update ticket fields
       story.frontmatter.ticket_id = '456';
@@ -328,7 +332,7 @@ ticket_provider: linear
 
     it('should handle ISO timestamp format for ticket_synced_at', async () => {
       const storyPath = createTestStoryWithoutTicketFields();
-      let story = parseStory(storyPath);
+      const story = parseStory(storyPath);
 
       // Add ticket with ISO timestamp
       const syncTime = new Date('2026-01-27T15:30:00.000Z').toISOString();

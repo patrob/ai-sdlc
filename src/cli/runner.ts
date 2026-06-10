@@ -1,20 +1,23 @@
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import chalk from 'chalk';
 import ora from 'ora';
-import { getSdlcRoot, loadConfig, isStageGateEnabled } from '../core/config.js';
-import { assessState, kanbanExists } from '../core/kanban.js';
-import { parseStory, resetRPIVCycle, markStoryComplete, updateStoryStatus, isAtMaxRetries, getStory, incrementImplementationRetryCount, updateStoryField, autoCompleteStoryAfterReview, isAtGlobalRecoveryLimit, getTotalRecoveryAttempts, incrementTotalRecoveryAttempts, moveToBlocked } from '../core/story.js';
-import { Action, StateAssessment, ReviewResult, ReviewDecision, ReworkContext } from '../types/index.js';
-import { runRefinementAgent } from '../agents/refinement.js';
-import { PhaseExecutor, loadWorkflowConfig, hasCustomAgents, getPhaseConfig, getEventBus } from '../core/index.js';
-import { runResearchAgent } from '../agents/research.js';
-import { runPlanningAgent } from '../agents/planning.js';
-import { runPlanReviewAgent } from '../agents/plan-review.js';
+
 import { runImplementationAgent } from '../agents/implementation.js';
-import { runReviewAgent, createPullRequest, generateReviewSummary } from '../agents/review.js';
-import { runReworkAgent, packageReworkContext } from '../agents/rework.js';
 import { runMergeAgent } from '../agents/merge.js';
+import { runPlanReviewAgent } from '../agents/plan-review.js';
+import { runPlanningAgent } from '../agents/planning.js';
+import { runRefinementAgent } from '../agents/refinement.js';
+import { runResearchAgent } from '../agents/research.js';
+import { createPullRequest, generateReviewSummary,runReviewAgent } from '../agents/review.js';
+import { packageReworkContext,runReworkAgent } from '../agents/rework.js';
+import { getSdlcRoot, isStageGateEnabled,loadConfig } from '../core/config.js';
+import { getEventBus,getPhaseConfig, hasCustomAgents, loadWorkflowConfig, PhaseExecutor } from '../core/index.js';
+import { assessState, kanbanExists } from '../core/kanban.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { autoCompleteStoryAfterReview, getStory, getTotalRecoveryAttempts, incrementImplementationRetryCount, incrementTotalRecoveryAttempts, isAtGlobalRecoveryLimit, isAtMaxRetries, markStoryComplete, moveToBlocked,parseStory, resetRPIVCycle, updateStoryField, updateStoryStatus } from '../core/story.js';
 import { getThemedChalk } from '../core/theme.js';
-import { getTerminalWidth, formatSuccessMessage } from './formatting.js';
+import { type Action, ReviewDecision, type ReviewResult, type ReworkContext,type StateAssessment } from '../types/index.js';
+import { formatSuccessMessage,getTerminalWidth } from './formatting.js';
 
 export interface RunOptions {
   auto?: boolean;

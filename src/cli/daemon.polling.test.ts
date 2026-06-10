@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { DaemonRunner } from './daemon.js';
 
 // Mock dependencies
@@ -112,6 +113,7 @@ describe('polling mechanism', () => {
 
   it('should respect configured polling interval', async () => {
     const daemon = new DaemonRunner();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const daemonAny = daemon as any;
 
     // Mock assessState to track calls
@@ -162,6 +164,7 @@ describe('polling mechanism', () => {
 
   it('should queue new actions found during polling', async () => {
     const daemon = new DaemonRunner();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const daemonAny = daemon as any;
 
     const { assessState } = await import('../core/kanban.js');

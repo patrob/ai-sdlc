@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { run } from '../../src/cli/commands.js';
 import * as cp from 'child_process';
 import * as fs from 'fs';
-import * as story from '../../src/core/story.js';
-import * as kanban from '../../src/core/kanban.js';
 import ora from 'ora';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { run } from '../../src/cli/commands.js';
+import * as kanban from '../../src/core/kanban.js';
+import * as story from '../../src/core/story.js';
 
 // Mock dependencies
 vi.mock('child_process');

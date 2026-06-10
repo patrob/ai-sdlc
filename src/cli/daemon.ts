@@ -1,21 +1,22 @@
-import chokidar, { FSWatcher } from 'chokidar';
+import chokidar, { type FSWatcher } from 'chokidar';
 import path from 'path';
-import { getSdlcRoot, loadConfig } from '../core/config.js';
-import { getLogger } from '../core/logger.js';
-import { assessState } from '../core/kanban.js';
-import { parseStory, getStory } from '../core/story.js';
-import { getThemedChalk } from '../core/theme.js';
+
+import { runImplementationAgent } from '../agents/implementation.js';
+import { runMergeAgent } from '../agents/merge.js';
+import { runPlanReviewAgent } from '../agents/plan-review.js';
+import { runPlanningAgent } from '../agents/planning.js';
 import { runRefinementAgent } from '../agents/refinement.js';
 import { runResearchAgent } from '../agents/research.js';
-import { runPlanningAgent } from '../agents/planning.js';
-import { runPlanReviewAgent } from '../agents/plan-review.js';
-import { runImplementationAgent } from '../agents/implementation.js';
 import { createPullRequest, runReviewAgent } from '../agents/review.js';
 import { runReworkAgent } from '../agents/rework.js';
-import { runMergeAgent } from '../agents/merge.js';
-import { Action } from '../types/index.js';
-import { formatSummaryStatus, formatCompactStoryCompletion } from './formatting.js';
+import { getSdlcRoot, loadConfig } from '../core/config.js';
+import { assessState } from '../core/kanban.js';
+import { getLogger, pinoLogger } from '../core/logger.js';
 import { ProcessManager } from '../core/process-manager.js';
+import { getStory,parseStory } from '../core/story.js';
+import { getThemedChalk } from '../core/theme.js';
+import { type Action } from '../types/index.js';
+import { formatCompactStoryCompletion,formatSummaryStatus } from './formatting.js';
 
 /**
  * Daemon statistics tracking
@@ -126,6 +127,8 @@ export class DaemonRunner {
     logger.info('daemon', 'Daemon starting', {
       pollingInterval: this.config.daemon?.pollingInterval || 5000,
     });
+
+    pinoLogger.info({ category: 'daemon', sdlcRoot: this.sdlcRoot }, 'Daemon started');
 
     this.logStartup();
 

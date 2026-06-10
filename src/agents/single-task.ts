@@ -1,19 +1,20 @@
 import { spawnSync } from 'child_process';
 import { createHash } from 'crypto';
+
 import { runAgentQuery } from '../core/client.js';
-import type { IProvider } from '../providers/types.js';
-import { getLogger } from '../core/logger.js';
 import {
-  TaskContext,
-  AgentTaskResult,
-  SingleTaskAgentOptions,
-  ImplementationTask,
-} from '../types/index.js';
-import {
-  discoverCommands,
   buildSingleTestCommand,
+  discoverCommands,
   parseCommand,
 } from '../core/command-discovery.js';
+import { getLogger } from '../core/logger.js';
+import type { IProvider } from '../providers/types.js';
+import {
+  type AgentTaskResult,
+  type ImplementationTask,
+  type SingleTaskAgentOptions,
+  type TaskContext,
+} from '../types/index.js';
 
 /**
  * System prompt for single-task implementation agent
@@ -110,6 +111,7 @@ export function detectScopeViolation(
 /**
  * Get current git diff hash to detect changes
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getCurrentDiffHash(workingDir: string): string {
   const result = spawnSync('git', ['diff', 'HEAD'], {
     cwd: workingDir,

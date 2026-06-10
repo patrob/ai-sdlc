@@ -1,24 +1,25 @@
-import path from 'path';
 import { spawn } from 'child_process';
-import { Story, EpicProcessingOptions, EpicSummary, PhaseExecutionResult, Config } from '../types/index.js';
-import { getSdlcRoot, loadConfig, validateWorktreeBasePath, DEFAULT_MERGE_CONFIG } from '../core/config.js';
+import fs from 'fs';
+import path from 'path';
+
+import { mergePullRequest,waitForChecks } from '../agents/review.js';
+import { DEFAULT_MERGE_CONFIG,getSdlcRoot, loadConfig, validateWorktreeBasePath } from '../core/config.js';
 import { findStoriesByEpic } from '../core/kanban.js';
-import { GitWorktreeService } from '../core/worktree.js';
+import { isPRMerged, markPRMerged,parseStory } from '../core/story.js';
+import { StoryLogger } from '../core/story-logger.js';
 import { getThemedChalk } from '../core/theme.js';
+import { GitWorktreeService } from '../core/worktree.js';
+import { type Config,type EpicProcessingOptions, type EpicSummary, type PhaseExecutionResult, type Story } from '../types/index.js';
 import { groupStoriesByPhase, validateDependencies } from './dependency-resolver.js';
 import {
-  createDashboard,
-  updateStoryStatus,
-  markStorySkipped,
-  markStoryFailed,
   advancePhase,
+  createDashboard,
+  type DashboardState,
+  markStoryFailed,
+  markStorySkipped,
   startDashboardRenderer,
-  DashboardState,
+  updateStoryStatus,
 } from './progress-dashboard.js';
-import { StoryLogger } from '../core/story-logger.js';
-import { parseStory, isPRMerged, markPRMerged } from '../core/story.js';
-import { waitForChecks, mergePullRequest } from '../agents/review.js';
-import fs from 'fs';
 
 /**
  * Normalize epic ID by stripping 'epic-' prefix if present

@@ -1,13 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { status } from '../../src/cli/commands.js';
 import { getSdlcRoot } from '../../src/core/config.js';
 import { initializeKanban } from '../../src/core/kanban.js';
 import { createStory } from '../../src/core/story.js';
-import { STORIES_FOLDER } from '../../src/types/index.js';
 import type { StatusJsonOutput } from '../../src/types/index.js';
+import { STORIES_FOLDER } from '../../src/types/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

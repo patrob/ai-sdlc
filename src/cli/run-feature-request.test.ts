@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { run } from './commands.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { parseStory } from '../core/story.js';
+import { run } from './commands.js';
 
 vi.mock('./daemon.js', () => ({
   startDaemon: vi.fn().mockResolvedValue(undefined),

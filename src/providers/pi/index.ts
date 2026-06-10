@@ -12,10 +12,11 @@
  * See `docs/spikes/pi-evaluation.md` for the spike that motivated this.
  */
 
-import { Agent } from '@earendil-works/pi-agent-core';
 import type { AgentEvent, AgentMessage, ExecutionEnv } from '@earendil-works/pi-agent-core';
+import { Agent } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import type { Api, AssistantMessage, Model, Usage } from '@earendil-works/pi-ai';
+
 import { AgentTimeoutError } from '../../core/agent-errors.js';
 import { DEFAULT_TIMEOUTS } from '../../core/config.js';
 import type {

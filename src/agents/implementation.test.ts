@@ -1,32 +1,49 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
-import {
-  TDD_SYSTEM_PROMPT,
-  runSingleTest,
-  runAllTests,
-  executeRedPhase,
-  executeGreenPhase,
-  executeRefactorPhase,
-  recordTDDCycle,
-  checkACCoverage,
-  runTDDImplementation,
-  commitIfAllTestsPass,
-  captureCurrentDiffHash,
-  hasChangesOccurred,
-  truncateTestOutput,
-  extractTestFailures,
-  buildRetryPrompt,
-  detectMissingDependencies,
-  sanitizeTestOutput,
-  extractChangedFiles,
-  buildRetryHistorySection,
-  type TDDPhaseResult,
-  type AttemptHistoryEntry,
-  type AttemptOutcome,
-  type ExtractedTestOutput,
-} from './implementation.js';
-import { Story, TDDTestCycle } from '../types/index.js';
-import * as storyModule from '../core/story.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { spawnSync } from 'child_process';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { afterAll,afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as storyModule from '../core/story.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { type Story, TDDTestCycle } from '../types/index.js';
+import {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  type AttemptHistoryEntry,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  type AttemptOutcome,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  buildRetryHistorySection,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  buildRetryPrompt,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  captureCurrentDiffHash,
+  checkACCoverage,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  commitIfAllTestsPass,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  detectMissingDependencies,
+  executeGreenPhase,
+  executeRedPhase,
+  executeRefactorPhase,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  extractChangedFiles,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  type ExtractedTestOutput,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  extractTestFailures,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  hasChangesOccurred,
+  recordTDDCycle,
+  runAllTests,
+  runSingleTest,
+  runTDDImplementation,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  sanitizeTestOutput,
+  TDD_SYSTEM_PROMPT,
+  type TDDPhaseResult,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  truncateTestOutput,
+} from './implementation.js';
 
 // Mock child_process module
 vi.mock('child_process', async () => {

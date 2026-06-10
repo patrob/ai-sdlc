@@ -1,7 +1,9 @@
 import { spawn } from 'child_process';
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { DEFAULT_TIMEOUTS, loadConfig } from '../../core/config.js';
 import { ProcessManager } from '../../core/process-manager.js';
 import type { Config } from '../../types/index.js';
-import { DEFAULT_TIMEOUTS, loadConfig } from '../../core/config.js';
 import { sanitizeErrorMessage } from './security.js';
 
 /**

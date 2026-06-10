@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, statSync } from 'fs';
 import path from 'path';
-import { TechStack, ProjectConfig } from '../types/index.js';
+
+import { type ProjectConfig,type TechStack } from '../types/index.js';
 
 /**
  * Stack detection configuration for each supported technology.

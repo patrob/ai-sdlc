@@ -1,13 +1,15 @@
 import fs from 'fs';
-import path from 'path';
 import ora from 'ora';
+import path from 'path';
+
 import { getSdlcRoot, loadConfig } from '../../core/config.js';
 import { kanbanExists } from '../../core/kanban.js';
-import { createStory } from '../../core/story.js';
 import { findAllStories } from '../../core/kanban.js';
+import { createStory } from '../../core/story.js';
 import { getThemedChalk } from '../../core/theme.js';
-import { createStoryFromFeatureRequest } from '../feature-request.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { Story } from '../../types/index.js';
+import { createStoryFromFeatureRequest } from '../feature-request.js';
 
 /**
  * Validate file path for security (path traversal, symlinks, allowed directories)

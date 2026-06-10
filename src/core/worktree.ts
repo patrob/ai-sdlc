@@ -1,8 +1,9 @@
 import { spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import path from 'path';
-import { isCleanWorkingDirectory, CleanWorkingDirectoryOptions } from './git-utils.js';
-import { WorktreeInfo, Story, ActionType } from '../types/index.js';
+
+import { type ActionType,type Story, type WorktreeInfo } from '../types/index.js';
+import { type CleanWorkingDirectoryOptions,isCleanWorkingDirectory } from './git-utils.js';
 
 /** Default patterns to exclude from working directory cleanliness checks */
 const DEFAULT_EXCLUDE_PATTERNS = ['.ai-sdlc/**'];

@@ -1,8 +1,12 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { DEFAULT_CONFIG, loadConfig, DEFAULT_DAEMON_CONFIG, DEFAULT_TIMEOUTS, validateImplementationConfig, DEFAULT_WORKTREE_CONFIG, validateWorktreeBasePath, getWorktreeConfig, DEFAULT_AI_PROVIDER_CONFIG } from './config.js';
-import { Config, TDDConfig, WorktreeConfig } from '../types/index.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { type Config, TDDConfig, WorktreeConfig } from '../types/index.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { DEFAULT_AI_PROVIDER_CONFIG,DEFAULT_CONFIG, DEFAULT_DAEMON_CONFIG, DEFAULT_TIMEOUTS, DEFAULT_WORKTREE_CONFIG, getWorktreeConfig, loadConfig, validateImplementationConfig, validateWorktreeBasePath } from './config.js';
 
 describe('config - TDD configuration', () => {
   describe('AI provider config defaults', () => {

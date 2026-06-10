@@ -1,16 +1,17 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
-  StoryLogger,
-  getLatestLogPath,
-  readLastLines,
   generateCorrelationId,
+  getLatestLogPath,
   getOrCreateCorrelationId,
-  setCorrelationIdEnv
-} from './story-logger.js';
+  readLastLines,
+  setCorrelationIdEnv,
+  StoryLogger} from './story-logger.js';
 
 // Mock fs module with promises
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 vi.mock('fs', async (importOriginal) => {
   return {
     default: {
@@ -529,6 +530,7 @@ describe('Correlation ID functions', () => {
     });
 
     it('should set correlation ID in environment', () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const logger = new StoryLogger('S-001', '/test/.ai-sdlc', 5, 'my-id-1234');
 
       expect(process.env.AI_SDLC_CORRELATION_ID).toBe('my-id-1234');

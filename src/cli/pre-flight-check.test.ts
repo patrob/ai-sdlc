@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { preFlightConflictCheck } from './commands.js';
-import type { Story, ConflictDetectionResult } from '../types/index.js';
-import * as kanbanModule from '../core/kanban.js';
+import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as conflictDetectorModule from '../core/conflict-detector.js';
+import * as kanbanModule from '../core/kanban.js';
+import type { ConflictDetectionResult,Story } from '../types/index.js';
+import { preFlightConflictCheck } from './commands.js';
 
 // Mock modules
 vi.mock('../core/kanban.js');

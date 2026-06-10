@@ -5,8 +5,9 @@
  * This is a test fixture that will be copied during integration tests.
  * The production counterpart is production.ts in the same directory.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { parseStory, loadConfig, formatData } from './production.js';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
+import { formatData,loadConfig, parseStory } from './production.js';
 
 // LEGITIMATE: Factory function creating test data
 function createMockStory() {
@@ -35,6 +36,7 @@ function assertValidStory(story: any) {
 }
 
 // LEGITIMATE: Mock builder
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function mockUser(overrides?: any) {
   return {
     id: 'user-1',
@@ -44,6 +46,7 @@ function mockUser(overrides?: any) {
 }
 
 // LEGITIMATE: Test data builder
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function withDefaults(config?: any) {
   return {
     enabled: true,

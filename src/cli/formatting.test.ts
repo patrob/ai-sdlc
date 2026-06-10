@@ -1,20 +1,22 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
+
 import {
-  truncateText,
-  formatLabels,
-  getTerminalWidth,
-  shouldUseCompactView,
-  getColumnWidths,
-  stripAnsiCodes,
-  sanitizeInput,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   ColumnWidths,
-  formatSummaryStatus,
-  formatElapsedTime,
   formatCompactStoryCompletion,
-  getKanbanColumnWidth,
-  padColumnToHeight,
-  getCelebrationMessage,
+  formatElapsedTime,
+  formatLabels,
   formatSuccessMessage,
+  formatSummaryStatus,
+  getCelebrationMessage,
+  getColumnWidths,
+  getKanbanColumnWidth,
+  getTerminalWidth,
+  padColumnToHeight,
+  sanitizeInput,
+  shouldUseCompactView,
+  stripAnsiCodes,
+  truncateText,
 } from './formatting.js';
 
 describe('formatting utilities', () => {

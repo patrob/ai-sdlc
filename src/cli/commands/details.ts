@@ -105,9 +105,19 @@ function isEmptySection(content: string): boolean {
     return true;
   }
 
-  // Only contains placeholder HTML comments
-  const withoutComments = trimmed.replace(/<!--[\s\S]*?-->/g, '').trim();
-  if (!withoutComments) {
+  // Only contains placeholder HTML comments (index-based strip, no regex)
+  let withoutComments = trimmed;
+  let commentStart = withoutComments.indexOf('<!--');
+  while (commentStart !== -1) {
+    const commentEnd = withoutComments.indexOf('-->', commentStart);
+    if (commentEnd === -1) {
+      withoutComments = withoutComments.slice(0, commentStart);
+      break;
+    }
+    withoutComments = withoutComments.slice(0, commentStart) + withoutComments.slice(commentEnd + 3);
+    commentStart = withoutComments.indexOf('<!--');
+  }
+  if (!withoutComments.trim()) {
     return true;
   }
 

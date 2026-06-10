@@ -90,11 +90,14 @@ export function parseStory(filePath: string): Story {
 export async function writeStory(story: Story, options?: LockOptions): Promise<void> {
   const content = matter.stringify(story.content, story.frontmatter);
 
-  // For new files (file doesn't exist yet), write directly without locking
-  // No race condition possible when creating a new file
-  if (!fs.existsSync(story.path)) {
-    fs.writeFileSync(story.path, content);
+  // For new files, write directly without locking using exclusive create.
+  // The 'wx' flag atomically creates the file, throwing EEXIST if it already exists (TOCTOU-safe)
+  try {
+    fs.writeFileSync(story.path, content, { flag: 'wx' });
     return;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+    // File exists — fall through to the locked write path below
   }
 
   // For existing files, use locking to prevent concurrent write corruption

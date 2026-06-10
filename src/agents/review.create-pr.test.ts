@@ -1,5 +1,5 @@
  
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import fs from 'fs';
 import { beforeEach, describe, expect, it,vi } from 'vitest';
 
@@ -13,6 +13,7 @@ vi.mock('child_process', () => ({
   spawn: vi.fn(),
   spawnSync: vi.fn(),
   execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }));
 vi.mock('fs');
 vi.mock('../core/story.js', async () => {
@@ -108,12 +109,15 @@ describe('createPullRequest - Draft PR Support', () => {
         if (cmd === 'git status --porcelain') return '';
         if (cmd.startsWith('git push')) return '';
         if (cmd === 'gh pr view --json url') throw new Error('no PR');
-        if (cmd.includes('gh pr create')) {
+        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
+        return '';
+      });
+      vi.mocked(execFileSync).mockImplementation((file: string, args: readonly string[]) => {
+        if (file === 'gh' && args[0] === 'pr' && args[1] === 'create') {
           // Verify --draft flag is present
-          expect(cmd).toContain('--draft');
+          expect(args).toContain('--draft');
           return 'https://github.com/owner/repo/pull/123\n';
         }
-        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
         return '';
       });
 
@@ -130,12 +134,15 @@ describe('createPullRequest - Draft PR Support', () => {
         if (cmd === 'git status --porcelain') return '';
         if (cmd.startsWith('git push')) return '';
         if (cmd === 'gh pr view --json url') throw new Error('no PR');
-        if (cmd.includes('gh pr create')) {
+        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
+        return '';
+      });
+      vi.mocked(execFileSync).mockImplementation((file: string, args: readonly string[]) => {
+        if (file === 'gh' && args[0] === 'pr' && args[1] === 'create') {
           // Verify --draft flag is NOT present
-          expect(cmd).not.toContain('--draft');
+          expect(args).not.toContain('--draft');
           return 'https://github.com/owner/repo/pull/123\n';
         }
-        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
         return '';
       });
 
@@ -161,12 +168,15 @@ describe('createPullRequest - Draft PR Support', () => {
         if (cmd === 'git status --porcelain') return '';
         if (cmd.startsWith('git push')) return '';
         if (cmd === 'gh pr view --json url') throw new Error('no PR');
-        if (cmd.includes('gh pr create')) {
+        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
+        return '';
+      });
+      vi.mocked(execFileSync).mockImplementation((file: string, args: readonly string[]) => {
+        if (file === 'gh' && args[0] === 'pr' && args[1] === 'create') {
           // Should use --draft from config
-          expect(cmd).toContain('--draft');
+          expect(args).toContain('--draft');
           return 'https://github.com/owner/repo/pull/123\n';
         }
-        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
         return '';
       });
 
@@ -189,11 +199,14 @@ describe('createPullRequest - Draft PR Support', () => {
         if (cmd === 'git status --porcelain') return '';
         if (cmd.startsWith('git push')) return '';
         if (cmd === 'gh pr view --json url') throw new Error('no PR');
-        if (cmd.includes('gh pr create')) {
-          expect(cmd).not.toContain('--draft');
+        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
+        return '';
+      });
+      vi.mocked(execFileSync).mockImplementation((file: string, args: readonly string[]) => {
+        if (file === 'gh' && args[0] === 'pr' && args[1] === 'create') {
+          expect(args).not.toContain('--draft');
           return 'https://github.com/owner/repo/pull/123\n';
         }
-        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
         return '';
       });
 
@@ -212,11 +225,14 @@ describe('createPullRequest - Draft PR Support', () => {
         if (cmd === 'git status --porcelain') return '';
         if (cmd.startsWith('git push')) return '';
         if (cmd === 'gh pr view --json url') throw new Error('no PR');
-        if (cmd.includes('gh pr create')) {
-          expect(cmd).not.toContain('--draft');
+        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
+        return '';
+      });
+      vi.mocked(execFileSync).mockImplementation((file: string, args: readonly string[]) => {
+        if (file === 'gh' && args[0] === 'pr' && args[1] === 'create') {
+          expect(args).not.toContain('--draft');
           return 'https://github.com/owner/repo/pull/123\n';
         }
-        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
         return '';
       });
 
@@ -242,12 +258,15 @@ describe('createPullRequest - Draft PR Support', () => {
         if (cmd === 'git status --porcelain') return '';
         if (cmd.startsWith('git push')) return '';
         if (cmd === 'gh pr view --json url') throw new Error('no PR');
-        if (cmd.includes('gh pr create')) {
+        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
+        return '';
+      });
+      vi.mocked(execFileSync).mockImplementation((file: string, args: readonly string[]) => {
+        if (file === 'gh' && args[0] === 'pr' && args[1] === 'create') {
           // Options should override config
-          expect(cmd).not.toContain('--draft');
+          expect(args).not.toContain('--draft');
           return 'https://github.com/owner/repo/pull/123\n';
         }
-        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
         return '';
       });
 
@@ -270,12 +289,15 @@ describe('createPullRequest - Draft PR Support', () => {
         if (cmd === 'git status --porcelain') return '';
         if (cmd.startsWith('git push')) return '';
         if (cmd === 'gh pr view --json url') throw new Error('no PR');
-        if (cmd.includes('gh pr create')) {
+        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
+        return '';
+      });
+      vi.mocked(execFileSync).mockImplementation((file: string, args: readonly string[]) => {
+        if (file === 'gh' && args[0] === 'pr' && args[1] === 'create') {
           // Options should override config
-          expect(cmd).toContain('--draft');
+          expect(args).toContain('--draft');
           return 'https://github.com/owner/repo/pull/123\n';
         }
-        if (cmd.includes('git remote')) return 'https://github.com/owner/repo.git\n';
         return '';
       });
 

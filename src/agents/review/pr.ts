@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import path from 'path';
 
 import { loadConfig } from '../../core/config.js';
@@ -294,15 +294,14 @@ export async function createPullRequest(
       // Options parameter takes precedence, then config, default is false
       const config = loadConfig(workingDir);
       const createAsDraft = options?.draft ?? config.github?.createDraftPRs ?? false;
-      const draftFlag = createAsDraft ? ' --draft' : '';
+      const ghArgs = [
+        'pr', 'create',
+        '--title', prTitle,
+        '--body', prBody,
+        ...(createAsDraft ? ['--draft'] : []),
+      ];
 
-      // Use heredoc pattern for multi-line body to preserve formatting
-      const ghCommand = `gh pr create --title ${escapeShellArg(prTitle)}${draftFlag} --body "$(cat <<'EOF'
-${prBody}
-EOF
-)"`;
-
-      const prOutput = execSync(ghCommand, { cwd: workingDir, encoding: 'utf-8' });
+      const prOutput = execFileSync('gh', ghArgs, { cwd: workingDir, encoding: 'utf-8' });
 
       const prUrl = prOutput.trim();
       await updateStoryField(story, 'pr_url', prUrl);

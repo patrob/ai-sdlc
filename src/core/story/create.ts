@@ -219,10 +219,29 @@ export async function createStory(
   // Use custom content if provided, otherwise use default template
   let storyContent: string;
   if (content) {
-    // Security: Strip dangerous HTML tags from custom content
-    storyContent = content
-      .replace(/<script[^>]*>.*?<\/script>/gis, '')
-      .replace(/<iframe[^>]*>.*?<\/iframe>/gis, '');
+    // Security: strip dangerous <script>/<iframe> tags from custom content.
+    // Index-based scan (no tag-matching regex) looping until stable fully removes
+    // tag bodies without the regex pitfalls flagged by static analysis.
+    storyContent = content;
+    for (const tag of ['script', 'iframe']) {
+      const open = '<' + tag;
+      const close = '</' + tag;
+      let lower = storyContent.toLowerCase();
+      let start = lower.indexOf(open);
+      while (start !== -1) {
+        const closeStart = lower.indexOf(close, start);
+        if (closeStart === -1) {
+          // No closing tag - drop everything from the opening tag onward
+          storyContent = storyContent.slice(0, start);
+          break;
+        }
+        const gt = storyContent.indexOf('>', closeStart);
+        const end = gt === -1 ? storyContent.length : gt + 1;
+        storyContent = storyContent.slice(0, start) + storyContent.slice(end);
+        lower = storyContent.toLowerCase();
+        start = lower.indexOf(open);
+      }
+    }
   } else {
     // Default template - lean story.md without section placeholders
     // Agent outputs (research, plan, review) go to separate files in the story folder

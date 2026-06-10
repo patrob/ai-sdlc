@@ -109,10 +109,8 @@ export class StoryLogger {
 
     this.logPath = path.join(logDir, `${timestamp}.log`);
 
-    // Ensure file exists before creating write stream (createWriteStream may not create immediately)
-    if (!fs.existsSync(this.logPath)) {
-      fs.writeFileSync(this.logPath, '');
-    }
+    // Use append-create flag to atomically create if absent, no-op if present (TOCTOU-safe)
+    fs.writeFileSync(this.logPath, '', { flag: 'a' });
 
     // Create write stream in append mode
     this.logStream = fs.createWriteStream(this.logPath, { flags: 'a' });

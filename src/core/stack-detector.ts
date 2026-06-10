@@ -204,10 +204,10 @@ const SUBDIRECTORY_PATTERNS = [
 function markerExists(dir: string, marker: string): boolean {
   if (marker.includes('*')) {
     // Handle glob pattern
-    const pattern = marker.replace('*', '');
+    const pattern = marker.replaceAll('*', '');
     try {
       const files = readdirSync(dir);
-      return files.some(f => f.endsWith(pattern) || f.startsWith(pattern.replace('*', '')));
+      return files.some(f => f.endsWith(pattern) || f.startsWith(pattern.replaceAll('*', '')));
     } catch {
       return false;
     }

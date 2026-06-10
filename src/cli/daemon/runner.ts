@@ -47,6 +47,8 @@ export class DaemonRunner {
   private lastCtrlCTime: number = 0;
   private pollTimerId: ReturnType<typeof setTimeout> | null = null;
   private stats: DaemonStats;
+  private sigintHandler: (() => void) | null = null;
+  private sigtermHandler: (() => void) | null = null;
 
   constructor(options: DaemonOptions = {}) {
     this.sdlcRoot = getSdlcRoot();
@@ -405,9 +407,16 @@ export class DaemonRunner {
         });
     };
 
+    // Raise the listener limit to accommodate multiple DaemonRunner instances in tests
+    process.setMaxListeners(Math.max(process.getMaxListeners(), 50));
+
+    // Store references so they can be removed in stop()
+    this.sigintHandler = handleShutdown;
+    this.sigtermHandler = handleShutdown;
+
     // Register SIGINT/SIGTERM handlers (may not work when run via npm)
-    process.on('SIGINT', handleShutdown);
-    process.on('SIGTERM', handleShutdown);
+    process.on('SIGINT', this.sigintHandler);
+    process.on('SIGTERM', this.sigtermHandler);
 
     // Also listen for raw stdin to catch Ctrl+C when signals are intercepted
     // This handles the case when running through npm/tsx which may not forward signals
@@ -436,6 +445,16 @@ export class DaemonRunner {
     }
 
     this.isShuttingDown = true;
+
+    // Remove registered signal handlers to prevent listener accumulation
+    if (this.sigintHandler) {
+      process.off('SIGINT', this.sigintHandler);
+      this.sigintHandler = null;
+    }
+    if (this.sigtermHandler) {
+      process.off('SIGTERM', this.sigtermHandler);
+      this.sigtermHandler = null;
+    }
 
     // Get themed chalk with fallback for test environments
     const c = getThemedChalk(this.config);

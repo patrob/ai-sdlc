@@ -58,7 +58,7 @@ export function removeUnfinishedCheckboxes(content: string): string {
  */
 export function getStoryFileURL(storyPath: string, branch: string, workingDir: string): string {
   try {
-    const remoteUrl = execSync('git remote get-url origin', { cwd: workingDir, encoding: 'utf-8' }).trim();
+    const remoteUrl = execSync('git remote get-url origin', { cwd: workingDir, encoding: 'utf-8', stdio: 'pipe' }).trim();
 
     // Parse owner/repo from URL
     // HTTPS: https://github.com/owner/repo.git

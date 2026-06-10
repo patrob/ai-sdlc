@@ -1,6 +1,5 @@
 import { spawnSync } from 'child_process';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+import {beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ghIssueComment,

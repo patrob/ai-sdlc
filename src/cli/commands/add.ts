@@ -7,8 +7,6 @@ import { kanbanExists } from '../../core/kanban.js';
 import { findAllStories } from '../../core/kanban.js';
 import { createStory } from '../../core/story.js';
 import { getThemedChalk } from '../../core/theme.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { Story } from '../../types/index.js';
 import { createStoryFromFeatureRequest } from '../feature-request.js';
 
 /**

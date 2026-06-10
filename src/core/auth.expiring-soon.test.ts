@@ -1,29 +1,7 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { execSync } from 'child_process';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { existsSync, readFileSync, statSync } from 'fs';
 import { homedir,platform } from 'os';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  configureAgentSdkAuth,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  getApiKey,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  getApiKeySource,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  getCredentialType,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  getTokenExpirationInfo,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  hasApiKey,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  isDirectApiKey,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  isOAuthToken,
   isTokenExpiringSoon,
 } from './auth.js';
 

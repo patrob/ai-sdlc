@@ -215,8 +215,8 @@ reviews_complete: true
 
   describe.sequential('Edge Cases', () => {
     it('should handle empty board with 0 done stories', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const sdlcRoot = getSdlcRoot();
+
+      const _sdlcRoot = getSdlcRoot();
 
       // No stories created - empty board
 

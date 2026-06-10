@@ -215,8 +215,7 @@ describe('AgentFactory', () => {
 
         constructor(private provider: IProvider) {}
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        async execute(context: AgentContext) {
+        async execute(_context: AgentContext) {
           return {
             success: true,
             story: {} as any,
@@ -224,8 +223,7 @@ describe('AgentFactory', () => {
           };
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        getSystemPrompt(context: AgentContext): string {
+        getSystemPrompt(_context: AgentContext): string {
           return 'Custom system prompt';
         }
       }
@@ -252,8 +250,7 @@ describe('AgentFactory', () => {
 
         constructor(private provider: IProvider) {}
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        async execute(context: AgentContext) {
+        async execute(_context: AgentContext) {
           return {
             success: true,
             story: {} as any,
@@ -261,8 +258,7 @@ describe('AgentFactory', () => {
           };
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        getSystemPrompt(context: AgentContext): string {
+        getSystemPrompt(_context: AgentContext): string {
           return 'Custom research prompt';
         }
       }
@@ -286,12 +282,10 @@ describe('AgentFactory', () => {
         readonly name = 'custom-v1';
         readonly requiredCapabilities = [] as const;
         constructor(private provider: IProvider) {}
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        async execute(context: AgentContext) {
+        async execute(_context: AgentContext) {
           return { success: true, story: {} as any, changesMade: [] };
         }
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        getSystemPrompt(context: AgentContext): string {
+        getSystemPrompt(_context: AgentContext): string {
           return 'Version 1';
         }
       }
@@ -301,12 +295,10 @@ describe('AgentFactory', () => {
         readonly name = 'custom-v2';
         readonly requiredCapabilities = [] as const;
         constructor(private provider: IProvider) {}
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        async execute(context: AgentContext) {
+        async execute(_context: AgentContext) {
           return { success: true, story: {} as any, changesMade: [] };
         }
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        getSystemPrompt(context: AgentContext): string {
+        getSystemPrompt(_context: AgentContext): string {
           return 'Version 2';
         }
       }
@@ -338,19 +330,16 @@ describe('AgentFactory', () => {
     });
 
     it('should include custom agent types', () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const provider = createMockProvider();
+      const _provider = createMockProvider();
 
       class CustomAgent implements IAgent {
         readonly name = 'custom';
         readonly requiredCapabilities = [] as const;
         constructor(private provider: IProvider) {}
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        async execute(context: AgentContext) {
+        async execute(_context: AgentContext) {
           return { success: true, story: {} as any, changesMade: [] };
         }
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        getSystemPrompt(context: AgentContext): string {
+        getSystemPrompt(_context: AgentContext): string {
           return 'Custom';
         }
       }
@@ -376,12 +365,10 @@ describe('AgentFactory', () => {
         readonly name = 'custom';
         readonly requiredCapabilities = [] as const;
         constructor(private provider: IProvider) {}
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        async execute(context: AgentContext) {
+        async execute(_context: AgentContext) {
           return { success: true, story: {} as any, changesMade: [] };
         }
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        getSystemPrompt(context: AgentContext): string {
+        getSystemPrompt(_context: AgentContext): string {
           return 'Custom';
         }
       }
@@ -399,19 +386,16 @@ describe('AgentFactory', () => {
 
   describe('reset()', () => {
     it('should clear custom agent registrations', () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const provider = createMockProvider();
+      const _provider = createMockProvider();
 
       class CustomAgent implements IAgent {
         readonly name = 'custom';
         readonly requiredCapabilities = [] as const;
         constructor(private provider: IProvider) {}
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        async execute(context: AgentContext) {
+        async execute(_context: AgentContext) {
           return { success: true, story: {} as any, changesMade: [] };
         }
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        getSystemPrompt(context: AgentContext): string {
+        getSystemPrompt(_context: AgentContext): string {
           return 'Custom';
         }
       }
@@ -583,12 +567,10 @@ describe('AgentFactory', () => {
         readonly name = 'custom';
         readonly requiredCapabilities = [] as const;
         constructor(private provider: IProvider) {}
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        async execute(context: AgentContext) {
+        async execute(_context: AgentContext) {
           return { success: true, story: {} as any, changesMade: [] };
         }
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        getSystemPrompt(context: AgentContext): string {
+        getSystemPrompt(_context: AgentContext): string {
           return 'Custom';
         }
       }

@@ -1,8 +1,7 @@
 import * as agentSdk from '@anthropic-ai/claude-agent-sdk';
 import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { type AgentProgressEvent,AuthenticationError, runAgentQuery } from '../../src/core/client.js';
+import { type AgentProgressEvent, runAgentQuery } from '../../src/core/client.js';
 import { ClaudeProvider,ProviderRegistry } from '../../src/providers/index.js';
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
@@ -201,10 +200,10 @@ describe('API Retry Integration Tests', () => {
   });
 
   it('should respect total duration cap and stop retrying', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    let callCount = 0;
+
+    let _callCount = 0;
     vi.mocked(agentSdk.query).mockImplementation(() => {
-      callCount++;
+      _callCount++;
       return createThrowingGenerator(createApiError('Rate limit', 429)) as any;
     });
 

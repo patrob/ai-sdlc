@@ -1,5 +1,4 @@
 import { spawnSync } from 'child_process';
-import { createHash } from 'crypto';
 
 import { runAgentQuery } from '../core/client.js';
 import {
@@ -106,25 +105,6 @@ export function detectScopeViolation(
 ): string[] | undefined {
   const violations = actualFiles.filter((f) => !declaredFiles.includes(f));
   return violations.length > 0 ? violations : undefined;
-}
-
-/**
- * Get current git diff hash to detect changes
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function getCurrentDiffHash(workingDir: string): string {
-  const result = spawnSync('git', ['diff', 'HEAD'], {
-    cwd: workingDir,
-    encoding: 'utf8',
-    maxBuffer: 50 * 1024 * 1024,
-  });
-
-  if (result.error) {
-    throw new Error(`Failed to get git diff: ${result.error.message}`);
-  }
-
-  const diff = result.stdout || '';
-  return createHash('sha256').update(diff).digest('hex');
 }
 
 /**

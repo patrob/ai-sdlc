@@ -4,8 +4,7 @@ import path from 'path';
 
 import { type AgentProgressCallback,runAgentQuery } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { parseStory, readSectionContent,updateStoryField, writeSectionContent, writeStory } from '../core/story.js';
+import { parseStory, readSectionContent,updateStoryField, writeSectionContent } from '../core/story.js';
 import type { IProvider } from '../providers/types.js';
 import { type AgentResult, type FARScore,type Story } from '../types/index.js';
 

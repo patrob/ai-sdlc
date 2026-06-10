@@ -1,5 +1,5 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ 
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getThemedChalk } from '../../src/core/theme.js';
 import { type ActionType,type Story } from '../../src/types/index.js';

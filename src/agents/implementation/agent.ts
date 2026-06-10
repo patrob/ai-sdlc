@@ -5,14 +5,12 @@
 import { spawnSync } from 'child_process';
 import path from 'path';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { AgentProgressCallback, runAgentQuery } from '../../core/client.js';
+import { runAgentQuery } from '../../core/client.js';
 import { loadConfig } from '../../core/config.js';
 import { getLogger } from '../../core/logger.js';
 import { getEffectiveMaxImplementationRetries,parseStory, updateStoryField, updateStoryStatus } from '../../core/story.js';
 import type { IProvider } from '../../providers/types.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { type AgentResult,Story } from '../../types/index.js';
+import { type AgentResult } from '../../types/index.js';
 import { type AgentOptions } from '../research.js';
 import { verifyImplementation } from '../verification.js';
 import { validateBranchName,validateWorkingDir } from './retry.js';

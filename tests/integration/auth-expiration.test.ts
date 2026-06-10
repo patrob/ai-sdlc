@@ -1,6 +1,4 @@
 import { homedir } from 'os';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import path from 'path';
 import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthenticationError,runAgentQuery } from '../../src/core/client.js';
@@ -202,8 +200,8 @@ describe('Auth Expiration Integration Tests', () => {
     });
 
     it('should handle malformed expiresAt date gracefully', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+       
+      const _debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
 
       vi.mocked(mockFs.readFileSync).mockReturnValue(JSON.stringify({
         accessToken: 'sk-ant-oat-token-invalid-date',

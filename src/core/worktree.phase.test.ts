@@ -1,15 +1,7 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import * as cp from 'child_process';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import * as fs from 'fs';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import * as path from 'path';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { type Story } from '../types/index.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { getLastCompletedPhase, getNextPhase,GitWorktreeService } from './worktree.js';
+import { getLastCompletedPhase, getNextPhase } from './worktree.js';
 
 // Mock child_process and fs
 vi.mock('child_process');

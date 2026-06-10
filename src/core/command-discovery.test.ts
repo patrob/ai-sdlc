@@ -1,6 +1,4 @@
 import * as fs from 'fs';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {

@@ -1,8 +1,7 @@
 import { describe, expect,it } from 'vitest';
 
 import { groupStoriesByPhase, validateDependencies } from '../../src/cli/dependency-resolver.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { discoverEpicStories,normalizeEpicId } from '../../src/cli/epic-processor.js';
+import {normalizeEpicId } from '../../src/cli/epic-processor.js';
 import { type Story } from '../../src/types/index.js';
 
 /**

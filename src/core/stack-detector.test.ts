@@ -1,8 +1,7 @@
 import { existsSync,mkdirSync, rmSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { detectProjects, detectStack, formatDetectedProjects, getDefaultCommands, getPrimaryProject } from './stack-detector.js';
 

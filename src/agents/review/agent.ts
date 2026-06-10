@@ -2,23 +2,17 @@ import path from 'path';
 
 import { loadConfig } from '../../core/config.js';
 import { getLogger } from '../../core/logger.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { appendReviewHistory, getEffectiveMaxImplementationRetries, getEffectiveMaxRetries, isAtMaxRetries, parseStory, snapshotMaxRetries, updateStoryField, updateStoryStatus, writeSectionContent,writeStory } from '../../core/story.js';
+import { appendReviewHistory, getEffectiveMaxImplementationRetries, getEffectiveMaxRetries, isAtMaxRetries, parseStory, snapshotMaxRetries, updateStoryField, writeSectionContent } from '../../core/story.js';
 import type { IProvider } from '../../providers/types.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { ReviewAttempt, ReviewDecision, ReviewIssue,ReviewResult, ReviewSeverity } from '../../types/index.js';
+import type { ReviewAttempt, ReviewIssue,ReviewResult } from '../../types/index.js';
 import { ReviewDecision as ReviewDecisionEnum, ReviewSeverity as ReviewSeverityEnum } from '../../types/index.js';
 import { detectTestDuplicationPatterns } from '../test-pattern-detector.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { determineEffectiveContentType } from './diff-analysis.js';
 import { deriveIndividualPassFailFromPerspectives, determineReviewSeverity, formatIssuesForDisplay,parseReviewResponse } from './parsers.js';
 import { createPullRequest } from './pr.js';
 import { runPreChecks, runTestFileCheck } from './pre-check.js';
 import { UNIFIED_REVIEW_PROMPT } from './prompts.js';
 import { sanitizeCommandOutput,validateWorkingDirectory } from './security.js';
 import { runSubReview } from './sub-review.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { generateReviewSummary } from './summary.js';
 import { generateTDDIssues,validateTDDCycles } from './tdd-validation.js';
 import { MAX_TEST_OUTPUT_SIZE, runVerificationAsync, type VerificationProgressCallback } from './verification.js';
 

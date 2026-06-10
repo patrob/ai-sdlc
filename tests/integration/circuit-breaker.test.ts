@@ -1,8 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   createStory,
@@ -14,8 +13,7 @@ import {
   unblockStory,
   writeStory,
 } from '../../src/core/story.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { STORIES_FOLDER, STORY_FILENAME } from '../../src/types/index.js';
+import { STORIES_FOLDER } from '../../src/types/index.js';
 
 describe('Global Recovery Circuit Breaker Integration', () => {
   let tempDir: string;

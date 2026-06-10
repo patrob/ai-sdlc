@@ -135,16 +135,6 @@ export async function runAllTests(
 }
 
 /**
- * Security: Escape shell arguments for safe use in commands
- * For use with execSync when shell execution is required
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function escapeShellArg(arg: string): string {
-  // Replace single quotes with '\'' and wrap in single quotes
-  return `'${arg.replace(/'/g, "'\\''")}'`;
-}
-
-/**
  * Validate working directory path for safety
  * @param workingDir The working directory path to validate
  * @throws Error if path contains shell metacharacters or traversal attempts

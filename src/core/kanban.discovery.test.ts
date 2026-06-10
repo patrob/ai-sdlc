@@ -1,13 +1,9 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { ReviewDecision, Story } from '../types/index.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { assessState, calculateCompletionScore, findAllStories, findStoriesByEpic } from './kanban.js';
+import { findAllStories, findStoriesByEpic } from './kanban.js';
 import * as storyModule from './story.js';
 
 describe('findAllStories - path canonicalization', () => {

@@ -47,8 +47,7 @@ describe('workflow-state', () => {
     // Clean up test directory
     try {
       await fs.promises.rm(TEST_SDLC_ROOT, { recursive: true, force: true });
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (error) {
+    } catch (_error) {
       // Ignore cleanup errors
     }
   });

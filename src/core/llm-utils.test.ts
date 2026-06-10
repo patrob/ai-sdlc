@@ -1,10 +1,7 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { beforeEach,describe, expect, it, vi } from 'vitest';
+import {describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  ExtractionResult,
   extractionStrategies,
   extractStructuredResponse,
   extractStructuredResponseSync,
@@ -32,8 +29,7 @@ const ReviewSchema = z.object({
   ),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type ReviewResponse = z.infer<typeof ReviewSchema>;
+type _ReviewResponse = z.infer<typeof ReviewSchema>;
 
 describe('llm-utils', () => {
   describe('extractStructuredResponseSync', () => {

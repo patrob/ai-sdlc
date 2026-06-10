@@ -3,8 +3,6 @@ import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type AgentTaskResult,
   type ImplementationTask,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  OrchestratorResult,
   type TaskProgress,
 } from '../types/index.js';
 import {

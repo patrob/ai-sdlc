@@ -1,8 +1,7 @@
 import path from 'path';
 import * as readline from 'readline';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { getSdlcRoot, loadConfig } from '../../core/config.js';
+import { loadConfig } from '../../core/config.js';
 import { detectConflicts } from '../../core/conflict-detector.js';
 import { findStoriesByStatus } from '../../core/kanban.js';
 import { sanitizeStoryId } from '../../core/story.js';
@@ -129,8 +128,7 @@ export async function preFlightConflictCheck(
         const sanitizedTargetId = sanitizeForDisplay(validatedTargetId);
         const sanitizedOtherId = sanitizeForDisplay(validatedOtherId);
         console.log(c.warning(`   ${sanitizedTargetId} may conflict with ${sanitizedOtherId}:`));
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (error) {
+      } catch (_error) {
         // If validation fails, show generic error (defensive)
         console.log(c.warning(`   Story may have conflicting changes (invalid ID format)`));
       }
@@ -172,8 +170,7 @@ export async function preFlightConflictCheck(
       warnings: shouldContinue ? ['User confirmed with conflicts'] : ['Conflicts detected']
     };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (error) {
+  } catch (_error) {
     // Fail-open: allow proceeding if conflict detection fails
     console.log(c.warning('⚠️  Conflict detection unavailable'));
     console.log(c.dim('Proceeding without conflict check...'));

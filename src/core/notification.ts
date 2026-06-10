@@ -2,8 +2,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { type NotificationChannelType,type NotificationConfig } from '../types/index.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { getEventBus, SDLCEvent } from './event-bus.js';
 
 /**
  * Notification event types for human-in-the-loop workflows

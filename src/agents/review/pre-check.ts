@@ -1,10 +1,5 @@
 import { getLogger } from '../../core/logger.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { updateStoryField } from '../../core/story.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { Config,Story } from '../../types/index.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { ReviewIssue } from '../../types/index.js';
+import type {Story } from '../../types/index.js';
 import { ReviewDecision as ReviewDecisionEnum, ReviewSeverity as ReviewSeverityEnum } from '../../types/index.js';
 import { determineEffectiveContentType, getConfigurationChanges, getDocumentationChanges, getSourceCodeChanges, hasTestFiles } from './diff-analysis.js';
 import { formatIssuesForDisplay } from './parsers.js';
@@ -27,8 +22,7 @@ export interface PreCheckResult {
 export async function runPreChecks(
   story: Story,
   workingDir: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  storyPath: string
+  _storyPath: string
 ): Promise<PreCheckResult> {
   const logger = getLogger();
   const contentType = determineEffectiveContentType(story);
@@ -128,8 +122,7 @@ export async function runTestFileCheck(
   story: Story,
   workingDir: string,
   contentType: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  storyPath: string
+  _storyPath: string
 ): Promise<{ passed: boolean; reviewResult?: any }> {
   const logger = getLogger();
   const requiresTests = contentType === 'code' || contentType === 'mixed';

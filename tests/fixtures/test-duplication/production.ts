@@ -19,7 +19,7 @@ export const formatData = (data: any): string => {
 };
 
 // Internal helper (not exported)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function internalHelper() {
+ 
+function _internalHelper() {
   return 'internal';
 }

@@ -27,15 +27,7 @@ vi.mock('../../src/core/logger.js', () => ({
 
 // Import the functions we need to test after setting up mocks
 import {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  evaluateFAR,
   runResearchAgent,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  sanitizeCodebaseContext,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  sanitizeForLogging,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  sanitizeWebResearchContent,
   shouldPerformWebResearch} from '../../src/agents/research.js';
 import { parseStory } from '../../src/core/story.js';
 

@@ -1,18 +1,7 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import fs from 'fs';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import os from 'os';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import path from 'path';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { ReviewDecision, type Story } from '../types/index.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { assessState, calculateCompletionScore, findAllStories, findStoriesByEpic } from './kanban.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import * as storyModule from './story.js';
+import { type Story } from '../types/index.js';
+import { calculateCompletionScore } from './kanban.js';
 
 describe('calculateCompletionScore', () => {
   function createMockStory(overrides: Partial<Story['frontmatter']> = {}): Story {

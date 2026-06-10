@@ -163,8 +163,7 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
           return { ...story, path: canonicalPath };
         }
       }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (err) {
+    } catch (_err) {
       // If reading directory fails, fall through to fallback search
     }
   }
@@ -188,8 +187,7 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
         if (story.frontmatter.id?.toLowerCase() === storyId.toLowerCase()) {
           return { ...story, path: canonicalPath };
         }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (err) {
+      } catch (_err) {
         continue;
       }
     }
@@ -208,8 +206,7 @@ export function findStoryById(sdlcRoot: string, storyId: string): Story | null {
         if (story.frontmatter.id?.toLowerCase() === storyId.toLowerCase()) {
           return { ...story, path: canonicalPath };
         }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (err) {
+      } catch (_err) {
         continue;
       }
     }

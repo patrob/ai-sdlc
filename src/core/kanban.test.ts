@@ -3,10 +3,7 @@ import os from 'os';
 import path from 'path';
 import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { ReviewDecision, Story } from '../types/index.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { assessState, calculateCompletionScore, findAllStories, findStoriesByEpic } from './kanban.js';
+import { assessState } from './kanban.js';
 import * as storyModule from './story.js';
 
 describe('assessState - max review retries blocking', () => {

@@ -1,5 +1,4 @@
 import { findStoryById } from '../core/story.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { Story } from '../types/index.js';
 
 /**

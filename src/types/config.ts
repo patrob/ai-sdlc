@@ -1,26 +1,9 @@
 import type {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  ConflictAnalysis,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  ConflictDetectionResult,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  ConflictSeverity,
   CostLimitConfig,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  GroupingCardinality,
   GroupingConfig,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  GroupingDimension,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  GroupingSummary,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  NotificationChannelType,
   NotificationConfig,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  PreFlightResult,
 } from './analysis.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { ProjectConfig, SettingSource,StoryStatus } from './story.js';
+import type { ProjectConfig, SettingSource } from './story.js';
 
 // Theme types
 export type ThemePreference = 'auto' | 'light' | 'dark' | 'none';

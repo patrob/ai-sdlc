@@ -124,8 +124,7 @@ describe('worktree cleanup on move-to-done', () => {
       vi.spyOn(fs, 'existsSync').mockReturnValue(true);
 
       // When user declines, no removal should occur
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const spawnSyncSpy = vi.spyOn(cp, 'spawnSync');
+      const _spawnSyncSpy = vi.spyOn(cp, 'spawnSync');
 
       // Verify readline prompts for confirmation
       expect(mockReadline.question).not.toHaveBeenCalled(); // Not called yet, just testing mock setup

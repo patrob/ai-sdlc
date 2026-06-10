@@ -1,19 +1,11 @@
 import { spawnSync } from 'child_process';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+import {beforeEach, describe, expect, it, vi } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import * as clientModule from '../core/client.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { ImplementationTask,type TaskContext } from '../types/index.js';
+import {type TaskContext } from '../types/index.js';
 import {
   buildTaskPrompt,
   detectMissingDependencies,
   detectScopeViolation,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  parseTaskResult,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  runSingleTaskAgent,
   TASK_AGENT_SYSTEM_PROMPT,
   validateFilePaths,
   verifyChanges,

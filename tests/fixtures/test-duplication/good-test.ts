@@ -36,8 +36,8 @@ function assertValidStory(story: any) {
 }
 
 // LEGITIMATE: Mock builder
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function mockUser(overrides?: any) {
+ 
+function _mockUser(overrides?: any) {
   return {
     id: 'user-1',
     name: 'Test User',
@@ -46,8 +46,8 @@ function mockUser(overrides?: any) {
 }
 
 // LEGITIMATE: Test data builder
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function withDefaults(config?: any) {
+ 
+function _withDefaults(config?: any) {
   return {
     enabled: true,
     retries: 3,

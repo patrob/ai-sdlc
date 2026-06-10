@@ -1,6 +1,4 @@
 import fs from 'fs';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import ora from 'ora';
 import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

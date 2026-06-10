@@ -223,8 +223,7 @@ describe('Agent Types', () => {
           };
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        getSystemPrompt(context: AgentContext): string {
+        getSystemPrompt(_context: AgentContext): string {
           return 'You are a test agent';
         }
       }

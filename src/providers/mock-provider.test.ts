@@ -1,6 +1,5 @@
  
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { beforeEach,describe, expect, it, vi } from 'vitest';
+import {describe, expect, it } from 'vitest';
 
 import { MockAuthenticator,MockProvider } from './mock-provider.js';
 import type { ProviderProgressEvent } from './types.js';

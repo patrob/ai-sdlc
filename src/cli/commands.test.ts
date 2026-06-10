@@ -5,12 +5,11 @@ import { type ActionType, type KanbanFolder,type Story } from '../types/index.js
 import { calculatePhaseProgress, determineWorktreeMode, escapeShellArg,getPhaseInfo, sanitizeStorySlug, truncateForTerminal } from './commands.js';
 
 describe('CLI Commands - Phase Helpers', () => {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  let originalEnv: NodeJS.ProcessEnv;
+  let _originalEnv: NodeJS.ProcessEnv;
   let colors: any;
 
   beforeEach(() => {
-    originalEnv = { ...process.env };
+    _originalEnv = { ...process.env };
     delete process.env.NO_COLOR;
     colors = getThemedChalk();
   });

@@ -1,16 +1,12 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { execSync,spawn, spawnSync } from 'child_process';
+import {spawn, spawnSync } from 'child_process';
 import fs from 'fs';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { beforeEach, describe, expect, it, Mock,vi } from 'vitest';
+import { beforeEach, describe, expect, it,vi } from 'vitest';
 
 import * as clientModule from '../core/client.js';
 import * as configModule from '../core/config.js';
 import * as storyModule from '../core/story.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { type Config, ContentType,ReviewDecision, ReviewIssue, ReviewSeverity, Story, TDDTestCycle } from '../types/index.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { createPullRequest, deriveIndividualPassFailFromPerspectives, determineEffectiveContentType, formatPRDescription, generateReviewSummary, generateTDDIssues, getConfigurationChanges, getDocumentationChanges, getSourceCodeChanges, getStoryFileURL, hasTestFiles, mergePullRequest,removeUnfinishedCheckboxes, runReviewAgent, truncatePRBody, validateTDDCycles, waitForChecks } from './review.js';
+import { type Config,ReviewDecision, ReviewSeverity } from '../types/index.js';
+import { runReviewAgent } from './review.js';
 
 // Mock external dependencies
 vi.mock('child_process', () => ({
@@ -117,10 +113,9 @@ describe('Review Agent - Pre-check Optimization', () => {
 
       // Mock spawn to simulate failed test execution
       const mockSpawn = vi.mocked(spawn);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      let callCount = 0;
+      let _callCount = 0;
       mockSpawn.mockImplementation(((command: string, args: string[]) => {
-        callCount++;
+        _callCount++;
         const isTestCommand = args.includes('test');
         const isBuildCommand = args.includes('build');
 

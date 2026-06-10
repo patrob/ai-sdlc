@@ -41,8 +41,7 @@ export function createDashboard(epicId: string, phases: Story[][]): DashboardSta
   const stories = new Map<string, StoryProgress>();
 
   // Initialize all stories in queued state
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  phases.forEach((phase, phaseIndex) => {
+  phases.forEach((phase, _phaseIndex) => {
     phase.forEach(story => {
       stories.set(story.frontmatter.id, {
         storyId: story.frontmatter.id,

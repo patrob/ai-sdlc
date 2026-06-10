@@ -4,8 +4,7 @@ import path from 'path';
 import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { runRefinementAgent } from '../agents/refinement.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { PhaseConfig,WorkflowConfig } from '../types/workflow-config.js';
+import type {WorkflowConfig } from '../types/workflow-config.js';
 import { createPhaseExecutor, executePhase,PhaseExecutor } from './phase-executor.js';
 
 // Mock dependencies

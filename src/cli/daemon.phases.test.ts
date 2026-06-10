@@ -120,8 +120,7 @@ describe('DaemonRunner', () => {
       const testPath = '/test/.ai-sdlc/backlog/test-story.md';
 
       // Mock processQueue to prevent it from running
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const processQueueSpy = vi.spyOn(daemonAny, 'processQueue' as any)
+      const _processQueueSpy = vi.spyOn(daemonAny, 'processQueue' as any)
         .mockImplementation(() => {});
 
       daemonAny.onFileAdded(testPath);

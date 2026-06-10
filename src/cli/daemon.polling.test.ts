@@ -113,8 +113,7 @@ describe('polling mechanism', () => {
 
   it('should respect configured polling interval', async () => {
     const daemon = new DaemonRunner();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const daemonAny = daemon as any;
+    const _daemonAny = daemon as any;
 
     // Mock assessState to track calls
     const { assessState } = await import('../core/kanban.js');
@@ -164,8 +163,7 @@ describe('polling mechanism', () => {
 
   it('should queue new actions found during polling', async () => {
     const daemon = new DaemonRunner();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const daemonAny = daemon as any;
+    const _daemonAny = daemon as any;
 
     const { assessState } = await import('../core/kanban.js');
     const assessStateMock = vi.mocked(assessState);

@@ -370,8 +370,7 @@ reviews_complete: false
 
       fs.writeFileSync(path.join(backlogDir, '01-test.md'), storyContent);
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const result = await migrateToFolderPerStory(testDir, { backup: false, force: true });
+      const _result = await migrateToFolderPerStory(testDir, { backup: false, force: true });
 
       const migratedFile = path.join(testDir, '.migrated');
       expect(fs.existsSync(migratedFile)).toBe(true);

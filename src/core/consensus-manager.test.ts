@@ -74,10 +74,9 @@ describe('ConsensusManager', () => {
         createOutput('agent2', true),
       ];
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      let iterationCount = 0;
+      let _iterationCount = 0;
       const executor = vi.fn().mockImplementation(async () => {
-        iterationCount++;
+        _iterationCount++;
         // After iteration, all approve
         return [
           createOutput('agent1', true),

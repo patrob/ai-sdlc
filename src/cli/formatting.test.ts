@@ -1,8 +1,6 @@
 import { afterEach,beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  ColumnWidths,
   formatCompactStoryCompletion,
   formatElapsedTime,
   formatLabels,

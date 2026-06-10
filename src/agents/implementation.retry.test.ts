@@ -1,53 +1,11 @@
 import { spawnSync } from 'child_process';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { afterAll,afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import * as storyModule from '../core/story.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { type Story, TDDTestCycle } from '../types/index.js';
+import { type Story } from '../types/index.js';
 import {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  type AttemptHistoryEntry,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  type AttemptOutcome,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  buildRetryHistorySection,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  buildRetryPrompt,
   captureCurrentDiffHash,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  checkACCoverage,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  commitIfAllTestsPass,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  detectMissingDependencies,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  executeGreenPhase,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  executeRedPhase,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  executeRefactorPhase,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  extractChangedFiles,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  type ExtractedTestOutput,
   extractTestFailures,
   hasChangesOccurred,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  recordTDDCycle,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  runAllTests,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  runSingleTest,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  runTDDImplementation,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  sanitizeTestOutput,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  TDD_SYSTEM_PROMPT,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  type TDDPhaseResult,
   truncateTestOutput,
 } from './implementation.js';
 
@@ -71,8 +29,7 @@ vi.mock('../core/story.js', async () => {
 });
 
 // Mock story for testing
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function createMockStory(overrides: Partial<Story> = {}): Story {
+function _createMockStory(overrides: Partial<Story> = {}): Story {
   return {
     path: '/test/story.md',
     slug: 'test-story',

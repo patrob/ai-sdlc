@@ -3,8 +3,6 @@ import os from 'os';
 import path from 'path';
 import { afterEach,beforeEach, describe, expect, it } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { DEFAULT_WORKFLOW_CONFIG } from '../types/workflow-config.js';
 import {
   getPhaseConfig,
   hasCustomAgents,

@@ -1,6 +1,5 @@
 import type { Action, Story } from '../../types/index.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { formatStatus as formatStatusUtil,getStoryFlags as getStoryFlagsUtil } from '../story-utils.js';
+import {getStoryFlags as getStoryFlagsUtil } from '../story-utils.js';
 import { getPhaseInfo } from './phase-display.js';
 
 /**

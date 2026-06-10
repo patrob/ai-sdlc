@@ -10,8 +10,7 @@ import { runImplementationOrchestrator } from '../../src/agents/orchestrator.js'
 // Mock single-task agent to control execution
 vi.mock('../../src/agents/single-task.js');
 import { runSingleTaskAgent } from '../../src/agents/single-task.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { type AgentTaskResult, ImplementationTask } from '../../src/types/index.js';
+import { type AgentTaskResult } from '../../src/types/index.js';
 
 // Mock git operations
 vi.mock('child_process', async () => {

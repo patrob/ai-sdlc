@@ -5,8 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { assessState } from '../../src/core/kanban.js';
 import { parseStory } from '../../src/core/story.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { BLOCKED_DIR, STORIES_FOLDER } from '../../src/types/index.js';
+import { STORIES_FOLDER } from '../../src/types/index.js';
 
 describe.sequential('Kanban - Block on Max Review Retries Integration', () => {
   let testDir: string;

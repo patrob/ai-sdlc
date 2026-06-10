@@ -12,8 +12,7 @@ import { type AgentResult, type MergeConfig } from '../types/index.js';
  */
 export async function runMergeAgent(
   storyPath: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  sdlcRoot: string
+  _sdlcRoot: string
 ): Promise<AgentResult> {
   const story = parseStory(storyPath);
   const config = loadConfig();

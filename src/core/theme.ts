@@ -1,5 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import chalk, { ChalkInstance } from 'chalk';
+import chalk from 'chalk';
 
 import { type Config, type ThemeColors,type ThemePreference } from '../types/index.js';
 import { loadConfig } from './config.js';

@@ -233,8 +233,7 @@ export abstract class BaseAgent implements IAgent {
    * @param context - Execution context
    * @protected
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  protected async beforeExecute(context: AgentContext): Promise<void> {
+  protected async beforeExecute(_context: AgentContext): Promise<void> {
     // Default: no-op
     // Subclasses can override
   }
@@ -255,12 +254,9 @@ export abstract class BaseAgent implements IAgent {
    * @protected
    */
   protected async afterExecute(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    context: AgentContext,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    story: Story,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    changesMade: string[]
+    _context: AgentContext,
+    _story: Story,
+    _changesMade: string[]
   ): Promise<void> {
     // Default: no-op
     // Subclasses can override

@@ -68,8 +68,7 @@ export function captureCurrentDiffHash(workingDir: string): string {
 
     // Git command failed, return empty hash
     return '';
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (error) {
+  } catch (_error) {
     // If validation fails or git command fails, return empty hash
     return '';
   }

@@ -6,8 +6,7 @@ import {
   getErrorClassifierRegistry,
   resetErrorClassifierRegistry,
 } from './error-classifier-registry.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { ClassifiedErrors, ErrorClassification,IErrorClassifier, ParsedError } from './error-classifier-types.js';
+import type { ErrorClassification,IErrorClassifier } from './error-classifier-types.js';
 
 describe('ErrorClassifierRegistry', () => {
   describe('register and getClassifier', () => {

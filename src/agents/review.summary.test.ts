@@ -1,22 +1,9 @@
  
  
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { execSync,spawn, spawnSync } from 'child_process';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import fs from 'fs';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { beforeEach, describe, expect, it, Mock,vi } from 'vitest';
+import { describe, expect, it,vi } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import * as clientModule from '../core/client.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import * as configModule from '../core/config.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import * as storyModule from '../core/story.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { Config, ContentType,ReviewDecision, type ReviewIssue, ReviewSeverity, Story, TDDTestCycle } from '../types/index.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { createPullRequest, deriveIndividualPassFailFromPerspectives, determineEffectiveContentType, formatPRDescription, generateReviewSummary, generateTDDIssues, getConfigurationChanges, getDocumentationChanges, getSourceCodeChanges, getStoryFileURL, hasTestFiles, mergePullRequest,removeUnfinishedCheckboxes, runReviewAgent, truncatePRBody, validateTDDCycles, waitForChecks } from './review.js';
+import { type ReviewIssue } from '../types/index.js';
+import { generateReviewSummary } from './review.js';
 
 // Mock external dependencies
 vi.mock('child_process', () => ({

@@ -6,8 +6,6 @@ import {
   getBaseBranch,
   getMergeBase,
   type GitValidationOptions,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  GitValidationResult,
   hasUntrackedFiles,
   isCleanWorkingDirectory,
   isLocalBehindRemote,

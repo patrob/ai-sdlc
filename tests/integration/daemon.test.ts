@@ -87,8 +87,8 @@ describe('Daemon Integration Tests', () => {
   describe('Daemon startup', () => {
     it('should initialize chokidar watcher on start', async () => {
       // Start daemon (but don't await indefinitely)
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const startPromise = daemon.start();
+
+      const _startPromise = daemon.start();
 
       // Give it a moment to initialize
       await vi.advanceTimersByTimeAsync(100);
@@ -118,8 +118,8 @@ describe('Daemon Integration Tests', () => {
       vi.mocked(mockChokidar.default.watch).mockReturnValue(mockWatcher as any);
 
       // Start daemon
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const startPromise = daemon.start();
+
+      const _startPromise = daemon.start();
 
       // Give it a moment to initialize
       await vi.advanceTimersByTimeAsync(100);
@@ -133,8 +133,8 @@ describe('Daemon Integration Tests', () => {
       const consoleLogSpy = vi.spyOn(console, 'log');
 
       // Start daemon
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const startPromise = daemon.start();
+
+      const _startPromise = daemon.start();
 
       // Give it a moment to initialize
       await vi.advanceTimersByTimeAsync(100);
@@ -177,8 +177,8 @@ describe('Daemon Integration Tests', () => {
         addHandler('/test/.ai-sdlc/backlog/new-story.md');
 
         // Verify internal state (file added to queue)
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const daemonAny = daemon as any;
+
+        const _daemonAny = daemon as any;
         // Queue processing happens asynchronously, so we can't directly verify
         // but we can verify the handler was called
         expect(addHandler).toBeDefined();

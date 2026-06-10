@@ -158,8 +158,7 @@ describe('ConflictDetectorService', () => {
         // Story 2: git status returns nothing
         mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const result = service.detectConflicts([story1, story2]);
+        const _result = service.detectConflicts([story1, story2]);
 
         expect(mockSpawnSync).toHaveBeenCalledWith(
           'git',
@@ -259,8 +258,7 @@ describe('ConflictDetectorService', () => {
         // Story 2: git status returns nothing
         mockSpawnSync.mockReturnValueOnce(createMockSpawnResult(''));
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const result = service.detectConflicts([story1, story2]);
+        const _result = service.detectConflicts([story1, story2]);
 
         expect(mockSpawnSync).toHaveBeenCalledWith(
           'git',

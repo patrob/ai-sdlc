@@ -1,7 +1,6 @@
 import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { BatchResult } from '../../src/cli/batch-processor.js';
+ 
 
 // Mock external dependencies
 vi.mock('../../src/core/config.js');
@@ -11,15 +10,15 @@ vi.mock('../../src/core/theme.js');
 
 describe('Batch Processing Integration Tests', () => {
   let mockConfig: any;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  let mockKanban: any;
+   
+  let _mockKanban: any;
   let mockStory: any;
   let mockTheme: any;
 
   beforeEach(async () => {
     // Setup mocks
     mockConfig = await import('../../src/core/config.js');
-    mockKanban = await import('../../src/core/kanban.js');
+    _mockKanban = await import('../../src/core/kanban.js');
     mockStory = await import('../../src/core/story.js');
     mockTheme = await import('../../src/core/theme.js');
 

@@ -409,11 +409,11 @@ branch refs/heads/ai-sdlc/S-0064-test-clean-restart
       });
 
       // Mock readline to respond "y" twice (first for cleanup, second for remote deletion)
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      let callCount = 0;
+
+      let _callCount = 0;
       const mockRl = {
         question: vi.fn((prompt, callback) => {
-          callCount++;
+          _callCount++;
           callback('y');
         }),
         close: vi.fn(),

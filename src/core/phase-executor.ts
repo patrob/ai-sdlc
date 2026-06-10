@@ -28,16 +28,10 @@ import type { IProvider } from '../providers/types.js';
 import {
   type AgentConfig,
   type AgentOutput,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  Concern,
   type ConsensusResult,
   DEFAULT_COMPOSITION,
   DEFAULT_CONSENSUS,
   DEFAULT_MAX_ITERATIONS,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  DEFAULT_WORKFLOW_CONFIG,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  PhaseConfig,
   type PhaseExecutionContext,
   type PhaseExecutionResult,
   type WorkflowConfig,
@@ -46,25 +40,11 @@ import { loadConfig } from './config.js';
 import {
   type ConsensusIterationContext,
   ConsensusManager,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  formatConcernsForIteration,
 } from './consensus-manager.js';
 import { getEventBus } from './event-bus.js';
 import { getLogger } from './logger.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { mergeAgentOutputs, MergedResult } from './result-merger.js';
+import { mergeAgentOutputs } from './result-merger.js';
 import { getPhaseConfig, hasCustomAgents,loadWorkflowConfig } from './workflow-config.js';
-
-/**
- * Map of agent roles to their executor functions
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type AgentExecutorFn = (
-  storyPath: string,
-  sdlcRoot: string,
-  options: { onProgress?: (msg: string) => void; iterationContext?: ConsensusIterationContext },
-  provider?: IProvider
-) => Promise<AgentOutput>;
 
 /**
  * Options for phase execution

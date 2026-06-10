@@ -1,5 +1,6 @@
 // @ts-check
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
+import unusedImports from 'eslint-plugin-unused-imports';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
@@ -19,6 +20,7 @@ export default tseslint.config(
   {
     plugins: {
       'simple-import-sort': simpleImportSort,
+      'unused-imports': unusedImports,
     },
     rules: {
       // Allow `any` — this CLI codebase has ~220 intentional uses
@@ -27,12 +29,21 @@ export default tseslint.config(
       // Allow require() — a few intentional uses exist
       '@typescript-eslint/no-require-imports': 'off',
 
-      // Unused vars: allow _ prefix, ignore rest siblings
-      '@typescript-eslint/no-unused-vars': [
+      // Disable the TS rule — unused-imports/no-unused-vars handles this instead
+      '@typescript-eslint/no-unused-vars': 'off',
+
+      // Auto-remove unused imports (fixable)
+      'unused-imports/no-unused-imports': 'error',
+
+      // Flag unused vars (prefix with _ to silence, use error so --max-warnings 0 works)
+      'unused-imports/no-unused-vars': [
         'error',
         {
-          argsIgnorePattern: '^_',
+          vars: 'all',
           varsIgnorePattern: '^_',
+          args: 'after-used',
+          argsIgnorePattern: '^_',
+          caughtErrors: 'all',
           caughtErrorsIgnorePattern: '^_',
           ignoreRestSiblings: true,
         },

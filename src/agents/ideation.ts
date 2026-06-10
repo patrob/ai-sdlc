@@ -1,8 +1,6 @@
 import { runAgentQuery } from '../core/client.js';
 import { findAllStories } from '../core/kanban.js';
 import { getLogger } from '../core/logger.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { parseStory } from '../core/story.js';
 import type { IProvider } from '../providers/types.js';
 import { type Story } from '../types/index.js';
 

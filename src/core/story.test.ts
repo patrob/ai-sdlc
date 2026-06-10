@@ -3,10 +3,7 @@ import os from 'os';
 import path from 'path';
 import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { BLOCKED_DIR, Config,ReviewDecision, ReviewResult } from '../types/index.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { autoCompleteStoryAfterReview,createStory, extractTitleFromContent, findStoryById, getStory, moveToBlocked, parseStory, sanitizeReasonText, sanitizeTitle, unblockStory, writeStory } from './story.js';
+import { getStory, moveToBlocked, parseStory, sanitizeReasonText, writeStory } from './story.js';
 
 describe('moveToBlocked', () => {
   let tempDir: string;

@@ -1,16 +1,12 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { execSync,spawn, spawnSync } from 'child_process';
+import {spawn, spawnSync } from 'child_process';
 import fs from 'fs';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { beforeEach, describe, expect, it, Mock,vi } from 'vitest';
+import { beforeEach, describe, expect, it,vi } from 'vitest';
 
 import * as clientModule from '../core/client.js';
 import * as configModule from '../core/config.js';
 import * as storyModule from '../core/story.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { type Config, ContentType,ReviewDecision, type ReviewIssue, ReviewSeverity, Story, TDDTestCycle } from '../types/index.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { createPullRequest, deriveIndividualPassFailFromPerspectives, determineEffectiveContentType, formatPRDescription, generateReviewSummary, generateTDDIssues, getConfigurationChanges, getDocumentationChanges, getSourceCodeChanges, getStoryFileURL, hasTestFiles, mergePullRequest,removeUnfinishedCheckboxes, runReviewAgent, truncatePRBody, validateTDDCycles, waitForChecks } from './review.js';
+import { type Config, type ReviewIssue } from '../types/index.js';
+import { deriveIndividualPassFailFromPerspectives, runReviewAgent } from './review.js';
 
 // Mock external dependencies
 vi.mock('child_process', () => ({
@@ -407,8 +403,7 @@ describe('Unified Collaborative Review', () => {
 
       vi.mocked(clientModule.runAgentQuery).mockResolvedValue(unifiedResponse);
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const result = await runReviewAgent(mockStoryPath, mockWorkingDir);
+      const _result = await runReviewAgent(mockStoryPath, mockWorkingDir);
 
       // Parse the review history to check derived values
       expect(vi.mocked(storyModule.appendReviewHistory)).toHaveBeenCalled();

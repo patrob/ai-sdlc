@@ -6,12 +6,9 @@ import path from 'path';
 
 import { type AgentProgressCallback, runAgentQuery } from '../../core/client.js';
 import { DEFAULT_TDD_CONFIG,loadConfig } from '../../core/config.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { parseStory, readSectionContent,writeStory } from '../../core/story.js';
+import { parseStory,writeStory } from '../../core/story.js';
 import { type AgentResult, type Story, type TDDConfig,type TDDTestCycle } from '../../types/index.js';
 import { TDD_SYSTEM_PROMPT } from './prompts.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { truncateTestOutput } from './retry.js';
 import { commitIfAllTestsPass,runAllTests, runSingleTest } from './test-runners.js';
 
 /**
@@ -282,8 +279,7 @@ export function checkACCoverage(story: Story): boolean {
 
   // Find all checkbox items
   const uncheckedItems = acSection.match(/- \[ \]/g);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const checkedItems = acSection.match(/- \[x\]/gi);
+  const _checkedItems = acSection.match(/- \[x\]/gi);
 
   // If there are unchecked items, coverage is incomplete
   if (uncheckedItems && uncheckedItems.length > 0) {

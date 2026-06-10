@@ -184,8 +184,7 @@ export async function createStory(
             if (existingStory.frontmatter.priority > maxPriority) {
               maxPriority = existingStory.frontmatter.priority;
             }
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          } catch (err) {
+          } catch (_err) {
             // Skip malformed stories
             continue;
           }
@@ -193,8 +192,7 @@ export async function createStory(
       }
       priority = maxPriority + DEFAULT_PRIORITY_GAP;
     }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (err) {
+  } catch (_err) {
     // If we can't read existing stories, start at DEFAULT_PRIORITY_GAP
     priority = DEFAULT_PRIORITY_GAP;
   }

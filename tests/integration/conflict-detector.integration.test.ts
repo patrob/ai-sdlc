@@ -20,8 +20,8 @@ describe('ConflictDetectorService Integration', () => {
     if (testDir && fs.existsSync(testDir)) {
       try {
         fs.rmSync(testDir, { recursive: true, force: true });
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (err) {
+       
+      } catch (_err) {
         // Ignore cleanup errors on exit
       }
     }

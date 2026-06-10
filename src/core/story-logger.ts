@@ -342,8 +342,7 @@ export function tailLog(filePath: string): void {
   let lastSize = existingContent.length;
 
   // Watch for changes
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const watcher = fs.watchFile(filePath, { interval: 100 }, (curr) => {
+  const _watcher = fs.watchFile(filePath, { interval: 100 }, (curr) => {
     if (curr.size > lastSize) {
       // File grew - read new content
       const stream = fs.createReadStream(filePath, {

@@ -383,8 +383,7 @@ export class Orchestrator {
       try {
         process.kill(info.pid, 'SIGTERM');
         console.log(`  [${storyId}] Sent SIGTERM`);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (error) {
+      } catch (_error) {
         // Process may already be dead
       }
     }
@@ -404,8 +403,7 @@ export class Orchestrator {
         try {
           process.kill(info.pid, 'SIGKILL');
           console.log(`  [${storyId}] Sent SIGKILL`);
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        } catch (error) {
+        } catch (_error) {
           // Process may already be dead
         }
       }

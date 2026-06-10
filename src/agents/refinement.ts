@@ -1,12 +1,10 @@
 import path from 'path';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { AgentProgressCallback,runAgentQuery } from '../core/client.js';
+import {runAgentQuery } from '../core/client.js';
 import { getLogger } from '../core/logger.js';
 import { parseStory, updateStoryStatus,writeStory } from '../core/story.js';
 import type { IProvider } from '../providers/types.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { type AgentResult,Story } from '../types/index.js';
+import { type AgentResult } from '../types/index.js';
 import { type AgentOptions } from './research.js';
 
 const REFINEMENT_SYSTEM_PROMPT = `You are a product refinement specialist. Your job is to take raw story ideas from the backlog and transform them into well-defined, actionable user stories.

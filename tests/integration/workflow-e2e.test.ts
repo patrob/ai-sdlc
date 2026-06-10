@@ -13,13 +13,12 @@
  * - Git: Real git commands in temp repository (passthrough in mock)
  */
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { execSync as realExecSync, spawnSync as realSpawnSync } from 'child_process';
+ 
+import { execSync as realExecSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { afterEach, beforeEach, describe, expect, it, type Mock,vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it,vi } from 'vitest';
 
 import { STORIES_FOLDER } from '../../src/types/index.js';
 

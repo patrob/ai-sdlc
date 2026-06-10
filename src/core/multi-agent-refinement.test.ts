@@ -15,8 +15,6 @@ import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkflowConfig } from '../types/workflow-config.js';
 import { PhaseExecutor } from './phase-executor.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { WorkflowConfigLoader } from './workflow-config.js';
 
 // Mock all the agents
 const mockTechLeadReviewer = vi.fn();

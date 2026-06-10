@@ -2,8 +2,7 @@ import * as cp from 'child_process';
 import * as fs from 'fs';
 import ora from 'ora';
 import * as readline from 'readline';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+import {beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { run } from '../../src/cli/commands.js';
 import * as kanban from '../../src/core/kanban.js';
@@ -75,8 +74,8 @@ vi.mock('../../src/core/client.js', () => ({
 describe('Worktree Resume Integration', () => {
   let mockSpinner: any;
   let mockReadline: any;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  let mockConfig: any;
+   
+  let _mockConfig: any;
 
   const createMockStory = (overrides: any = {}) => ({
     frontmatter: {
@@ -104,7 +103,7 @@ describe('Worktree Resume Integration', () => {
     vi.clearAllMocks();
 
     // Re-import mocked modules and set up test-specific values
-    mockConfig = await import('../../src/core/config.js');
+    _mockConfig = await import('../../src/core/config.js');
 
     // Mock ora spinner
     mockSpinner = {

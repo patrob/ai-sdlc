@@ -4,8 +4,7 @@ import { beforeEach,describe, expect, it, vi } from 'vitest';
 
 import { loadConfig } from '../core/config.js';
 import type { Story } from '../types/index.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { ensureDependenciesInstalled, type VerificationResult,verifyImplementation } from './verification.js';
+import { ensureDependenciesInstalled,verifyImplementation } from './verification.js';
 
 vi.mock('fs');
 vi.mock('child_process');

@@ -1,10 +1,8 @@
  
  
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { type ImplementationTask, TaskStatus } from '../types/index.js';
+import { type ImplementationTask } from '../types/index.js';
 import { formatImplementationTasks, parseImplementationTasks, validateTaskFormat } from './task-parser.js';
 
 describe('parseImplementationTasks', () => {

@@ -2,8 +2,6 @@
  * Core retry attempt loop
  */
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import path from 'path';
 
 import { type AgentProgressCallback, runAgentQuery } from '../../core/client.js';
 import { moveToBlocked,parseStory, readSectionContent, updateStoryField, writeStory } from '../../core/story.js';

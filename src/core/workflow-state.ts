@@ -56,8 +56,7 @@ export function calculateStoryHash(storyPath: string): string {
   try {
     const content = fs.readFileSync(storyPath, 'utf-8');
     return crypto.createHash('sha256').update(content).digest('hex');
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (error) {
+  } catch (_error) {
     // If file doesn't exist or can't be read, return empty hash
     return '';
   }
@@ -225,8 +224,7 @@ export async function clearWorkflowState(sdlcRoot: string, storyId?: string): Pr
     if (fs.existsSync(statePath)) {
       await fs.promises.unlink(statePath);
     }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (error) {
+  } catch (_error) {
     // Ignore errors if file doesn't exist or can't be deleted
     // This is a cleanup operation, not critical
   }

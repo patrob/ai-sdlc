@@ -1,8 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { detectTestDuplicationPatterns } from '../../src/agents/test-pattern-detector.js';
 

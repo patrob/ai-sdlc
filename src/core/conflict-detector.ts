@@ -45,8 +45,7 @@ function validateBranchName(branchName: string): void {
  * @param projectRoot - Project root directory (unused but kept for API consistency)
  * @throws Error if worktree path is invalid
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function validateWorktreePath(worktreePath: string, projectRoot: string): void {
+function validateWorktreePath(worktreePath: string, _projectRoot: string): void {
   if (!worktreePath) {
     throw new Error('Worktree path cannot be empty');
   }
@@ -455,8 +454,7 @@ export class ConflictDetectorService {
     highCount: number,
     mediumCount: number,
     lowCount: number,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    safe: boolean
+    _safe: boolean
   ): string {
     if (highCount > 0) {
       return `Found ${highCount} high-severity conflict(s) - recommend sequential execution`;

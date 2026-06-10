@@ -4,8 +4,7 @@
 
 import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { type TaskProgress, TaskStatus } from '../types/index.js';
+import { type TaskProgress } from '../types/index.js';
 import {
   generateProgressTable,
   getCurrentTask,

@@ -3,8 +3,7 @@ import matter from 'gray-matter';
 import path from 'path';
 import * as properLockfile from 'proper-lockfile';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { FOLDER_TO_STATUS, type LockOptions, STORIES_FOLDER, type Story, STORY_FILENAME,type StoryFrontmatter, type StoryStatus } from '../../types/index.js';
+import { FOLDER_TO_STATUS, type LockOptions, type Story,type StoryFrontmatter, type StoryStatus } from '../../types/index.js';
 
 /**
  * Section file names for split story outputs.

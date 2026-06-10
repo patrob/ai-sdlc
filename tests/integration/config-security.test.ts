@@ -3,8 +3,7 @@ import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { loadConfig, saveConfig } from '../../src/core/config.js';
+import { loadConfig } from '../../src/core/config.js';
 
 describe('Configuration Security Tests', () => {
   let tempDir: string;

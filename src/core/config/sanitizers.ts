@@ -1,5 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { type Config, ProjectConfig,type TechStack } from '../../types/index.js';
+import { type Config,type TechStack } from '../../types/index.js';
 import { validateCostLimitConfig } from './validators.js';
 
 /**

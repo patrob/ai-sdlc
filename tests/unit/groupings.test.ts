@@ -12,8 +12,7 @@ import {
   getUniqueLabels,
   labelMatchesPattern,
 } from '../../src/core/kanban.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { Story, type StoryStatus } from '../../src/types/index.js';
+import { type StoryStatus } from '../../src/types/index.js';
 
 describe('labelMatchesPattern', () => {
   describe('exact matches', () => {

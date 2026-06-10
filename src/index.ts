@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import chalk from 'chalk';
 import { Command } from 'commander';
 import fs from 'fs';
 import { createRequire } from 'module';
@@ -14,8 +12,7 @@ import { getLogger,initLogger } from './core/logger.js';
 import { setupGlobalCleanupHandlers } from './core/process-manager.js';
 import { getLatestLogPath, readLastLines, tailLog } from './core/story-logger.js';
 import { getThemedChalk } from './core/theme.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { loadWorkflowConfig, WorkflowConfigLoader } from './core/workflow-config.js';
+import { WorkflowConfigLoader } from './core/workflow-config.js';
 import { registerBuiltInProviders } from './providers/index.js';
 import { type LogConfig,type ThemePreference } from './types/index.js';
 

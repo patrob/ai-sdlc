@@ -1,5 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import chalk from 'chalk';
 import ora from 'ora';
 
 import { runImplementationAgent } from '../agents/implementation.js';
@@ -13,8 +11,7 @@ import { packageReworkContext,runReworkAgent } from '../agents/rework.js';
 import { getSdlcRoot, isStageGateEnabled,loadConfig } from '../core/config.js';
 import { getEventBus,getPhaseConfig, hasCustomAgents, loadWorkflowConfig, PhaseExecutor } from '../core/index.js';
 import { assessState, kanbanExists } from '../core/kanban.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { autoCompleteStoryAfterReview, getStory, getTotalRecoveryAttempts, incrementImplementationRetryCount, incrementTotalRecoveryAttempts, isAtGlobalRecoveryLimit, isAtMaxRetries, markStoryComplete, moveToBlocked,parseStory, resetRPIVCycle, updateStoryField, updateStoryStatus } from '../core/story.js';
+import { autoCompleteStoryAfterReview, getStory, getTotalRecoveryAttempts, incrementImplementationRetryCount, incrementTotalRecoveryAttempts, isAtGlobalRecoveryLimit, isAtMaxRetries, moveToBlocked,parseStory, resetRPIVCycle } from '../core/story.js';
 import { getThemedChalk } from '../core/theme.js';
 import { type Action, ReviewDecision, type ReviewResult, type ReworkContext,type StateAssessment } from '../types/index.js';
 import { formatSuccessMessage,getTerminalWidth } from './formatting.js';

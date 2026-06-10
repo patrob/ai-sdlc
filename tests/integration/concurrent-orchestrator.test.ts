@@ -69,8 +69,8 @@ describe('Orchestrator Integration', () => {
   });
 
   it('should respect concurrency limit in options', () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const stories = [
+     
+    const _stories = [
       createMockStory('S-001', 'Story 1'),
       createMockStory('S-002', 'Story 2'),
       createMockStory('S-003', 'Story 3'),

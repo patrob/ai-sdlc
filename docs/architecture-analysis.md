@@ -1,5 +1,12 @@
 # Architecture Analysis Report: AI-SDLC Codebase
 
+> [!NOTE]
+> **Historical document.** This analysis predates the provider-abstraction + Pi migration and is kept for historical context only.
+>
+> - The Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) described here has been **REMOVED**.
+> - All providers — including `claude` (Anthropic) — now run on the [Pi agentic engine](https://pi.dev); see [`docs/adr/002-provider-agnostic-agent-harness-via-pi.md`](adr/002-provider-agnostic-agent-harness-via-pi.md).
+> - Code snippets and diagrams below showing `import { query } from '@anthropic-ai/claude-agent-sdk'` and `ClaudeProvider` reflect the OLD architecture and are retained only as historical reference.
+
 ## Executive Summary
 
 This report provides a comprehensive architecture analysis of the AI-SDLC codebase with recommendations for making it modular, extensible, and ready for future provider integrations (such as GitHub Copilot SDK). The codebase is a TypeScript CLI that orchestrates AI-assisted software development lifecycle management using the Claude Code SDK.

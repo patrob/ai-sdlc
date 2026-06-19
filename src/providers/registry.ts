@@ -14,8 +14,8 @@ export interface ProviderSelectionConfig {
  *
  * @example
  * ```typescript
- * // Register providers
- * ProviderRegistry.register('claude', () => new ClaudeProvider());
+ * // Register providers (all backed by the Pi agentic engine)
+ * ProviderRegistry.register('claude', () => createPiProvider('claude'));
  * ProviderRegistry.register('openai', () => createPiProvider('openai'));
  *
  * // Get provider by name
@@ -58,7 +58,7 @@ export class ProviderRegistry {
    *
    * @example
    * ```typescript
-   * ProviderRegistry.register('claude', () => new ClaudeProvider());
+   * ProviderRegistry.register('claude', () => createPiProvider('claude'));
    * ```
    */
   static register(name: string, factory: () => IProvider): void {

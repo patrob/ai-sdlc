@@ -250,9 +250,9 @@ Configure ai-sdlc behavior via a `.ai-sdlc.json` file in your project root. If n
 
 Configure credentials for the selected AI provider. Built-ins are `claude`, `openai`, `codex`, `openrouter`, `ollama`, `copilot`, `mock`, and `dry-run`.
 
-The non-Claude LLM providers (`openai`, `codex`, `openrouter`, `ollama`, `copilot`) are powered by the [Pi](https://github.com/badlogic/pi-mono) agentic engine, giving each a real tool-using, file-editing agent loop (not just text completions). See `docs/spikes/pi-evaluation.md`.
+Every provider — including `claude` (Anthropic models) — runs on the [Pi](https://pi.dev) agentic engine, giving each a real tool-using, file-editing agent loop (read/write/edit/list/bash in the working directory) rather than single-shot text completions. The `claude` provider routes to Anthropic through Pi's native `anthropic-messages` API; the others route to their respective provider APIs. See `docs/spikes/pi-evaluation.md`.
 
-For the default Claude provider, set:
+For the default Claude provider (Anthropic models via Pi), set:
 
 ```bash
 export ANTHROPIC_API_KEY=your-key-here

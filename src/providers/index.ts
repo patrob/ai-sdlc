@@ -24,11 +24,8 @@ export * from './types.js';
 // Export ProviderRegistry class
 export { ProviderRegistry } from './registry.js';
 
-// Export Claude provider
-export { ClaudeAuthenticator } from './claude/authenticator.js';
-export { ClaudeProvider } from './claude/index.js';
-
-// Export the Pi agentic engine that powers the non-Claude providers
+// Export the Pi agentic engine — the single agentic engine that powers every
+// provider, including `claude` (Anthropic) via Pi's native anthropic-messages API.
 export { registerBuiltInProviders } from './built-ins.js';
 export type { PiProviderDeps,PiProviderSettings } from './pi/index.js';
 export {

@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed - BREAKING
 
+- **Removed the Anthropic Claude Agent SDK dependency** (`@anthropic-ai/claude-agent-sdk`); all providers (including `claude`) now run on the [Pi](https://pi.dev) agentic engine via Pi's native provider APIs. The `claude` provider routes to Anthropic models through Pi's `anthropic-messages` API. The `claude` provider name and its credentials (`ANTHROPIC_API_KEY` / `ANTHROPIC_OAUTH_TOKEN`) are unchanged. The SDK's automatic CLAUDE.md auto-discovery (`settingSources: ['project']`) is no longer available; see `docs/CLAUDE-MD-FEATURE.md`.
 - **Node.js >= 22.19.0 now required** (previously >= 18). The new Pi agent engine (`@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`) requires Node 22.19+.
-- **Non-Claude providers swapped to the Pi agentic engine**: `openai`, `codex`, `openrouter`, `copilot` (and the new `ollama`) are now powered by `PiAgenticProvider`, giving each a real tool-using, file-editing agent loop (read/write/edit/list/bash in the working directory) instead of single-shot text completions. Provider names, env vars, and `.ai-sdlc.json` configuration are unchanged.
+- **All providers swapped to the Pi agentic engine**: `claude`, `openai`, `codex`, `openrouter`, `copilot` (and the new `ollama`) are now powered by the Pi engine, giving each a real tool-using, file-editing agent loop (read/write/edit/list/bash in the working directory) instead of single-shot text completions. Provider names, env vars, and `.ai-sdlc.json` configuration are unchanged.
 - **Status command output format**: The `status` command now displays stories in a uniform table format with columns for Story ID, Title, Status, Labels, and Flags. The previous column-based kanban view has been replaced.
   - ⚠️ **Breaking Change**: Scripts or tools that parse the status command output will need to be updated.
   - Titles are now truncated with '...' suffix for better readability (responsive 30-60 chars based on terminal width)

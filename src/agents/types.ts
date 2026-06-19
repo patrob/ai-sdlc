@@ -32,7 +32,7 @@ export type { AgentOptions } from './research.js';
  * const context: AgentContext = {
  *   storyPath: '/path/to/.ai-sdlc/stories/S-0001/story.md',
  *   sdlcRoot: '/path/to/.ai-sdlc',
- *   provider: new ClaudeProvider(),
+ *   provider: ProviderRegistry.get('claude'),
  *   options: {
  *     reworkContext: 'Fix linting errors in implementation',
  *     onProgress: (event) => console.log(event)

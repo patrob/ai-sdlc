@@ -1,8 +1,17 @@
 # CLAUDE.md Auto-Discovery Feature
 
+> **Historical note (no longer automatic):** The auto-discovery behavior described
+> below was provided by the Anthropic Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`)
+> via its `settingSources: ['project']` setting. That SDK has been **removed** — all
+> providers now run on the [Pi](https://pi.dev) agentic engine, which does not auto-inject
+> `.claude/CLAUDE.md` from a settings source. `CLAUDE.md` remains a useful, version-controlled
+> instructions file for humans and agents; it is simply no longer loaded automatically by an
+> SDK setting. The rest of this document is retained for historical context and describes how
+> the feature worked under the Claude Agent SDK.
+
 ## Overview
 
-The Agent SDK now automatically discovers and loads `CLAUDE.md` from project settings when `settingSources` includes 'project'. This enables teams to share custom instructions without manual configuration.
+Under the now-removed Claude Agent SDK, the SDK automatically discovered and loaded `CLAUDE.md` from project settings when `settingSources` included 'project'. This enabled teams to share custom instructions without manual configuration.
 
 ## Changes Made
 

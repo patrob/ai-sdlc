@@ -171,13 +171,13 @@ export interface ProviderQueryOptions {
  *
  * @example
  * ```typescript
- * class ClaudeAuthenticator implements IAuthenticator {
+ * class MyAuthenticator implements IAuthenticator {
  *   isConfigured(): boolean {
- *     return process.env.ANTHROPIC_API_KEY !== undefined;
+ *     return process.env.MY_API_KEY !== undefined;
  *   }
  *
  *   getCredentialType(): 'api_key' | 'oauth' | 'none' {
- *     return process.env.ANTHROPIC_API_KEY ? 'api_key' : 'none';
+ *     return process.env.MY_API_KEY ? 'api_key' : 'none';
  *   }
  *
  *   async configure(): Promise<void> {
@@ -249,22 +249,25 @@ export interface IAuthenticator {
  * Defines the contract that all AI provider implementations must fulfill.
  * Enables ai-sdlc to work with multiple AI providers without changing agent code.
  *
+ * Concrete providers are created via the Pi engine and registered in the
+ * ProviderRegistry; the example below shows the shape of an implementation.
+ *
  * @example
  * ```typescript
- * class ClaudeProvider implements IProvider {
- *   readonly name = 'claude';
+ * class MyProvider implements IProvider {
+ *   readonly name = 'my-provider';
  *   readonly capabilities: ProviderCapabilities = {
  *     supportsStreaming: true,
  *     supportsTools: true,
  *     supportsSystemPrompt: true,
  *     supportsMultiTurn: true,
  *     maxContextTokens: 200000,
- *     supportedModels: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022']
+ *     supportedModels: ['model-a', 'model-b']
  *   };
  *
  *   async query(options: ProviderQueryOptions): Promise<string> {
- *     // Execute query against Claude API
- *     return await claudeSdk.query(options);
+ *     // Execute query via the Pi agentic engine
+ *     return await runPiQuery(options);
  *   }
  *
  *   async validateConfiguration(): Promise<boolean> {
@@ -272,7 +275,7 @@ export interface IAuthenticator {
  *   }
  *
  *   getAuthenticator(): IAuthenticator {
- *     return new ClaudeAuthenticator();
+ *     return new MyAuthenticator();
  *   }
  * }
  * ```

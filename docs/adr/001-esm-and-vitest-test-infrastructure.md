@@ -3,6 +3,12 @@
 **Status:** Accepted
 **Date:** 2025-12
 
+> **Update:** The specific motivating dependency (`@anthropic-ai/claude-agent-sdk`,
+> the Anthropic Claude Agent SDK) has since been removed in favor of the Pi agentic
+> engine (see ADR-002 / Pi adoption). The ESM-first + Vitest decision below still
+> stands unchanged: the Pi packages (`@earendil-works/pi-agent-core`,
+> `@earendil-works/pi-ai`) are also ESM-only, so the same constraints and benefits apply.
+
 ## Context
 
 ai-sdlc is distributed as a Node.js CLI package on npm. The modern Node.js

@@ -60,12 +60,12 @@ For complete examples, see the [Example Configurations](#example-configurations)
 | `theme` | `"auto" \| "light" \| "dark" \| "none"` | `"auto"` | Terminal theme preference for output formatting. `"auto"` detects based on terminal, `"none"` disables all colors |
 | `testCommand` | `string \| undefined` | `"npm test"` | Command executed to run project tests. If undefined, tests are skipped |
 | `buildCommand` | `string \| undefined` | `"npm run build"` | Command executed to build the project. If undefined, build is skipped |
-| `settingSources` | `SettingSource[]` | `["project"]` | Configuration precedence for Agent SDK filesystem settings. Valid values: `"user"` (global `~/.claude/settings.json`), `"project"` (`.claude/settings.json` and CLAUDE.md), `"local"` (`.claude/settings.local.json`). Empty array means SDK isolation mode with no filesystem settings |
+| `settingSources` | `SettingSource[]` | `["project"]` | Legacy filesystem-settings precedence field. Valid values: `"user"` (global `~/.claude/settings.json`), `"project"` (`.claude/settings.json` and CLAUDE.md), `"local"` (`.claude/settings.local.json`). This field was honored by the now-removed Claude Agent SDK; under the Pi engine it no longer auto-loads `.claude/` settings or CLAUDE.md. See `docs/CLAUDE-MD-FEATURE.md` |
 | `useOrchestrator` | `boolean \| undefined` | `false` | Enable sequential task orchestrator for implementation. When true, implementation runs as separate agents orchestrated sequentially |
 
 **Notes:**
 - `testCommand` and `buildCommand` are validated against a whitelist of safe executables. See [Validation Rules](#validation-rules).
-- `settingSources` controls which `.claude/` configuration files are loaded by the Agent SDK. Must include `"project"` to load CLAUDE.md files.
+- `settingSources` previously controlled which `.claude/` configuration files were loaded by the Claude Agent SDK. That SDK has been removed and all providers now run on the Pi engine, so this field no longer triggers automatic CLAUDE.md loading; it is retained only for backward compatibility.
 
 ---
 
@@ -73,9 +73,11 @@ For complete examples, see the [Example Configurations](#example-configurations)
 
 Controls which registered AI provider is used for all agent queries, including `/grill-me`, daemon processing, and the SDLC phases.
 
+Every provider runs on the [Pi](https://pi.dev) agentic engine, which provides the tool-using, file-editing agent loop for all providers. The `claude` provider routes to Anthropic models through Pi's native `anthropic-messages` API; the other built-ins route to their respective provider APIs via Pi. Select a provider with `ai.provider` (or the `AI_SDLC_PROVIDER` environment variable).
+
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `ai.provider` | `string` | `"claude"` | Registered provider name. Built-in providers include `"claude"`, `"openai"`, `"codex"`, `"openrouter"`, `"copilot"`, `"mock"`, and `"dry-run"` |
+| `ai.provider` | `string` | `"claude"` | Registered provider name (all Pi-routed). Built-in providers include `"claude"`, `"openai"`, `"codex"`, `"openrouter"`, `"copilot"`, `"ollama"`, `"mock"`, and `"dry-run"` |
 | `ai.model` | `string \| undefined` | `undefined` | Optional model name for providers that support model selection |
 
 `AI_SDLC_PROVIDER` takes precedence over `ai.provider` for one-off runs. `AI_SDLC_MODEL` provides a global model override for the HTTP providers when `ai.model` is not set; provider-specific model env vars take precedence over `AI_SDLC_MODEL`.
@@ -84,7 +86,7 @@ Built-in provider credential and model settings:
 
 | Provider | Credential env vars | Optional base URL env var | Provider model env var | Default model |
 |----------|---------------------|---------------------------|------------------------|---------------|
-| `claude` | `ANTHROPIC_API_KEY` or Claude OAuth from `claude login` | n/a | n/a | `claude-sonnet-4-5-20250929` |
+| `claude` | `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN` (Anthropic models via Pi's `anthropic-messages` API) | n/a | n/a | `claude-sonnet-4-5-20250929` |
 | `openai` | `OPENAI_API_KEY` | `OPENAI_BASE_URL` | `AI_SDLC_OPENAI_MODEL` | `gpt-5.2` |
 | `codex` | `OPENAI_API_KEY` | `OPENAI_BASE_URL` | `AI_SDLC_CODEX_MODEL` | `gpt-5.3-codex` |
 | `openrouter` | `OPENROUTER_API_KEY` | `OPENROUTER_BASE_URL` | `AI_SDLC_OPENROUTER_MODEL` | `openai/gpt-5.2` |

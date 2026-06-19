@@ -65,6 +65,12 @@ export interface PiProviderDeps {
   resolveModel?: (settings: PiProviderSettings, modelId: string, baseUrl: string) => Model<Api>;
   /** Override execution-environment creation. */
   createEnv?: (cwd: string) => ExecutionEnv;
+  /**
+   * Override credential resolution. When provided, this takes precedence over the
+   * provider's env-var lookup. Used to bridge ai-sdlc's keychain/credential-file
+   * auth (see {@link ../../core/auth.js}) into Pi's `getApiKey` callback.
+   */
+  getApiKey?: () => string | undefined;
 }
 
 function readFirstEnv(envVars: string[]): string | undefined {
@@ -116,7 +122,17 @@ export class PiAuthenticator implements IAuthenticator {
   }
 
   getApiKey(): string | undefined {
-    return readFirstEnv(this.settings.apiKeyEnvVars);
+    const fromEnv = readFirstEnv(this.settings.apiKeyEnvVars);
+    if (fromEnv) {
+      return fromEnv;
+    }
+    // Keyless providers (e.g. a local Ollama server) still need a non-empty
+    // placeholder: Pi's OpenAI-compatible client rejects a falsy apiKey even
+    // when the backend ignores it. The value is never sent anywhere meaningful.
+    if (this.settings.credentialType === 'none') {
+      return 'sk-no-key-required';
+    }
+    return undefined;
   }
 }
 
@@ -207,7 +223,7 @@ export class PiAgenticProvider implements IProvider {
 
     const agent = new Agent({
       initialState: { systemPrompt: options.systemPrompt ?? '', model, tools },
-      getApiKey: async () => this.authenticator.getApiKey(),
+      getApiKey: async () => this.deps.getApiKey?.() ?? this.authenticator.getApiKey(),
     });
 
     const unsubscribe = agent.subscribe((event: AgentEvent) => {
@@ -336,6 +352,27 @@ export class PiAgenticProvider implements IProvider {
 
 /** Built-in Pi-routed provider definitions. */
 export const PI_PROVIDER_SETTINGS: Record<string, PiProviderSettings> = {
+  claude: {
+    name: 'claude',
+    piProvider: 'anthropic',
+    api: 'anthropic-messages',
+    defaultBaseUrl: 'https://api.anthropic.com',
+    baseUrlEnvVar: 'ANTHROPIC_BASE_URL',
+    defaultModel: 'claude-sonnet-4-5-20250929',
+    modelEnvVars: ['AI_SDLC_CLAUDE_MODEL', 'AI_SDLC_ANTHROPIC_MODEL'],
+    apiKeyEnvVars: ['ANTHROPIC_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'],
+    credentialType: 'oauth',
+    // Credentials may also come from the keychain / credentials file via the
+    // injected getApiKey bridge, so an env var is not strictly required.
+    requiresCredential: false,
+    maxContextTokens: 200000,
+    supportedModels: [
+      'claude-sonnet-4-5-20250929',
+      'claude-opus-4-5-20251101',
+      'claude-opus-4-5',
+      'claude-haiku-4-5',
+    ],
+  },
   openai: {
     name: 'openai',
     piProvider: 'openai',

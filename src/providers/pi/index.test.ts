@@ -10,7 +10,7 @@ import {
 import { afterEach,beforeEach, describe, expect, it } from 'vitest';
 
 import type { ProviderProgressEvent } from '../types.js';
-import { createPiProvider, PI_PROVIDER_SETTINGS,PiAgenticProvider } from './index.js';
+import { createPiProvider, PI_PROVIDER_SETTINGS,PiAgenticProvider, PiAuthenticator } from './index.js';
 
 /**
  * These tests exercise the real Pi agent loop offline via Pi's faux provider —
@@ -169,6 +169,13 @@ describe('PiAuthenticator', () => {
     expect(auth.getCredentialType()).toBe('none');
   });
 
+  it('supplies a non-empty placeholder key for keyless providers (Pi rejects falsy apiKey)', () => {
+    // Local Ollama needs no real key, but Pi's OpenAI-compatible client throws
+    // on a falsy apiKey, so the authenticator must return a truthy placeholder.
+    const auth = new PiAuthenticator(PI_PROVIDER_SETTINGS.ollama);
+    expect(auth.getApiKey()).toBeTruthy();
+  });
+
   it('advertises OAuth for Codex and Copilot (delegated credential resolution)', () => {
     expect(createPiProvider('codex').getAuthenticator().getCredentialType()).toBe('oauth');
     expect(createPiProvider('copilot').getAuthenticator().getCredentialType()).toBe('oauth');
@@ -176,14 +183,23 @@ describe('PiAuthenticator', () => {
 });
 
 describe('createPiProvider', () => {
-  it('exposes the five target providers', () => {
+  it('exposes every Pi-routed provider, including claude (Anthropic)', () => {
     expect(Object.keys(PI_PROVIDER_SETTINGS).sort()).toEqual([
+      'claude',
       'codex',
       'copilot',
       'ollama',
       'openai',
       'openrouter',
     ]);
+  });
+
+  it('routes the claude provider through Pi native anthropic-messages API', () => {
+    expect(PI_PROVIDER_SETTINGS.claude).toMatchObject({
+      name: 'claude',
+      piProvider: 'anthropic',
+      api: 'anthropic-messages',
+    });
   });
 
   it('throws for an unknown provider name (negative path)', () => {

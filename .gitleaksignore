@@ -1,0 +1,10 @@
+# gitleaks fingerprints to ignore.
+# Each entry is a known false positive verified to be a test fixture, not a
+# live credential. Format: <commit>:<file>:<rule-id>:<startLine>
+#
+# src/cli/pre-flight-check.test.ts uses the literal string "API_KEY=abc123"
+# inside a thrown Error to assert that sensitive-looking error text is redacted
+# from user-facing output. It is not a real secret. The current working tree
+# also carries an inline `gitleaks:allow` comment on that line.
+b5359dcc9e28012d48c77adaf4d1fdd9278ea245:src/cli/pre-flight-check.test.ts:generic-api-key:510
+79643edd9b6bf8589213a97bd78ceb519083f9ef:src/cli/pre-flight-check.test.ts:generic-api-key:510

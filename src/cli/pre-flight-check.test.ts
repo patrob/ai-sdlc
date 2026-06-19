@@ -514,7 +514,8 @@ describe('preFlightConflictCheck', () => {
     const activeStory = createMockStory('S-0001', 'in-progress');
     vi.mocked(kanbanModule.findStoriesByStatus).mockReturnValue([activeStory]);
     vi.mocked(conflictDetectorModule.detectConflicts).mockImplementation(() => {
-      throw new Error('Sensitive error with secrets: API_KEY=abc123');
+      // Fake fixture value; the test below asserts sensitive errors are redacted from output
+      throw new Error('Sensitive error with secrets: API_KEY=abc123'); // gitleaks:allow
     });
 
     const result = await preFlightConflictCheck(targetStory, sdlcRoot, {});

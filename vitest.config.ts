@@ -15,7 +15,10 @@ export default defineConfig({
     maxWorkers: 8,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      // 'cobertura' emits coverage/cobertura-coverage.xml so a standard
+      // `vitest run --coverage` (this default config) produces the report
+      // assessment tools look for, matching vitest.coverage.config.ts.
+      reporter: ['text', 'json', 'html', 'cobertura'],
       exclude: [
         'node_modules/',
         'dist/',
